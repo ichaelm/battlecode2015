@@ -389,20 +389,25 @@ public class RobotPlayer {
 					if (rc.getLocation().distanceSquaredTo(HQLoc) <= 2) {
 						tryMove(rc.getLocation().directionTo(HQLoc).opposite());
 					} else {
-						RobotType buildOrder = recieveBuildOrders(rc.getID());
-						if (buildOrder == null) {
-							mine();
+						Direction escapeDir = escapeCrowding();
+						if (escapeDir != null) {
+							tryMove(escapeDir);
 						} else {
-							if (ordersMarked(rc.getID())) {
-								sendOrders(rc.getID(), -1, 0, 0);
+							RobotType buildOrder = recieveBuildOrders(rc.getID());
+							if (buildOrder == null) {
 								mine();
 							} else {
-								if (rc.getTeamOre() < buildOrder.oreCost) {
+								if (ordersMarked(rc.getID())) {
+									sendOrders(rc.getID(), -1, 0, 0);
 									mine();
 								} else {
-									boolean success = tryBuild(directions[rand.nextInt(8)],buildOrder);
-									if (success) {
-										markOrders(rc.getID());
+									if (rc.getTeamOre() < buildOrder.oreCost) {
+										mine();
+									} else {
+										boolean success = tryBuild(directions[rand.nextInt(8)],buildOrder);
+										if (success) {
+											markOrders(rc.getID());
+										}
 									}
 								}
 							}
@@ -647,6 +652,31 @@ public class RobotPlayer {
 		}
 		if (lowestRobot != null) {
 			rc.transferSupplies((int)((mySupply-lowestSupply)/2), lowestRobot.location);
+		}
+	}
+	
+	private static Direction escapeCrowding() {
+		RobotInfo[] myRobots = rc.senseNearbyRobots(2);
+		MapLocation myLoc = rc.getLocation();
+		if (myRobots.length >= 6) {
+			boolean[] blockedDirs = {false, false, false, false, false, false, false, false};
+			for (int i = 0; i < myRobots.length; i++) {
+				MapLocation move = myRobots[i].location;
+				Direction d = myLoc.directionTo(move);
+				blockedDirs[directionToInt(d)] = true;
+			}
+			Direction[] validMoves = {null, null};
+			int numValidMoves = 0;
+			for (int i = 0; i < 8; i++) {
+				if (blockedDirs[i] == false) {
+					validMoves[numValidMoves] = intToDirection(i);
+					numValidMoves++;
+				}
+			}
+			int choice = rand.nextInt(numValidMoves);
+			return validMoves[choice];
+		} else {
+			return null;
 		}
 	}
 
