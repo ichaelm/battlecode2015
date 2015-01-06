@@ -5,23 +5,60 @@ import battlecode.common.*;
 import java.util.*;
 
 public class RobotPlayer {
+	
+	// AI parameters
+	static final int ARRAY_SIZE = 1000;
+	
+	// Cached game information
 	static RobotController rc;
 	static Team myTeam;
 	static Team enemyTeam;
+	static RobotType myType;
 	static int myRange;
 	static Random rand;
+	static MapLocation HQLoc;
+	static MapLocation enemyHQLoc;
 	static Direction[] directions = {Direction.NORTH, Direction.NORTH_EAST, Direction.EAST, Direction.SOUTH_EAST, Direction.SOUTH, Direction.SOUTH_WEST, Direction.WEST, Direction.NORTH_WEST};
 	
 	public static void run(RobotController myrc) {
+		// Initialize cached game information
 		rc = myrc;
-        rand = new Random(rc.getID());
-
-		myRange = rc.getType().attackRadiusSquared;
-		MapLocation enemyLoc = rc.senseEnemyHQLocation();
-        Direction lastDirection = null;
 		myTeam = rc.getTeam();
 		enemyTeam = myTeam.opponent();
-		int ARRAY_SIZE = 1000;
+		myType = rc.getType();
+		myRange = myType.attackRadiusSquared;
+        rand = new Random(rc.getID());
+        HQLoc = rc.senseHQLocation();
+		enemyHQLoc = rc.senseEnemyHQLocation();
+		
+		switch (myType) {
+		case HQ: runHQ(); break;
+		case TOWER: runTower(); break;
+		case AEROSPACELAB: runAerospaceLab(); break;
+		case BARRACKS: runBarracks(); break;
+		case BASHER: runBasher(); break;
+		case BEAVER: runBeaver(); break;
+		case COMMANDER: runCommander(); break;
+		case COMPUTER: runComputer(); break;
+		case DRONE: runDrone(); break;
+		case HANDWASHSTATION: runHandwashStation(); break;
+		case HELIPAD: runHelipad(); break;
+		case LAUNCHER: runLauncher(); break;
+		case MINER: runMiner(); break;
+		case MINERFACTORY: runMinerFactory(); break;
+		case MISSILE: runMissile(); break;
+		case SOLDIER: runSoldier(); break;
+		case SUPPLYDEPOT: runSupplyDepot(); break;
+		case TANK: runTank(); break;
+		case TANKFACTORY: runTankFactory(); break;
+		case TECHNOLOGYINSTITUTE: runTechnologyInstitute(); break;
+		case TRAININGFIELD: runTrainingField(); break;
+		default: break;
+		}
+	}
+	
+	private static void runHQ() {
+		// Information stored across rounds
 		RobotInfo[] myRobots = null;
 		RobotInfo[] mySupplyDepots = null;
 		RobotInfo[] myMinerFactories = null;
@@ -43,426 +80,527 @@ public class RobotPlayer {
 		RobotInfo[] myLaunchers = null;
 		RobotInfo[] myMissiles = null;
 		RobotInfo[] myTowers = null;
-		
-		while(true) {
-            try {
-                rc.setIndicatorString(0, "This is an indicator string.");
-                rc.setIndicatorString(1, "I am a " + rc.getType());
-            } catch (Exception e) {
-                System.out.println("Unexpected exception");
-                e.printStackTrace();
-            }
 
-			if (rc.getType() == RobotType.HQ) {
-				try {
-					myRobots = rc.senseNearbyRobots(999999, myTeam);
-					mySupplyDepots = new RobotInfo[ARRAY_SIZE];
-					myMinerFactories = new RobotInfo[ARRAY_SIZE];
-					myTechnologyInstitutes = new RobotInfo[ARRAY_SIZE];
-					myBarracks = new RobotInfo[ARRAY_SIZE];
-					myHelipads = new RobotInfo[ARRAY_SIZE];
-					myTrainingFields = new RobotInfo[ARRAY_SIZE];
-					myTankFactories = new RobotInfo[ARRAY_SIZE];
-					myAerospaceLabs = new RobotInfo[ARRAY_SIZE];
-					myHandwashStations = new RobotInfo[ARRAY_SIZE];
-					myBeavers = new RobotInfo[ARRAY_SIZE];
-					myMiners = new RobotInfo[ARRAY_SIZE];
-					myComputers = new RobotInfo[ARRAY_SIZE];
-					mySoldiers = new RobotInfo[ARRAY_SIZE];
-					myBashers = new RobotInfo[ARRAY_SIZE];
-					myDrones = new RobotInfo[ARRAY_SIZE];
-					myTanks = new RobotInfo[ARRAY_SIZE];
-					myCommanders = new RobotInfo[ARRAY_SIZE];
-					myLaunchers = new RobotInfo[ARRAY_SIZE];
-					myMissiles = new RobotInfo[ARRAY_SIZE];
-					myTowers = new RobotInfo[ARRAY_SIZE];
-					int numSupplyDepots = 0;
-					int numMinerFactories = 0;
-					int numTechnologyInstitutes = 0;
-					int numBarracks = 0;
-					int numHelipads = 0;
-					int numTrainingFields = 0;
-					int numTankFactories = 0;
-					int numAerospaceLabs = 0;
-					int numHandwashStations = 0;
-					int numBeavers = 0;
-					int numMiners = 0;
-					int numComputers = 0;
-					int numSoldiers = 0;
-					int numBashers = 0;
-					int numDrones = 0;
-					int numTanks = 0;
-					int numCommanders = 0;
-					int numLaunchers = 0;
-					int numMissiles = 0;
-					int numTowers = 0;
-					
-					for (RobotInfo r : myRobots) {
-						RobotType type = r.type;
-						switch (type) {
-						case SUPPLYDEPOT:
-							mySupplyDepots[numSupplyDepots] = r;
-							numSupplyDepots++;
-							break;
-						case MINERFACTORY:
-							myMinerFactories[numMinerFactories] = r;
-							numMinerFactories++;
-							break;
-						case TECHNOLOGYINSTITUTE:
-							myTechnologyInstitutes[numTechnologyInstitutes] = r;
-							numTechnologyInstitutes++;
-							break;
+		while (true) {
+			try {
+				myRobots = rc.senseNearbyRobots(999999, myTeam);
+				mySupplyDepots = new RobotInfo[ARRAY_SIZE];
+				myMinerFactories = new RobotInfo[ARRAY_SIZE];
+				myTechnologyInstitutes = new RobotInfo[ARRAY_SIZE];
+				myBarracks = new RobotInfo[ARRAY_SIZE];
+				myHelipads = new RobotInfo[ARRAY_SIZE];
+				myTrainingFields = new RobotInfo[ARRAY_SIZE];
+				myTankFactories = new RobotInfo[ARRAY_SIZE];
+				myAerospaceLabs = new RobotInfo[ARRAY_SIZE];
+				myHandwashStations = new RobotInfo[ARRAY_SIZE];
+				myBeavers = new RobotInfo[ARRAY_SIZE];
+				myMiners = new RobotInfo[ARRAY_SIZE];
+				myComputers = new RobotInfo[ARRAY_SIZE];
+				mySoldiers = new RobotInfo[ARRAY_SIZE];
+				myBashers = new RobotInfo[ARRAY_SIZE];
+				myDrones = new RobotInfo[ARRAY_SIZE];
+				myTanks = new RobotInfo[ARRAY_SIZE];
+				myCommanders = new RobotInfo[ARRAY_SIZE];
+				myLaunchers = new RobotInfo[ARRAY_SIZE];
+				myMissiles = new RobotInfo[ARRAY_SIZE];
+				myTowers = new RobotInfo[ARRAY_SIZE];
+				int numSupplyDepots = 0;
+				int numMinerFactories = 0;
+				int numTechnologyInstitutes = 0;
+				int numBarracks = 0;
+				int numHelipads = 0;
+				int numTrainingFields = 0;
+				int numTankFactories = 0;
+				int numAerospaceLabs = 0;
+				int numHandwashStations = 0;
+				int numBeavers = 0;
+				int numMiners = 0;
+				int numComputers = 0;
+				int numSoldiers = 0;
+				int numBashers = 0;
+				int numDrones = 0;
+				int numTanks = 0;
+				int numCommanders = 0;
+				int numLaunchers = 0;
+				int numMissiles = 0;
+				int numTowers = 0;
+
+				for (RobotInfo r : myRobots) {
+					RobotType type = r.type;
+					switch (type) {
+					case SUPPLYDEPOT:
+						mySupplyDepots[numSupplyDepots] = r;
+						numSupplyDepots++;
+						break;
+					case MINERFACTORY:
+						myMinerFactories[numMinerFactories] = r;
+						numMinerFactories++;
+						break;
+					case TECHNOLOGYINSTITUTE:
+						myTechnologyInstitutes[numTechnologyInstitutes] = r;
+						numTechnologyInstitutes++;
+						break;
+					case BARRACKS:
+						myBarracks[numBarracks] = r;
+						numBarracks++;
+						break;
+					case HELIPAD:
+						myHelipads[numHelipads] = r;
+						numHelipads++;
+						break;
+					case TRAININGFIELD:
+						myTrainingFields[numTrainingFields] = r;
+						numTrainingFields++;
+						break;
+					case TANKFACTORY:
+						myTankFactories[numTankFactories] = r;
+						numTankFactories++;
+						break;
+					case AEROSPACELAB:
+						myAerospaceLabs[numAerospaceLabs] = r;
+						numAerospaceLabs++;
+						break;
+					case HANDWASHSTATION:
+						myHandwashStations[numHandwashStations] = r;
+						numHandwashStations++;
+						break;
+					case BEAVER:
+						myBeavers[numBeavers] = r;
+						numBeavers++;
+						break;
+					case MINER:
+						myMiners[numMiners] = r;
+						numMiners++;
+						break;
+					case COMPUTER:
+						myComputers[numComputers] = r;
+						numComputers++;
+						break;
+					case SOLDIER:
+						mySoldiers[numSoldiers] = r;
+						numSoldiers++;
+						break;
+					case BASHER:
+						myBashers[numBashers] = r;
+						numBashers++;
+						break;
+					case DRONE:
+						myDrones[numDrones] = r;
+						numDrones++;
+						break;
+					case TANK:
+						myTanks[numTanks] = r;
+						numTanks++;
+						break;
+					case COMMANDER:
+						myCommanders[numCommanders] = r;
+						numCommanders++;
+						break;
+					case LAUNCHER:
+						myLaunchers[numLaunchers] = r;
+						numLaunchers++;
+						break;
+					case MISSILE:
+						myMissiles[numMissiles] = r;
+						numMissiles++;
+						break;
+					case TOWER:
+						myTowers[numTowers] = r;
+						numTowers++;
+						break;
+					case HQ:
+						break;
+					}
+				}
+				int targetBarracks = 1;
+				int targetTankFactories = 1;
+				int targetHelipads = 1;
+				int numBuildingBarracks = 0;
+				int numBuildingTankFactories = 0;
+				int numBuildingHelipads = 0;
+
+				// beaver loop, check orders
+				for (int i = 0; i < ARRAY_SIZE; i++) {
+					RobotInfo r = myBeavers[i];
+					if (r == null) {
+						break;
+					}
+					RobotType buildOrder = recieveBuildOrders(r.ID);
+					if (buildOrder != null) {
+						switch (buildOrder) {
 						case BARRACKS:
-							myBarracks[numBarracks] = r;
-							numBarracks++;
-							break;
-						case HELIPAD:
-							myHelipads[numHelipads] = r;
-							numHelipads++;
-							break;
-						case TRAININGFIELD:
-							myTrainingFields[numTrainingFields] = r;
-							numTrainingFields++;
-							break;
+							numBuildingBarracks++;
 						case TANKFACTORY:
-							myTankFactories[numTankFactories] = r;
-							numTankFactories++;
-							break;
-						case AEROSPACELAB:
-							myAerospaceLabs[numAerospaceLabs] = r;
-							numAerospaceLabs++;
-							break;
-						case HANDWASHSTATION:
-							myHandwashStations[numHandwashStations] = r;
-							numHandwashStations++;
-							break;
-						case BEAVER:
-							myBeavers[numBeavers] = r;
-							numBeavers++;
-							break;
-						case MINER:
-							myMiners[numMiners] = r;
-							numMiners++;
-							break;
-						case COMPUTER:
-							myComputers[numComputers] = r;
-							numComputers++;
-							break;
-						case SOLDIER:
-							mySoldiers[numSoldiers] = r;
-							numSoldiers++;
-							break;
-						case BASHER:
-							myBashers[numBashers] = r;
-							numBashers++;
-							break;
-						case DRONE:
-							myDrones[numDrones] = r;
-							numDrones++;
-							break;
-						case TANK:
-							myTanks[numTanks] = r;
-							numTanks++;
-							break;
-						case COMMANDER:
-							myCommanders[numCommanders] = r;
-							numCommanders++;
-							break;
-						case LAUNCHER:
-							myLaunchers[numLaunchers] = r;
-							numLaunchers++;
-							break;
-						case MISSILE:
-							myMissiles[numMissiles] = r;
-							numMissiles++;
-							break;
-						case TOWER:
-							myTowers[numTowers] = r;
-							numTowers++;
-							break;
-						case HQ:
-							break;
+							numBuildingTankFactories++;
+						case HELIPAD:
+							numBuildingHelipads++;
 						}
 					}
-					int targetBarracks = 1;
-					int targetTankFactories = 1;
-					int targetHelipads = 1;
-					int numBuildingBarracks = 0;
-					int numBuildingTankFactories = 0;
-					int numBuildingHelipads = 0;
-					
-					// beaver loop, check orders
-					for (int i = 0; i < ARRAY_SIZE; i++) {
-						RobotInfo r = myBeavers[i];
-						if (r == null) {
-							break;
-						}
-						int[] orders = recieveOrders(r.ID);
-						if (orders != null) {
-							RobotType buildOrder = numToRobotType(orders[0]);
-							if (buildOrder != null) {
-								switch (buildOrder) {
-								case BARRACKS:
-									numBuildingBarracks++;
-								case TANKFACTORY:
-									numBuildingTankFactories++;
-								case HELIPAD:
-									numBuildingHelipads++;
-								}
-							}
-						}
-					}
-					
-					rc.setIndicatorString(0, numBarracks + " barracks");
-					rc.setIndicatorString(1, numBuildingBarracks + " building barracks");
-					
-					// beaver loop, send orders
-					for (int i = 0; i < ARRAY_SIZE; i++) {
-						RobotInfo r = myBeavers[i];
-						if (r == null) {
-							break;
-						}
-						int[] orders = recieveOrders(r.ID);
-						if (orders == null) {
-							if (targetBarracks > numBuildingBarracks + numBarracks) {
-								sendOrders(r.ID, robotTypeToNum(RobotType.BARRACKS),0,0);
-								numBuildingBarracks++;
-							} else if (targetHelipads > numBuildingHelipads + numHelipads) {
-								sendOrders(r.ID, robotTypeToNum(RobotType.HELIPAD),0,0);
-								numBuildingHelipads++;
-							} else if (targetTankFactories > numBuildingTankFactories + numTankFactories) {
-								sendOrders(r.ID, robotTypeToNum(RobotType.TANKFACTORY),0,0);
-								numBuildingTankFactories++;
-							}
-						} else {
-							RobotType buildOrder = numToRobotType(orders[0]);
-							if (buildOrder == null) {
-								if (targetBarracks > numBuildingBarracks + numBarracks) {
-									sendOrders(r.ID, robotTypeToNum(RobotType.BARRACKS),0,0);
-									numBuildingBarracks++;
-								} else if (targetHelipads > numBuildingHelipads + numHelipads) {
-									sendOrders(r.ID, robotTypeToNum(RobotType.HELIPAD),0,0);
-									numBuildingHelipads++;
-								} else if (targetTankFactories > numBuildingTankFactories + numTankFactories) {
-									sendOrders(r.ID, robotTypeToNum(RobotType.TANKFACTORY),0,0);
-									numBuildingTankFactories++;
-								}
-							}
-						}
+				}
 
-					}
-					
-					if (rc.isWeaponReady()) {
-						attackSomething();
-					}
+				rc.setIndicatorString(0, numBarracks + " barracks");
+				rc.setIndicatorString(1, numBuildingBarracks + " building barracks");
 
-					if (rc.isCoreReady() && rc.getTeamOre() >= 350 && numBeavers < 10) {
-						trySpawn(directions[rand.nextInt(8)], RobotType.BEAVER);
+				// beaver loop, send orders
+				for (int i = 0; i < ARRAY_SIZE; i++) {
+					RobotInfo r = myBeavers[i];
+					if (r == null) {
+						break;
 					}
-				} catch (Exception e) {
-					System.out.println("HQ Exception");
-                    e.printStackTrace();
-				}
-			}
-			
-            if (rc.getType() == RobotType.TOWER) {
-                try {					
-					if (rc.isWeaponReady()) {
-						attackSomething();
-					}
-				} catch (Exception e) {
-					System.out.println("Tower Exception");
-                    e.printStackTrace();
-				}
-            }
-			
-			
-			if (rc.getType() == RobotType.BASHER) {
-                try {
-
-					if (rc.isCoreReady()) {
-						if (Clock.getRoundNum() < 1000) {
-							tryMove(directions[rand.nextInt(8)]);
-						} else {
-							tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
+					RobotType buildOrder = recieveBuildOrders(r.ID);
+					if (buildOrder == null) {
+						if (targetBarracks > numBuildingBarracks + numBarracks) {
+							sendOrders(r.ID, robotTypeToNum(RobotType.BARRACKS),0,0);
+							numBuildingBarracks++;
+						} else if (targetHelipads > numBuildingHelipads + numHelipads) {
+							sendOrders(r.ID, robotTypeToNum(RobotType.HELIPAD),0,0);
+							numBuildingHelipads++;
+						} else if (targetTankFactories > numBuildingTankFactories + numTankFactories) {
+							sendOrders(r.ID, robotTypeToNum(RobotType.TANKFACTORY),0,0);
+							numBuildingTankFactories++;
 						}
 					}
-                } catch (Exception e) {
-					System.out.println("Basher Exception");
-					e.printStackTrace();
-                }
-            }
-			
-            if (rc.getType() == RobotType.SOLDIER) {
-                try {
-                    if (rc.isWeaponReady()) {
-						attackSomething();
-					}
-					if (rc.isCoreReady()) {
-						if (Clock.getRoundNum() < 1000) {
-							tryMove(directions[rand.nextInt(8)]);
-						} else {
-							tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
-						}					}
-                } catch (Exception e) {
-					System.out.println("Soldier Exception");
-					e.printStackTrace();
-                }
-            }
-            
-            if (rc.getType() == RobotType.TANK) {
-                try {
-                    if (rc.isWeaponReady()) {
-						attackSomething();
-					}
-					if (rc.isCoreReady()) {
-						if (Clock.getRoundNum() < 1000) {
-							tryMove(directions[rand.nextInt(8)]);
-						} else {
-							tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
-						}					}
-                } catch (Exception e) {
-					System.out.println("Soldier Exception");
-					e.printStackTrace();
-                }
+				}
+				if (rc.isWeaponReady()) {
+					attackSomething();
+				}
+				if (rc.isCoreReady() && rc.getTeamOre() >= 350 && numBeavers < 10) {
+					trySpawn(directions[rand.nextInt(8)], RobotType.BEAVER);
+				}
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("HQ Exception");
+				e.printStackTrace();
 			}
-            
-            if (rc.getType() == RobotType.DRONE) {
-                try {
-                    if (rc.isWeaponReady()) {
-						attackSomething();
-					}
-					if (rc.isCoreReady()) {
-						if (Clock.getRoundNum() < 1000) {
-							tryMove(directions[rand.nextInt(8)]);
-						} else {
-							tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
-						}					}
-                } catch (Exception e) {
-					System.out.println("Drone Exception");
-					e.printStackTrace();
-                }
-			}
-			
-			if (rc.getType() == RobotType.BEAVER) {
-				try {
-					if (rc.isWeaponReady()) {
-						attackSomething();
-					}
-					if (rc.isCoreReady()) {
-						int[] orders = recieveOrders(rc.getID());
-						if (orders == null) {
-							boolean fate = rand.nextBoolean();
-							if (fate) {
-								rc.mine();
-							} else {
-								tryMove(directions[rand.nextInt(8)]);
-							}
-						} else {
-							RobotType buildOrder = numToRobotType(orders[0]);
-							if (buildOrder == null) {
-								boolean fate = rand.nextBoolean();
-								if (fate) {
-									rc.mine();
-								} else {
-									tryMove(directions[rand.nextInt(8)]);
-								}
-							} else {
-								if (ordersMarked(rc.getID())) {
-									sendOrders(rc.getID(), 0, 0, 0);
-									boolean fate = rand.nextBoolean();
-									if (fate) {
-										rc.mine();
-									} else {
-										tryMove(directions[rand.nextInt(8)]);
-									}
-								} else {
-									if (rc.getTeamOre() < buildOrder.oreCost) {
-										boolean fate = rand.nextBoolean();
-										if (fate) {
-											rc.mine();
-										} else {
-											tryMove(directions[rand.nextInt(8)]);
-										}
-									} else {
-										boolean success = tryBuild(directions[rand.nextInt(8)],buildOrder);
-										if (success) {
-											markOrders(rc.getID());
-										}
-									}
-								}
-							}
-							
+		}
+	}
 
-						}
-						
-						
-					}
-				} catch (Exception e) {
-					System.out.println("Beaver Exception");
-                    e.printStackTrace();
+	private static void runTower() {
+		while (true) {
+			try {					
+				if (rc.isWeaponReady()) {
+					attackSomething();
 				}
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("Tower Exception");
+				e.printStackTrace();
 			}
-
-            if (rc.getType() == RobotType.BARRACKS) {
-				try {
-					
-					if (rc.isCoreReady() && rc.getTeamOre() >= 600) {
-						boolean fate = rand.nextBoolean();
-						if (fate) {
-							trySpawn(directions[rand.nextInt(8)],RobotType.SOLDIER);
-						} else {
-							trySpawn(directions[rand.nextInt(8)],RobotType.BASHER);
-						}
-						
-					}
-				} catch (Exception e) {
-					System.out.println("Barracks Exception");
-                    e.printStackTrace();
-				}
-			}
-            
-            if (rc.getType() == RobotType.TANKFACTORY) {
-				try {
-					if (rc.isCoreReady() && rc.getTeamOre() >= 600) {
-							trySpawn(directions[rand.nextInt(8)],RobotType.TANK);
-					}
-				} catch (Exception e) {
-					System.out.println("Tank Factory Exception");
-                    e.printStackTrace();
-				}
-			}
-            
-            if (rc.getType() == RobotType.HELIPAD) {
-				try {
-					if (rc.isCoreReady() && rc.getTeamOre() >= 600) {
-							trySpawn(directions[rand.nextInt(8)],RobotType.DRONE);
-					}
-				} catch (Exception e) {
-					System.out.println("Helipad Exception");
-                    e.printStackTrace();
-				}
-			}
-            try {
-            	RobotInfo[] nearbyAllies = rc.senseNearbyRobots(GameConstants.SUPPLY_TRANSFER_RADIUS_SQUARED, myTeam);
-            	double mySupply = rc.getSupplyLevel();
-            	double lowestSupply = mySupply;
-            	RobotInfo lowestRobot = null;
-            	for (RobotInfo r : nearbyAllies) {
-            		if (r.supplyLevel < lowestSupply) {
-            			lowestSupply = r.supplyLevel;
-            			lowestRobot = r;
-            		}
-            	}
-            	if (lowestRobot != null) {
-            		rc.transferSupplies((int)((mySupply-lowestSupply)/2), lowestRobot.location);
-            	}
-            } catch (Exception e) {
-            	System.out.println("Transfer Exception");
-            	e.printStackTrace();
-            }
-            
+		}
+	}
+	
+	private static void runAerospaceLab() {
+		try {
+			transferSupply();
 			rc.yield();
+		} catch (Exception e) {
+			System.out.println("Aerospace Lab Exception");
+			e.printStackTrace();
+		}
+	}
+	
+	private static void runBarracks() {
+		while (true) {
+			try {
+				if (rc.isCoreReady() && rc.getTeamOre() >= 600) {
+					boolean fate = rand.nextBoolean();
+					if (fate) {
+						trySpawn(directions[rand.nextInt(8)],RobotType.SOLDIER);
+					} else {
+						trySpawn(directions[rand.nextInt(8)],RobotType.BASHER);
+					}
+					
+				}
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("Barracks Exception");
+                e.printStackTrace();
+			}
+		}
+	}
+	
+	private static void runBasher() {
+		while (true) {
+            try {
+				if (rc.isCoreReady()) {
+					if (Clock.getRoundNum() < 1000) {
+						tryMove(directions[rand.nextInt(8)]);
+					} else {
+						tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
+					}
+				}
+				transferSupply();
+				rc.yield();
+            } catch (Exception e) {
+				System.out.println("Basher Exception");
+				e.printStackTrace();
+            }
+		}
+	}
+	
+	private static void runBeaver() {
+		while (true) {
+			try {
+				if (rc.isWeaponReady()) {
+					attackSomething();
+				}
+				if (rc.isCoreReady()) {
+					RobotType buildOrder = recieveBuildOrders(rc.getID());
+					if (buildOrder == null) {
+						mine();
+					} else {
+						if (ordersMarked(rc.getID())) {
+							sendOrders(rc.getID(), 0, 0, 0);
+							mine();
+						} else {
+							if (rc.getTeamOre() < buildOrder.oreCost) {
+								mine();
+							} else {
+								boolean success = tryBuild(directions[rand.nextInt(8)],buildOrder);
+								if (success) {
+									markOrders(rc.getID());
+								}
+							}
+						}
+					}
+				}
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("Beaver Exception");
+                e.printStackTrace();
+			}
+		}
+	}
+	
+	private static void runCommander() {
+		try {
+			transferSupply();
+			rc.yield();
+		} catch (Exception e) {
+			System.out.println("Commander Exception");
+			e.printStackTrace();
+		}
+	}
+	
+	private static void runComputer() {
+		try {
+			transferSupply();
+			rc.yield();
+		} catch (Exception e) {
+			System.out.println("Computer Exception");
+			e.printStackTrace();
+		}
+	}
+	
+	private static void runDrone() {
+		while (true) {
+			try {
+                if (rc.isWeaponReady()) {
+					attackSomething();
+				}
+				if (rc.isCoreReady()) {
+					if (Clock.getRoundNum() < 1000) {
+						tryMove(directions[rand.nextInt(8)]);
+					} else {
+						tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
+					}
+				}
+				transferSupply();
+				rc.yield();
+            } catch (Exception e) {
+				System.out.println("Drone Exception");
+				e.printStackTrace();
+            }
+		}
+	}
+	
+	private static void runHandwashStation() {
+		try {
+			transferSupply();
+			rc.yield();
+		} catch (Exception e) {
+			System.out.println("Handwash Exception");
+			e.printStackTrace();
+		}
+	}
+	
+	private static void runHelipad() {
+		while (true) {
+			try {
+				if (rc.isCoreReady() && rc.getTeamOre() >= 600) {
+					trySpawn(directions[rand.nextInt(8)],RobotType.DRONE);
+				}
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("Helipad Exception");
+				e.printStackTrace();
+			}
+		}
+	}
+	
+	private static void runLauncher() {
+		try {
+			transferSupply();
+			rc.yield();
+		} catch (Exception e) {
+			System.out.println("Launcher Exception");
+			e.printStackTrace();
+		}
+	}
+	
+	private static void runMiner() {
+		try {
+			transferSupply();
+			rc.yield();
+		} catch (Exception e) {
+			System.out.println("Miner Exception");
+			e.printStackTrace();
+		}
+	}
+	
+	private static void runMinerFactory() {
+		try {
+			transferSupply();
+			rc.yield();
+		} catch (Exception e) {
+			System.out.println("Miner Factory Exception");
+			e.printStackTrace();
+		}
+	}
+	
+	private static void runMissile() {
+		try {
+			transferSupply();
+			rc.yield();
+		} catch (Exception e) {
+			System.out.println("Missile Exception");
+			e.printStackTrace();
+		}
+	}
+	
+	private static void runSoldier() {
+		while (true) {
+			try {
+	            if (rc.isWeaponReady()) {
+					attackSomething();
+				}
+				if (rc.isCoreReady()) {
+					if (Clock.getRoundNum() < 1000) {
+						tryMove(directions[rand.nextInt(8)]);
+					} else {
+						tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
+					}
+				}
+				transferSupply();
+				rc.yield();
+	        } catch (Exception e) {
+				System.out.println("Soldier Exception");
+				e.printStackTrace();
+	        }
+		}
+	}
+	
+	private static void runSupplyDepot() {
+		try {
+			transferSupply();
+			rc.yield();
+		} catch (Exception e) {
+			System.out.println("Supply Depot Exception");
+			e.printStackTrace();
+		}
+	}
+	
+	private static void runTank() {
+		while (true) {
+			try {
+				if (rc.isWeaponReady()) {
+					attackSomething();
+				}
+				if (rc.isCoreReady()) {
+					if (Clock.getRoundNum() < 1000) {
+						tryMove(directions[rand.nextInt(8)]);
+					} else {
+						tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
+					}
+				}
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("Tank Exception");
+				e.printStackTrace();
+			}
+		}
+	}
+	
+	private static void runTankFactory() {
+		while (true) {
+			try {
+				if (rc.isCoreReady() && rc.getTeamOre() >= 600) {
+						trySpawn(directions[rand.nextInt(8)],RobotType.TANK);
+				}
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("Tank Factory Exception");
+                e.printStackTrace();
+			}
+		}
+	}
+	
+	private static void runTechnologyInstitute() {
+		try {
+			transferSupply();
+			rc.yield();
+		} catch (Exception e) {
+			System.out.println("Technology Institute Exception");
+			e.printStackTrace();
+		}
+	}
+	
+	private static void runTrainingField() {
+		try {
+			transferSupply();
+			rc.yield();
+		} catch (Exception e) {
+			System.out.println("Training Field Exception");
+			e.printStackTrace();
+		}
+	}
+	
+	private static void transferSupply() throws GameActionException {
+		RobotInfo[] nearbyAllies = rc.senseNearbyRobots(GameConstants.SUPPLY_TRANSFER_RADIUS_SQUARED, myTeam);
+    	double mySupply = rc.getSupplyLevel();
+    	double lowestSupply = mySupply;
+    	RobotInfo lowestRobot = null;
+    	for (RobotInfo r : nearbyAllies) {
+    		if (r.supplyLevel < lowestSupply) {
+    			lowestSupply = r.supplyLevel;
+    			lowestRobot = r;
+    		}
+    	}
+    	if (lowestRobot != null) {
+    		rc.transferSupplies((int)((mySupply-lowestSupply)/2), lowestRobot.location);
+    	}
+	}
+	
+	private static void mine() throws GameActionException {
+		MapLocation loc = rc.getLocation();
+		double ore = rc.senseOre(loc);
+		if (ore > 40) {
+			rc.mine();
+		} else {
+			for (int i = 0; i < 8; i++) {
+				Direction d = intToDirection(i);
+				if (rc.senseOre(loc.add(d)) > 40 && rc.canMove(d)) {
+					rc.move(d);
+					break;
+				}
+			}
 		}
 	}
 	
@@ -538,6 +676,17 @@ public class RobotPlayer {
 		result[1] = rc.readBroadcast(hash * MSG_LEN + 2);
 		result[2] = rc.readBroadcast(hash * MSG_LEN + 3);
 		return result;
+	}
+	
+	private static RobotType recieveBuildOrders(int ID) throws GameActionException {
+		int[] orders = recieveOrders(ID);
+		if (orders != null) {
+			RobotType buildOrders = numToRobotType(orders[0]);
+			if (buildOrders != null) {
+				return buildOrders;
+			}
+		}
+		return null;
 	}
 	
 	private static void markOrders(int ID) throws GameActionException {
@@ -643,6 +792,29 @@ public class RobotPlayer {
 				return 7;
 			default:
 				return -1;
+		}
+	}
+	
+	static Direction intToDirection(int num) {
+		switch(num) {
+			case 0:
+				return Direction.NORTH;
+			case 1:
+				return Direction.NORTH_EAST;
+			case 2:
+				return Direction.EAST;
+			case 3:
+				return Direction.SOUTH_EAST;
+			case 4:
+				return Direction.SOUTH;
+			case 5:
+				return Direction.SOUTH_WEST;
+			case 6:
+				return Direction.WEST;
+			case 7:
+				return Direction.NORTH_WEST;
+			default:
+				return Direction.NONE;
 		}
 	}
 }
