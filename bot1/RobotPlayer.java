@@ -5,20 +5,44 @@ import battlecode.common.*;
 import java.util.*;
 
 public class RobotPlayer {
-	
+
 	// AI parameters
-	static final int ARRAY_SIZE = 1000;
-	
+	private static final int ARRAY_SIZE = 1000;
+	private static final int RUSH_TURN = 1500;
+
 	// Cached game information
-	static RobotController rc;
-	static Team myTeam;
-	static Team enemyTeam;
-	static RobotType myType;
-	static int myRange;
-	static Random rand;
-	static MapLocation HQLoc;
-	static MapLocation enemyHQLoc;
-	static Direction[] directions = {Direction.NORTH, Direction.NORTH_EAST, Direction.EAST, Direction.SOUTH_EAST, Direction.SOUTH, Direction.SOUTH_WEST, Direction.WEST, Direction.NORTH_WEST};
+	private static RobotController rc;
+	private static Team myTeam;
+	private static Team enemyTeam;
+	private static RobotType myType;
+	private static int myRange;
+	private static Random rand;
+	private static MapLocation HQLoc;
+	private static MapLocation enemyHQLoc;
+	private static Direction[] directions = {Direction.NORTH, Direction.NORTH_EAST, Direction.EAST, Direction.SOUTH_EAST, Direction.SOUTH, Direction.SOUTH_WEST, Direction.WEST, Direction.NORTH_WEST};
+	private static RobotType[] robotTypes = {
+		RobotType.HQ,
+		RobotType.TOWER,
+		RobotType.SUPPLYDEPOT,
+		RobotType.TECHNOLOGYINSTITUTE,
+		RobotType.BARRACKS,
+		RobotType.HELIPAD,
+		RobotType.TRAININGFIELD,
+		RobotType.TANKFACTORY,
+		RobotType.MINERFACTORY,
+		RobotType.HANDWASHSTATION,
+		RobotType.AEROSPACELAB,
+		RobotType.BEAVER,
+		RobotType.COMPUTER,
+		RobotType.SOLDIER,
+		RobotType.BASHER,
+		RobotType.MINER,
+		RobotType.DRONE,
+		RobotType.TANK,
+		RobotType.COMMANDER,
+		RobotType.LAUNCHER,
+		RobotType.MISSILE,
+	};
 	
 	public static void run(RobotController myrc) {
 		// Initialize cached game information
@@ -27,10 +51,10 @@ public class RobotPlayer {
 		enemyTeam = myTeam.opponent();
 		myType = rc.getType();
 		myRange = myType.attackRadiusSquared;
-        rand = new Random(rc.getID());
-        HQLoc = rc.senseHQLocation();
+		rand = new Random(rc.getID());
+		HQLoc = rc.senseHQLocation();
 		enemyHQLoc = rc.senseEnemyHQLocation();
-		
+
 		switch (myType) {
 		case HQ: runHQ(); break;
 		case TOWER: runTower(); break;
@@ -56,7 +80,7 @@ public class RobotPlayer {
 		default: break;
 		}
 	}
-	
+
 	private static void runHQ() {
 		// Information stored across rounds
 		RobotInfo[] myRobots = null;
@@ -212,12 +236,14 @@ public class RobotPlayer {
 						break;
 					}
 				}
-				int targetBarracks = 1;
-				int targetTankFactories = 1;
-				int targetHelipads = 1;
+				int targetBarracks = 5;
+				int targetTankFactories = 0;
+				int targetHelipads = 0;
+				int targetSupplyDepots = 15;
 				int numBuildingBarracks = 0;
 				int numBuildingTankFactories = 0;
 				int numBuildingHelipads = 0;
+				int numBuildingSupplyDepots = 0;
 
 				// beaver loop, check orders
 				for (int i = 0; i < ARRAY_SIZE; i++) {
@@ -234,6 +260,8 @@ public class RobotPlayer {
 							numBuildingTankFactories++;
 						case HELIPAD:
 							numBuildingHelipads++;
+						case SUPPLYDEPOT:
+							numBuildingSupplyDepots++;
 						}
 					}
 				}
@@ -242,7 +270,7 @@ public class RobotPlayer {
 				rc.setIndicatorString(1, numBuildingBarracks + " building barracks");
 
 				// beaver loop, send orders
-				for (int i = 0; i < ARRAY_SIZE; i++) {
+				for (int i = numBeavers; --i >= 0;) {
 					RobotInfo r = myBeavers[i];
 					if (r == null) {
 						break;
@@ -258,13 +286,16 @@ public class RobotPlayer {
 						} else if (targetTankFactories > numBuildingTankFactories + numTankFactories) {
 							sendOrders(r.ID, robotTypeToNum(RobotType.TANKFACTORY),0,0);
 							numBuildingTankFactories++;
+						} else if (targetSupplyDepots > numBuildingSupplyDepots + numSupplyDepots) {
+							sendOrders(r.ID, robotTypeToNum(RobotType.SUPPLYDEPOT),0,0);
+							numBuildingSupplyDepots++;
 						}
 					}
 				}
 				if (rc.isWeaponReady()) {
 					attackSomething();
 				}
-				if (rc.isCoreReady() && rc.getTeamOre() >= 350 && numBeavers < 10) {
+				if (rc.isCoreReady() && rc.getTeamOre() >= 350 && numBeavers < 30) {
 					trySpawn(directions[rand.nextInt(8)], RobotType.BEAVER);
 				}
 				transferSupply();
@@ -290,17 +321,19 @@ public class RobotPlayer {
 			}
 		}
 	}
-	
+
 	private static void runAerospaceLab() {
-		try {
-			transferSupply();
-			rc.yield();
-		} catch (Exception e) {
-			System.out.println("Aerospace Lab Exception");
-			e.printStackTrace();
+		while (true) {
+			try {
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("Aerospace Lab Exception");
+				e.printStackTrace();
+			}
 		}
 	}
-	
+
 	private static void runBarracks() {
 		while (true) {
 			try {
@@ -311,36 +344,41 @@ public class RobotPlayer {
 					} else {
 						trySpawn(directions[rand.nextInt(8)],RobotType.BASHER);
 					}
-					
+
 				}
 				transferSupply();
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("Barracks Exception");
-                e.printStackTrace();
+				e.printStackTrace();
 			}
 		}
 	}
-	
+
 	private static void runBasher() {
 		while (true) {
-            try {
+			try {
 				if (rc.isCoreReady()) {
-					if (Clock.getRoundNum() < 1000) {
-						tryMove(directions[rand.nextInt(8)]);
+					if (Clock.getRoundNum() < RUSH_TURN) {
+						rally();
 					} else {
-						tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
+						MapLocation enemyLoc = nearestEnemy();
+						if (enemyLoc == null) {
+							tryMove(rc.getLocation().directionTo(enemyHQLoc));
+						} else {
+							tryMove(rc.getLocation().directionTo(enemyLoc));
+						}
 					}
 				}
 				transferSupply();
 				rc.yield();
-            } catch (Exception e) {
+			} catch (Exception e) {
 				System.out.println("Basher Exception");
 				e.printStackTrace();
-            }
+			}
 		}
 	}
-	
+
 	private static void runBeaver() {
 		while (true) {
 			try {
@@ -348,20 +386,24 @@ public class RobotPlayer {
 					attackSomething();
 				}
 				if (rc.isCoreReady()) {
-					RobotType buildOrder = recieveBuildOrders(rc.getID());
-					if (buildOrder == null) {
-						mine();
+					if (rc.getLocation().distanceSquaredTo(HQLoc) <= 2) {
+						tryMove(rc.getLocation().directionTo(HQLoc).opposite());
 					} else {
-						if (ordersMarked(rc.getID())) {
-							sendOrders(rc.getID(), 0, 0, 0);
+						RobotType buildOrder = recieveBuildOrders(rc.getID());
+						if (buildOrder == null) {
 							mine();
 						} else {
-							if (rc.getTeamOre() < buildOrder.oreCost) {
+							if (ordersMarked(rc.getID())) {
+								sendOrders(rc.getID(), -1, 0, 0);
 								mine();
 							} else {
-								boolean success = tryBuild(directions[rand.nextInt(8)],buildOrder);
-								if (success) {
-									markOrders(rc.getID());
+								if (rc.getTeamOre() < buildOrder.oreCost) {
+									mine();
+								} else {
+									boolean success = tryBuild(directions[rand.nextInt(8)],buildOrder);
+									if (success) {
+										markOrders(rc.getID());
+									}
 								}
 							}
 						}
@@ -371,63 +413,69 @@ public class RobotPlayer {
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("Beaver Exception");
-                e.printStackTrace();
+				e.printStackTrace();
 			}
 		}
 	}
-	
+
 	private static void runCommander() {
-		try {
-			transferSupply();
-			rc.yield();
-		} catch (Exception e) {
-			System.out.println("Commander Exception");
-			e.printStackTrace();
+		while (true) {
+			try {
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("Commander Exception");
+				e.printStackTrace();
+			}
 		}
 	}
-	
+
 	private static void runComputer() {
-		try {
-			transferSupply();
-			rc.yield();
-		} catch (Exception e) {
-			System.out.println("Computer Exception");
-			e.printStackTrace();
+		while (true) {
+			try {
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("Computer Exception");
+				e.printStackTrace();
+			}
 		}
 	}
-	
+
 	private static void runDrone() {
 		while (true) {
 			try {
-                if (rc.isWeaponReady()) {
+				if (rc.isWeaponReady()) {
 					attackSomething();
 				}
 				if (rc.isCoreReady()) {
-					if (Clock.getRoundNum() < 1000) {
-						tryMove(directions[rand.nextInt(8)]);
+					if (Clock.getRoundNum() < RUSH_TURN) {
+						rally();
 					} else {
-						tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
+						tryMove(rc.getLocation().directionTo(enemyHQLoc));
 					}
 				}
 				transferSupply();
 				rc.yield();
-            } catch (Exception e) {
+			} catch (Exception e) {
 				System.out.println("Drone Exception");
 				e.printStackTrace();
-            }
+			}
 		}
 	}
-	
+
 	private static void runHandwashStation() {
-		try {
-			transferSupply();
-			rc.yield();
-		} catch (Exception e) {
-			System.out.println("Handwash Exception");
-			e.printStackTrace();
+		while (true) {
+			try {
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("Handwash Exception");
+				e.printStackTrace();
+			}
 		}
 	}
-	
+
 	private static void runHelipad() {
 		while (true) {
 			try {
@@ -442,79 +490,89 @@ public class RobotPlayer {
 			}
 		}
 	}
-	
+
 	private static void runLauncher() {
-		try {
-			transferSupply();
-			rc.yield();
-		} catch (Exception e) {
-			System.out.println("Launcher Exception");
-			e.printStackTrace();
+		while (true) {
+			try {
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("Launcher Exception");
+				e.printStackTrace();
+			}
 		}
 	}
-	
+
 	private static void runMiner() {
-		try {
-			transferSupply();
-			rc.yield();
-		} catch (Exception e) {
-			System.out.println("Miner Exception");
-			e.printStackTrace();
+		while (true) {
+			try {
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("Miner Exception");
+				e.printStackTrace();
+			}
 		}
 	}
-	
+
 	private static void runMinerFactory() {
-		try {
-			transferSupply();
-			rc.yield();
-		} catch (Exception e) {
-			System.out.println("Miner Factory Exception");
-			e.printStackTrace();
+		while (true) {
+			try {
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("Miner Factory Exception");
+				e.printStackTrace();
+			}
 		}
 	}
-	
+
 	private static void runMissile() {
-		try {
-			transferSupply();
-			rc.yield();
-		} catch (Exception e) {
-			System.out.println("Missile Exception");
-			e.printStackTrace();
+		while (true) {
+			try {
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("Missile Exception");
+				e.printStackTrace();
+			}
 		}
 	}
-	
+
 	private static void runSoldier() {
 		while (true) {
 			try {
-	            if (rc.isWeaponReady()) {
+				if (rc.isWeaponReady()) {
 					attackSomething();
 				}
 				if (rc.isCoreReady()) {
-					if (Clock.getRoundNum() < 1000) {
-						tryMove(directions[rand.nextInt(8)]);
+					if (Clock.getRoundNum() < RUSH_TURN) {
+						rally();
 					} else {
-						tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
+						tryMove(rc.getLocation().directionTo(enemyHQLoc));
 					}
 				}
 				transferSupply();
 				rc.yield();
-	        } catch (Exception e) {
+			} catch (Exception e) {
 				System.out.println("Soldier Exception");
 				e.printStackTrace();
-	        }
+			}
 		}
 	}
-	
+
 	private static void runSupplyDepot() {
-		try {
-			transferSupply();
-			rc.yield();
-		} catch (Exception e) {
-			System.out.println("Supply Depot Exception");
-			e.printStackTrace();
+		while (true) {
+			try {
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("Supply Depot Exception");
+				e.printStackTrace();
+			}
 		}
 	}
-	
+
 	private static void runTank() {
 		while (true) {
 			try {
@@ -522,10 +580,10 @@ public class RobotPlayer {
 					attackSomething();
 				}
 				if (rc.isCoreReady()) {
-					if (Clock.getRoundNum() < 1000) {
-						tryMove(directions[rand.nextInt(8)]);
+					if (Clock.getRoundNum() < RUSH_TURN) {
+						rally();
 					} else {
-						tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
+						tryMove(rc.getLocation().directionTo(enemyHQLoc));
 					}
 				}
 				transferSupply();
@@ -536,58 +594,62 @@ public class RobotPlayer {
 			}
 		}
 	}
-	
+
 	private static void runTankFactory() {
 		while (true) {
 			try {
 				if (rc.isCoreReady() && rc.getTeamOre() >= 600) {
-						trySpawn(directions[rand.nextInt(8)],RobotType.TANK);
+					trySpawn(directions[rand.nextInt(8)],RobotType.TANK);
 				}
 				transferSupply();
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("Tank Factory Exception");
-                e.printStackTrace();
+				e.printStackTrace();
 			}
 		}
 	}
-	
+
 	private static void runTechnologyInstitute() {
-		try {
-			transferSupply();
-			rc.yield();
-		} catch (Exception e) {
-			System.out.println("Technology Institute Exception");
-			e.printStackTrace();
+		while (true) {
+			try {
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("Technology Institute Exception");
+				e.printStackTrace();
+			}
 		}
 	}
-	
+
 	private static void runTrainingField() {
-		try {
-			transferSupply();
-			rc.yield();
-		} catch (Exception e) {
-			System.out.println("Training Field Exception");
-			e.printStackTrace();
+		while (true) {
+			try {
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("Training Field Exception");
+				e.printStackTrace();
+			}
 		}
 	}
-	
+
 	private static void transferSupply() throws GameActionException {
 		RobotInfo[] nearbyAllies = rc.senseNearbyRobots(GameConstants.SUPPLY_TRANSFER_RADIUS_SQUARED, myTeam);
-    	double mySupply = rc.getSupplyLevel();
-    	double lowestSupply = mySupply;
-    	RobotInfo lowestRobot = null;
-    	for (RobotInfo r : nearbyAllies) {
-    		if (r.supplyLevel < lowestSupply) {
-    			lowestSupply = r.supplyLevel;
-    			lowestRobot = r;
-    		}
-    	}
-    	if (lowestRobot != null) {
-    		rc.transferSupplies((int)((mySupply-lowestSupply)/2), lowestRobot.location);
-    	}
+		double mySupply = rc.getSupplyLevel();
+		double lowestSupply = mySupply;
+		RobotInfo lowestRobot = null;
+		for (RobotInfo r : nearbyAllies) {
+			if (r.supplyLevel < lowestSupply) {
+				lowestSupply = r.supplyLevel;
+				lowestRobot = r;
+			}
+		}
+		if (lowestRobot != null) {
+			rc.transferSupplies((int)((mySupply-lowestSupply)/2), lowestRobot.location);
+		}
 	}
-	
+
 	private static void mine() throws GameActionException {
 		MapLocation loc = rc.getLocation();
 		double ore = rc.senseOre(loc);
@@ -604,47 +666,76 @@ public class RobotPlayer {
 		}
 	}
 	
+	private static void rally() throws GameActionException {
+		MapLocation myLoc = rc.getLocation();
+		if (myLoc.distanceSquaredTo(HQLoc) > 300) {
+			tryMove(myLoc.directionTo(HQLoc));
+		} else {
+			tryMove(directions[rand.nextInt(8)]);
+		}
+	}
+	
+	private static MapLocation nearestEnemy() throws GameActionException {
+		MapLocation myLoc = rc.getLocation();
+		RobotInfo[] enemies = rc.senseNearbyRobots(24, enemyTeam);
+		int closestDist = 9999;
+		RobotInfo closestRobot = null;
+		for (RobotInfo r : enemies) {
+			MapLocation enemyLoc = r.location;
+			int dist = myLoc.distanceSquaredTo(enemyLoc);
+			if (dist < closestDist) {
+				closestDist = dist;
+				closestRobot = r;
+			}
+		}
+		if (closestRobot != null) {
+			return closestRobot.location;
+		}
+		return null;
+	}
+
 	private static int robotTypeToNum(RobotType type) {
 		int num;
 		switch (type) {
-		case BARRACKS:
-			num = 1;
-			break;
-		case HELIPAD:
-			num = 2;
-			break;
-		case TANKFACTORY:
-			num = 3;
-			break;
-		default:
-			num = 0;
-			break;
+		case HQ: num = 0; break;
+		case TOWER: num = 1; break;
+		case SUPPLYDEPOT: num = 2; break;
+		case TECHNOLOGYINSTITUTE: num = 3; break;
+		case BARRACKS: num = 4; break;
+		case HELIPAD: num = 5; break;
+		case TRAININGFIELD: num = 6; break;
+		case TANKFACTORY: num = 7; break;
+		case MINERFACTORY: num = 8; break;
+		case HANDWASHSTATION: num = 9; break;
+		case AEROSPACELAB: num = 10; break;
+		case BEAVER: num = 11; break;
+		case COMPUTER: num = 12; break;
+		case SOLDIER: num = 13; break;
+		case BASHER: num = 14; break;
+		case MINER: num = 15; break;
+		case DRONE: num = 16; break;
+		case TANK: num = 17; break;
+		case COMMANDER: num = 18; break;
+		case LAUNCHER: num = 19; break;
+		case MISSILE: num = 20; break;
+		default: num = -1; break;
 		}
 		return num;
 	}
-	
+
 	private static RobotType numToRobotType(int num) {
 		RobotType type;
-		switch(num) {
-		case 1:
-			type = RobotType.BARRACKS;
-			break;
-		case 2:
-			type = RobotType.HELIPAD;
-			break;
-		case 3:
-			type = RobotType.TANKFACTORY;
-			break;
-		default:
+		if (num >= 0 && num < 21) {
+			type = robotTypes[num];
+		} else {
 			type = null;
-			break;
 		}
 		return type;
 	}
-	
+
 	private static final int MSG_LEN = 5;
 	private static final int NUM_MSG = 65536 / MSG_LEN;
-	
+
 	private static void sendOrders(int ID, int order, int x, int y) throws GameActionException {
 		int hash = hashID(ID);
 		int foundID = rc.readBroadcast(hash * MSG_LEN);
@@ -659,7 +750,7 @@ public class RobotPlayer {
 		rc.broadcast(hash * MSG_LEN + 3, y);
 		rc.broadcast(hash * MSG_LEN + 4, 0);
 	}
-	
+
 	private static int[] recieveOrders(int ID) throws GameActionException {
 		int hash = hashID(ID);
 		int foundID = rc.readBroadcast(hash * MSG_LEN);
@@ -677,7 +768,7 @@ public class RobotPlayer {
 		result[2] = rc.readBroadcast(hash * MSG_LEN + 3);
 		return result;
 	}
-	
+
 	private static RobotType recieveBuildOrders(int ID) throws GameActionException {
 		int[] orders = recieveOrders(ID);
 		if (orders != null) {
@@ -688,7 +779,7 @@ public class RobotPlayer {
 		}
 		return null;
 	}
-	
+
 	private static void markOrders(int ID) throws GameActionException {
 		int hash = hashID(ID);
 		int foundID = rc.readBroadcast(hash * MSG_LEN);
@@ -701,7 +792,7 @@ public class RobotPlayer {
 			rc.broadcast(hash * MSG_LEN + 4, 1);
 		}
 	}
-	
+
 	private static boolean ordersMarked(int ID) throws GameActionException {
 		int hash = hashID(ID);
 		int foundID = rc.readBroadcast(hash * MSG_LEN);
@@ -715,20 +806,20 @@ public class RobotPlayer {
 		}
 		return false;
 	}
-	
+
 	private static int hashID(int ID) {
 		return ID % NUM_MSG;
 	}
-	
-    // This method will attack an enemy in sight, if there is one
+
+	// This method will attack an enemy in sight, if there is one
 	static void attackSomething() throws GameActionException {
 		RobotInfo[] enemies = rc.senseNearbyRobots(myRange, enemyTeam);
 		if (enemies.length > 0) {
 			rc.attackLocation(enemies[0].location);
 		}
 	}
-	
-    // This method will attempt to move in Direction d (or as close to it as possible)
+
+	// This method will attempt to move in Direction d (or as close to it as possible)
 	static void tryMove(Direction d) throws GameActionException {
 		int offsetIndex = 0;
 		int[] offsets = {0,1,-1,2,-2};
@@ -741,8 +832,8 @@ public class RobotPlayer {
 			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
 		}
 	}
-	
-    // This method will attempt to spawn in the given direction (or as close to it as possible)
+
+	// This method will attempt to spawn in the given direction (or as close to it as possible)
 	static void trySpawn(Direction d, RobotType type) throws GameActionException {
 		int offsetIndex = 0;
 		int[] offsets = {0,1,-1,2,-2,3,-3,4};
@@ -755,8 +846,8 @@ public class RobotPlayer {
 			rc.spawn(directions[(dirint+offsets[offsetIndex]+8)%8], type);
 		}
 	}
-	
-    // This method will attempt to build in the given direction (or as close to it as possible)
+
+	// This method will attempt to build in the given direction (or as close to it as possible)
 	static boolean tryBuild(Direction d, RobotType type) throws GameActionException {
 		int offsetIndex = 0;
 		int[] offsets = {0,1,-1,2,-2,3,-3,4};
@@ -771,50 +862,50 @@ public class RobotPlayer {
 		}
 		return false;
 	}
-	
+
 	static int directionToInt(Direction d) {
 		switch(d) {
-			case NORTH:
-				return 0;
-			case NORTH_EAST:
-				return 1;
-			case EAST:
-				return 2;
-			case SOUTH_EAST:
-				return 3;
-			case SOUTH:
-				return 4;
-			case SOUTH_WEST:
-				return 5;
-			case WEST:
-				return 6;
-			case NORTH_WEST:
-				return 7;
-			default:
-				return -1;
+		case NORTH:
+			return 0;
+		case NORTH_EAST:
+			return 1;
+		case EAST:
+			return 2;
+		case SOUTH_EAST:
+			return 3;
+		case SOUTH:
+			return 4;
+		case SOUTH_WEST:
+			return 5;
+		case WEST:
+			return 6;
+		case NORTH_WEST:
+			return 7;
+		default:
+			return -1;
 		}
 	}
-	
+
 	static Direction intToDirection(int num) {
 		switch(num) {
-			case 0:
-				return Direction.NORTH;
-			case 1:
-				return Direction.NORTH_EAST;
-			case 2:
-				return Direction.EAST;
-			case 3:
-				return Direction.SOUTH_EAST;
-			case 4:
-				return Direction.SOUTH;
-			case 5:
-				return Direction.SOUTH_WEST;
-			case 6:
-				return Direction.WEST;
-			case 7:
-				return Direction.NORTH_WEST;
-			default:
-				return Direction.NONE;
+		case 0:
+			return Direction.NORTH;
+		case 1:
+			return Direction.NORTH_EAST;
+		case 2:
+			return Direction.EAST;
+		case 3:
+			return Direction.SOUTH_EAST;
+		case 4:
+			return Direction.SOUTH;
+		case 5:
+			return Direction.SOUTH_WEST;
+		case 6:
+			return Direction.WEST;
+		case 7:
+			return Direction.NORTH_WEST;
+		default:
+			return Direction.NONE;
 		}
 	}
 }
