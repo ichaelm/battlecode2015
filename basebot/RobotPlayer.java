@@ -84,220 +84,63 @@ public class RobotPlayer {
 	private static void runHQ() {
 		// Information stored across rounds
 		RobotInfo[] myRobots = null;
-		RobotInfo[] mySupplyDepots = null;
-		RobotInfo[] myMinerFactories = null;
-		RobotInfo[] myTechnologyInstitutes = null;
-		RobotInfo[] myBarracks = null;
-		RobotInfo[] myHelipads = null;
-		RobotInfo[] myTrainingFields = null;
-		RobotInfo[] myTankFactories = null;
-		RobotInfo[] myAerospaceLabs = null;
-		RobotInfo[] myHandwashStations = null;
-		RobotInfo[] myBeavers = null;
-		RobotInfo[] myMiners = null;
-		RobotInfo[] myComputers = null;
-		RobotInfo[] mySoldiers = null;
-		RobotInfo[] myBashers = null;
-		RobotInfo[] myDrones = null;
-		RobotInfo[] myTanks = null;
-		RobotInfo[] myCommanders = null;
-		RobotInfo[] myLaunchers = null;
-		RobotInfo[] myMissiles = null;
-		RobotInfo[] myTowers = null;
+		RobotInfo[][] myRobotsByType;
+		int[] numRobotsByType; // zeros
 
 		while (true) {
 			try {
 				myRobots = rc.senseNearbyRobots(999999, myTeam);
-				mySupplyDepots = new RobotInfo[ARRAY_SIZE];
-				myMinerFactories = new RobotInfo[ARRAY_SIZE];
-				myTechnologyInstitutes = new RobotInfo[ARRAY_SIZE];
-				myBarracks = new RobotInfo[ARRAY_SIZE];
-				myHelipads = new RobotInfo[ARRAY_SIZE];
-				myTrainingFields = new RobotInfo[ARRAY_SIZE];
-				myTankFactories = new RobotInfo[ARRAY_SIZE];
-				myAerospaceLabs = new RobotInfo[ARRAY_SIZE];
-				myHandwashStations = new RobotInfo[ARRAY_SIZE];
-				myBeavers = new RobotInfo[ARRAY_SIZE];
-				myMiners = new RobotInfo[ARRAY_SIZE];
-				myComputers = new RobotInfo[ARRAY_SIZE];
-				mySoldiers = new RobotInfo[ARRAY_SIZE];
-				myBashers = new RobotInfo[ARRAY_SIZE];
-				myDrones = new RobotInfo[ARRAY_SIZE];
-				myTanks = new RobotInfo[ARRAY_SIZE];
-				myCommanders = new RobotInfo[ARRAY_SIZE];
-				myLaunchers = new RobotInfo[ARRAY_SIZE];
-				myMissiles = new RobotInfo[ARRAY_SIZE];
-				myTowers = new RobotInfo[ARRAY_SIZE];
-				int numSupplyDepots = 0;
-				int numMinerFactories = 0;
-				int numTechnologyInstitutes = 0;
-				int numBarracks = 0;
-				int numHelipads = 0;
-				int numTrainingFields = 0;
-				int numTankFactories = 0;
-				int numAerospaceLabs = 0;
-				int numHandwashStations = 0;
-				int numBeavers = 0;
-				int numMiners = 0;
-				int numComputers = 0;
-				int numSoldiers = 0;
-				int numBashers = 0;
-				int numDrones = 0;
-				int numTanks = 0;
-				int numCommanders = 0;
-				int numLaunchers = 0;
-				int numMissiles = 0;
-				int numTowers = 0;
+				myRobotsByType = new RobotInfo[21][ARRAY_SIZE];
+				numRobotsByType = new int[21]; // zeros
 
 				for (RobotInfo r : myRobots) {
 					RobotType type = r.type;
-					switch (type) {
-					case SUPPLYDEPOT:
-						mySupplyDepots[numSupplyDepots] = r;
-						numSupplyDepots++;
-						break;
-					case MINERFACTORY:
-						myMinerFactories[numMinerFactories] = r;
-						numMinerFactories++;
-						break;
-					case TECHNOLOGYINSTITUTE:
-						myTechnologyInstitutes[numTechnologyInstitutes] = r;
-						numTechnologyInstitutes++;
-						break;
-					case BARRACKS:
-						myBarracks[numBarracks] = r;
-						numBarracks++;
-						break;
-					case HELIPAD:
-						myHelipads[numHelipads] = r;
-						numHelipads++;
-						break;
-					case TRAININGFIELD:
-						myTrainingFields[numTrainingFields] = r;
-						numTrainingFields++;
-						break;
-					case TANKFACTORY:
-						myTankFactories[numTankFactories] = r;
-						numTankFactories++;
-						break;
-					case AEROSPACELAB:
-						myAerospaceLabs[numAerospaceLabs] = r;
-						numAerospaceLabs++;
-						break;
-					case HANDWASHSTATION:
-						myHandwashStations[numHandwashStations] = r;
-						numHandwashStations++;
-						break;
-					case BEAVER:
-						myBeavers[numBeavers] = r;
-						numBeavers++;
-						break;
-					case MINER:
-						myMiners[numMiners] = r;
-						numMiners++;
-						break;
-					case COMPUTER:
-						myComputers[numComputers] = r;
-						numComputers++;
-						break;
-					case SOLDIER:
-						mySoldiers[numSoldiers] = r;
-						numSoldiers++;
-						break;
-					case BASHER:
-						myBashers[numBashers] = r;
-						numBashers++;
-						break;
-					case DRONE:
-						myDrones[numDrones] = r;
-						numDrones++;
-						break;
-					case TANK:
-						myTanks[numTanks] = r;
-						numTanks++;
-						break;
-					case COMMANDER:
-						myCommanders[numCommanders] = r;
-						numCommanders++;
-						break;
-					case LAUNCHER:
-						myLaunchers[numLaunchers] = r;
-						numLaunchers++;
-						break;
-					case MISSILE:
-						myMissiles[numMissiles] = r;
-						numMissiles++;
-						break;
-					case TOWER:
-						myTowers[numTowers] = r;
-						numTowers++;
-						break;
-					case HQ:
-						break;
-					}
+					int typeNum = robotTypeToNum(type);
+					myRobotsByType[typeNum][numRobotsByType[typeNum]] = r;
+					numRobotsByType[typeNum]++;
 				}
-				int targetBarracks = 5;
-				int targetTankFactories = 0;
-				int targetHelipads = 0;
-				int targetSupplyDepots = 15;
-				int numBuildingBarracks = 0;
-				int numBuildingTankFactories = 0;
-				int numBuildingHelipads = 0;
-				int numBuildingSupplyDepots = 0;
+				int[] targetRobotsByType = new int[21]; //zeros
+				int[] progressRobotsByType = new int[21]; //zeros
+				targetRobotsByType[robotTypeToNum(RobotType.BARRACKS)] = 5;
+				targetRobotsByType[robotTypeToNum(RobotType.SUPPLYDEPOT)] = 15;
 
 				// beaver loop, check orders
-				for (int i = 0; i < ARRAY_SIZE; i++) {
-					RobotInfo r = myBeavers[i];
+				for (int i = 0; i < numRobotsByType[robotTypeToNum(RobotType.BEAVER)]; i++) {
+					RobotInfo r = myRobotsByType[robotTypeToNum(RobotType.BEAVER)][i];
 					if (r == null) {
 						break;
 					}
 					RobotType buildOrder = recieveBuildOrders(r.ID);
 					if (buildOrder != null) {
-						switch (buildOrder) {
-						case BARRACKS:
-							numBuildingBarracks++;
-						case TANKFACTORY:
-							numBuildingTankFactories++;
-						case HELIPAD:
-							numBuildingHelipads++;
-						case SUPPLYDEPOT:
-							numBuildingSupplyDepots++;
-						}
+						int buildOrderTypeNum = robotTypeToNum(buildOrder);
+						progressRobotsByType[buildOrderTypeNum]++;
 					}
 				}
 
-				rc.setIndicatorString(0, numBarracks + " barracks");
-				rc.setIndicatorString(1, numBuildingBarracks + " building barracks");
-
 				// beaver loop, send orders
-				for (int i = numBeavers; --i >= 0;) {
-					RobotInfo r = myBeavers[i];
+				for (int i = numRobotsByType[robotTypeToNum(RobotType.BEAVER)]; --i >= 0;) {
+					RobotInfo r = myRobotsByType[robotTypeToNum(RobotType.BEAVER)][i];
 					if (r == null) {
 						break;
 					}
 					RobotType buildOrder = recieveBuildOrders(r.ID);
 					if (buildOrder == null) {
-						if (targetBarracks > numBuildingBarracks + numBarracks) {
-							sendOrders(r.ID, robotTypeToNum(RobotType.BARRACKS),0,0);
-							numBuildingBarracks++;
-						} else if (targetHelipads > numBuildingHelipads + numHelipads) {
-							sendOrders(r.ID, robotTypeToNum(RobotType.HELIPAD),0,0);
-							numBuildingHelipads++;
-						} else if (targetTankFactories > numBuildingTankFactories + numTankFactories) {
-							sendOrders(r.ID, robotTypeToNum(RobotType.TANKFACTORY),0,0);
-							numBuildingTankFactories++;
-						} else if (targetSupplyDepots > numBuildingSupplyDepots + numSupplyDepots) {
-							sendOrders(r.ID, robotTypeToNum(RobotType.SUPPLYDEPOT),0,0);
-							numBuildingSupplyDepots++;
+						for (int typeNum = 0; typeNum < 21; typeNum++) {
+							if (targetRobotsByType[typeNum] > progressRobotsByType[typeNum] + numRobotsByType[typeNum]) {
+								sendOrders(r.ID, typeNum, 0, 0);
+								progressRobotsByType[typeNum]++;
+								break;
+							}
 						}
 					}
 				}
 				if (rc.isWeaponReady()) {
 					attackSomething();
 				}
-				if (rc.isCoreReady() && rc.getTeamOre() >= 350 && numBeavers < 30) {
+				if (rc.isCoreReady() && rc.getTeamOre() >= 350 && numRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 30) {
 					trySpawn(directions[rand.nextInt(8)], RobotType.BEAVER);
 				}
+				rc.yield();
 				transferSupply();
 				rc.yield();
 			} catch (Exception e) {
@@ -632,6 +475,38 @@ public class RobotPlayer {
 				System.out.println("Training Field Exception");
 				e.printStackTrace();
 			}
+		}
+	}
+	
+	private static RobotType[] calculateBuildPlan() {
+		
+		return null;
+	}
+	
+	private static RobotType builtBy(RobotType target) {
+		switch (target) {
+		case HQ: return null;
+		case TOWER: return null;
+		case AEROSPACELAB: return RobotType.BEAVER;
+		case BARRACKS: return RobotType.BEAVER;
+		case BASHER: return RobotType.BARRACKS;
+		case BEAVER: return RobotType.HQ;
+		case COMMANDER: return RobotType.TRAININGFIELD;
+		case COMPUTER: return RobotType.TECHNOLOGYINSTITUTE;
+		case DRONE: return RobotType.HELIPAD;
+		case HANDWASHSTATION: return RobotType.BEAVER;
+		case HELIPAD: return RobotType.BEAVER;
+		case LAUNCHER: return RobotType.AEROSPACELAB;
+		case MINER: return RobotType.MINERFACTORY;
+		case MINERFACTORY: return RobotType.BEAVER;
+		case MISSILE: return RobotType.LAUNCHER;
+		case SOLDIER: return RobotType.BARRACKS;
+		case SUPPLYDEPOT: return RobotType.BEAVER;
+		case TANK: return RobotType.TANKFACTORY;
+		case TANKFACTORY: return RobotType.BEAVER;
+		case TECHNOLOGYINSTITUTE: return RobotType.BEAVER;
+		case TRAININGFIELD: return RobotType.BEAVER;
+		default: return null;
 		}
 	}
 
