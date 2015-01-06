@@ -673,8 +673,12 @@ public class RobotPlayer {
 					numValidMoves++;
 				}
 			}
-			int choice = rand.nextInt(numValidMoves);
-			return validMoves[choice];
+			if (numValidMoves > 0) {
+				int choice = rand.nextInt(numValidMoves);
+				return validMoves[choice];
+			} else {
+				return null;
+			}
 		} else {
 			return null;
 		}
@@ -683,12 +687,12 @@ public class RobotPlayer {
 	private static void mine() throws GameActionException {
 		MapLocation loc = rc.getLocation();
 		double ore = rc.senseOre(loc);
-		if (ore > 40) {
+		if (ore > 5) {
 			rc.mine();
 		} else {
 			for (int i = 0; i < 8; i++) {
 				Direction d = intToDirection(i);
-				if (rc.senseOre(loc.add(d)) > 40 && rc.canMove(d)) {
+				if (rc.senseOre(loc.add(d)) > 5 && rc.canMove(d)) {
 					rc.move(d);
 					break;
 				}
