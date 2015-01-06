@@ -386,28 +386,24 @@ public class RobotPlayer {
 					attackSomething();
 				}
 				if (rc.isCoreReady()) {
-					if (rc.getLocation().distanceSquaredTo(HQLoc) <= 2) {
-						tryMove(rc.getLocation().directionTo(HQLoc).opposite());
+					Direction escapeDir = escapeCrowding();
+					if (escapeDir != null) {
+						tryMove(escapeDir);
 					} else {
-						Direction escapeDir = escapeCrowding();
-						if (escapeDir != null) {
-							tryMove(escapeDir);
+						RobotType buildOrder = recieveBuildOrders(rc.getID());
+						if (buildOrder == null) {
+							mine();
 						} else {
-							RobotType buildOrder = recieveBuildOrders(rc.getID());
-							if (buildOrder == null) {
+							if (ordersMarked(rc.getID())) {
+								sendOrders(rc.getID(), -1, 0, 0);
 								mine();
 							} else {
-								if (ordersMarked(rc.getID())) {
-									sendOrders(rc.getID(), -1, 0, 0);
+								if (rc.getTeamOre() < buildOrder.oreCost) {
 									mine();
 								} else {
-									if (rc.getTeamOre() < buildOrder.oreCost) {
-										mine();
-									} else {
-										boolean success = tryBuild(directions[rand.nextInt(8)],buildOrder);
-										if (success) {
-											markOrders(rc.getID());
-										}
+									boolean success = tryBuild(directions[rand.nextInt(8)],buildOrder);
+									if (success) {
+										markOrders(rc.getID());
 									}
 								}
 							}
