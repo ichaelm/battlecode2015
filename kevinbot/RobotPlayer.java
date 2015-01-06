@@ -1,4 +1,4 @@
-package examplefuncsplayer;
+package kevinbot;
 
 import battlecode.common.*;
 import java.util.*;
@@ -10,6 +10,7 @@ public class RobotPlayer {
 	static int myRange;
 	static Random rand;
 	static Direction[] directions = {Direction.NORTH, Direction.NORTH_EAST, Direction.EAST, Direction.SOUTH_EAST, Direction.SOUTH, Direction.SOUTH_WEST, Direction.WEST, Direction.NORTH_WEST};
+	static Strategy currentStrategy;
 	
 	public static void run(RobotController tomatojuice) {
 		rc = tomatojuice;
@@ -217,7 +218,38 @@ public class RobotPlayer {
 			rc.build(directions[(dirint+offsets[offsetIndex]+8)%8], type);
 		}
 	}
+	/*
+	 * A enumerator for the different kinds of strategies. Add more as necessary.
+	 */
+	enum Strategy {
+		ATTACK, DEFENSE, BALANCED
+	}
 	
+	/*
+	 * Method choose the next unit the Beaver should build. In late stages,
+	 * it can be randomly determined based on a function of the priority of the 
+	 * given unit for the particular strategy multiplied by a probability function (given how necessary the piece is
+	 * as determined by how many of that particular piece are on the board).
+	 * */
+	static RobotType toBuildNext() {
+		switch(currentStrategy) {
+		case ATTACK:
+			boolean earlyGame = true;
+			if (earlyGame) {
+				return RobotType.MINERFACTORY;
+			}
+			else {
+				return RobotType.HANDWASHSTATION;
+			}
+		case BALANCED:
+			return null;
+		case DEFENSE:
+			return null;
+		default:
+			return null;
+		
+		}
+	}
 	static int directionToInt(Direction d) {
 		switch(d) {
 			case NORTH:
