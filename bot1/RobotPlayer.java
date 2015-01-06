@@ -198,16 +198,23 @@ public class RobotPlayer {
 							break;
 						}
 						int[] orders = recieveOrders(r.ID);
-						RobotType buildOrder = numToRobotType(orders[0]);
-						switch (buildOrder) {
-						case BARRACKS:
-							numBuildingBarracks++;
-						case TANKFACTORY:
-							numBuildingTankFactories++;
-						case HELIPAD:
-							numBuildingHelipads++;
+						if (orders != null) {
+							RobotType buildOrder = numToRobotType(orders[0]);
+							if (buildOrder != null) {
+								switch (buildOrder) {
+								case BARRACKS:
+									numBuildingBarracks++;
+								case TANKFACTORY:
+									numBuildingTankFactories++;
+								case HELIPAD:
+									numBuildingHelipads++;
+								}
+							}
 						}
 					}
+					
+					rc.setIndicatorString(0, numBarracks + " barracks");
+					rc.setIndicatorString(1, numBuildingBarracks + " building barracks");
 					
 					// beaver loop, send orders
 					for (int i = 0; i < ARRAY_SIZE; i++) {
@@ -216,27 +223,40 @@ public class RobotPlayer {
 							break;
 						}
 						int[] orders = recieveOrders(r.ID);
-						RobotType buildOrder = numToRobotType(orders[0]);
-						if (buildOrder == null) {
-							if (targetBarracks > numBuildingBarracks) {
+						if (orders == null) {
+							if (targetBarracks > numBuildingBarracks + numBarracks) {
 								sendOrders(r.ID, robotTypeToNum(RobotType.BARRACKS),0,0);
 								numBuildingBarracks++;
-							} else if (targetTankFactories > numBuildingTankFactories) {
-								sendOrders(r.ID, robotTypeToNum(RobotType.TANKFACTORY),0,0);
-								numBuildingTankFactories++;
-							} else if (targetHelipads > numBuildingHelipads) {
+							} else if (targetHelipads > numBuildingHelipads + numHelipads) {
 								sendOrders(r.ID, robotTypeToNum(RobotType.HELIPAD),0,0);
 								numBuildingHelipads++;
+							} else if (targetTankFactories > numBuildingTankFactories + numTankFactories) {
+								sendOrders(r.ID, robotTypeToNum(RobotType.TANKFACTORY),0,0);
+								numBuildingTankFactories++;
 							}
-							
+						} else {
+							RobotType buildOrder = numToRobotType(orders[0]);
+							if (buildOrder == null) {
+								if (targetBarracks > numBuildingBarracks + numBarracks) {
+									sendOrders(r.ID, robotTypeToNum(RobotType.BARRACKS),0,0);
+									numBuildingBarracks++;
+								} else if (targetHelipads > numBuildingHelipads + numHelipads) {
+									sendOrders(r.ID, robotTypeToNum(RobotType.HELIPAD),0,0);
+									numBuildingHelipads++;
+								} else if (targetTankFactories > numBuildingTankFactories + numTankFactories) {
+									sendOrders(r.ID, robotTypeToNum(RobotType.TANKFACTORY),0,0);
+									numBuildingTankFactories++;
+								}
+							}
 						}
+
 					}
 					
 					if (rc.isWeaponReady()) {
 						attackSomething();
 					}
 
-					if (rc.isCoreReady() && rc.getTeamOre() >= 500) {
+					if (rc.isCoreReady() && rc.getTeamOre() >= 350 && numBeavers < 10) {
 						trySpawn(directions[rand.nextInt(8)], RobotType.BEAVER);
 					}
 				} catch (Exception e) {
@@ -259,9 +279,7 @@ public class RobotPlayer {
 			
 			if (rc.getType() == RobotType.BASHER) {
                 try {
-                    RobotInfo[] adjacentEnemies = rc.senseNearbyRobots(2, enemyTeam);
 
-                    // BASHERs attack automatically, so let's just move around mostly randomly
 					if (rc.isCoreReady()) {
 						tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
 					}
@@ -277,18 +295,41 @@ public class RobotPlayer {
 						attackSomething();
 					}
 					if (rc.isCoreReady()) {
-						int fate = rand.nextInt(1000);
-						if (fate < 800) {
-							tryMove(directions[rand.nextInt(8)]);
-						} else {
-							tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
-						}
+						tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
 					}
                 } catch (Exception e) {
 					System.out.println("Soldier Exception");
 					e.printStackTrace();
                 }
             }
+            
+            if (rc.getType() == RobotType.TANK) {
+                try {
+                    if (rc.isWeaponReady()) {
+						attackSomething();
+					}
+					if (rc.isCoreReady()) {
+						tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
+					}
+                } catch (Exception e) {
+					System.out.println("Soldier Exception");
+					e.printStackTrace();
+                }
+			}
+            
+            if (rc.getType() == RobotType.DRONE) {
+                try {
+                    if (rc.isWeaponReady()) {
+						attackSomething();
+					}
+					if (rc.isCoreReady()) {
+						tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
+					}
+                } catch (Exception e) {
+					System.out.println("Drone Exception");
+					e.printStackTrace();
+                }
+			}
 			
 			if (rc.getType() == RobotType.BEAVER) {
 				try {
@@ -296,21 +337,53 @@ public class RobotPlayer {
 						attackSomething();
 					}
 					if (rc.isCoreReady()) {
-						int fate = rand.nextInt(1000);
-						if (fate < 500 && rc.getTeamOre() >= 500) {
-							try {
-								tryBuild(directions[rand.nextInt(8)],RobotType.TANKFACTORY);
-							} catch (Exception e) {
-								tryBuild(directions[rand.nextInt(8)],RobotType.BARRACKS);
+						int[] orders = recieveOrders(rc.getID());
+						if (orders == null) {
+							boolean fate = rand.nextBoolean();
+							if (fate) {
+								rc.mine();
+							} else {
+								tryMove(directions[rand.nextInt(8)]);
+							}
+						} else {
+							RobotType buildOrder = numToRobotType(orders[0]);
+							if (buildOrder == null) {
+								boolean fate = rand.nextBoolean();
+								if (fate) {
+									rc.mine();
+								} else {
+									tryMove(directions[rand.nextInt(8)]);
+								}
+							} else {
+								if (ordersMarked(rc.getID())) {
+									sendOrders(rc.getID(), 0, 0, 0);
+									boolean fate = rand.nextBoolean();
+									if (fate) {
+										rc.mine();
+									} else {
+										tryMove(directions[rand.nextInt(8)]);
+									}
+								} else {
+									if (rc.getTeamOre() < buildOrder.oreCost) {
+										boolean fate = rand.nextBoolean();
+										if (fate) {
+											rc.mine();
+										} else {
+											tryMove(directions[rand.nextInt(8)]);
+										}
+									} else {
+										boolean success = tryBuild(directions[rand.nextInt(8)],buildOrder);
+										if (success) {
+											markOrders(rc.getID());
+										}
+									}
+								}
 							}
 							
-						} else if (fate < 600) {
-							rc.mine();
-						} else if (fate < 900) {
-							tryMove(directions[rand.nextInt(8)]);
-						} else {
-							tryMove(rc.senseHQLocation().directionTo(rc.getLocation()));
+
 						}
+						
+						
 					}
 				} catch (Exception e) {
 					System.out.println("Beaver Exception");
@@ -321,15 +394,14 @@ public class RobotPlayer {
             if (rc.getType() == RobotType.BARRACKS) {
 				try {
 					
-                    // get information broadcasted by the HQ
-					int numBeavers = rc.readBroadcast(0);
-					int numSoldiers = rc.readBroadcast(1);
-					int numBashers = rc.readBroadcast(2);
-					
-					if (rc.isCoreReady() && rc.getTeamOre() >= 60) {
-						if (rc.getTeamOre() > 80) {
+					if (rc.isCoreReady() && rc.getTeamOre() >= 600) {
+						boolean fate = rand.nextBoolean();
+						if (fate) {
+							trySpawn(directions[rand.nextInt(8)],RobotType.SOLDIER);
+						} else {
 							trySpawn(directions[rand.nextInt(8)],RobotType.BASHER);
 						}
+						
 					}
 				} catch (Exception e) {
 					System.out.println("Barracks Exception");
@@ -339,40 +411,24 @@ public class RobotPlayer {
             
             if (rc.getType() == RobotType.TANKFACTORY) {
 				try {
-					
-                    // get information broadcasted by the HQ
-					int numBeavers = rc.readBroadcast(0);
-					int numSoldiers = rc.readBroadcast(1);
-					int numBashers = rc.readBroadcast(2);
-					
-					if (rc.isCoreReady() && rc.getTeamOre() >= 250) {
-						if (rc.getTeamOre() > 80) {
+					if (rc.isCoreReady() && rc.getTeamOre() >= 600) {
 							trySpawn(directions[rand.nextInt(8)],RobotType.TANK);
-						}
 					}
 				} catch (Exception e) {
-					System.out.println("Barracks Exception");
+					System.out.println("Tank Factory Exception");
                     e.printStackTrace();
 				}
 			}
             
-            if (rc.getType() == RobotType.TANK) {
-                try {
-                    if (rc.isWeaponReady()) {
-						attackSomething();
+            if (rc.getType() == RobotType.HELIPAD) {
+				try {
+					if (rc.isCoreReady() && rc.getTeamOre() >= 600) {
+							trySpawn(directions[rand.nextInt(8)],RobotType.DRONE);
 					}
-					if (rc.isCoreReady()) {
-						int fate = rand.nextInt(1000);
-						if (fate < 0) {
-							tryMove(directions[rand.nextInt(8)]);
-						} else {
-							tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
-						}
-					}
-                } catch (Exception e) {
-					System.out.println("Soldier Exception");
-					e.printStackTrace();
-                }
+				} catch (Exception e) {
+					System.out.println("Helipad Exception");
+                    e.printStackTrace();
+				}
 			}
 			
 			rc.yield();
@@ -417,40 +473,71 @@ public class RobotPlayer {
 		return type;
 	}
 	
+	private static final int MSG_LEN = 5;
+	private static final int NUM_MSG = 65536 / MSG_LEN;
+	
 	private static void sendOrders(int ID, int order, int x, int y) throws GameActionException {
 		int hash = hashID(ID);
-		int foundID = rc.readBroadcast(hash * 4);
+		int foundID = rc.readBroadcast(hash * MSG_LEN);
 		while (foundID != ID && foundID != 0) {
 			hash = hash + 1;
-			hash = hash % (65536 / 4);
-			foundID = rc.readBroadcast(hash * 4);
+			hash = hash % NUM_MSG;
+			foundID = rc.readBroadcast(hash * MSG_LEN);
 		}
-		rc.broadcast(hash * 4, ID);
-		rc.broadcast(hash * 4 + 1, order);
-		rc.broadcast(hash * 4 + 2, x);
-		rc.broadcast(hash * 4 + 3, y);
+		rc.broadcast(hash * MSG_LEN, ID);
+		rc.broadcast(hash * MSG_LEN + 1, order);
+		rc.broadcast(hash * MSG_LEN + 2, x);
+		rc.broadcast(hash * MSG_LEN + 3, y);
+		rc.broadcast(hash * MSG_LEN + 4, 0);
 	}
 	
 	private static int[] recieveOrders(int ID) throws GameActionException {
 		int hash = hashID(ID);
-		int foundID = rc.readBroadcast(hash * 4);
+		int foundID = rc.readBroadcast(hash * MSG_LEN);
 		while (foundID != ID && foundID != 0) {
 			hash = hash + 1;
-			hash = hash % (65536 / 4);
-			foundID = rc.readBroadcast(hash * 4);
+			hash = hash % NUM_MSG;
+			foundID = rc.readBroadcast(hash * MSG_LEN);
 		}
 		if (foundID == 0) {
 			return null;
 		}
 		int[] result = new int[3];
-		result[0] = rc.readBroadcast(hash * 4 + 1);
-		result[1] = rc.readBroadcast(hash * 4 + 2);
-		result[2] = rc.readBroadcast(hash * 4 + 3);
+		result[0] = rc.readBroadcast(hash * MSG_LEN + 1);
+		result[1] = rc.readBroadcast(hash * MSG_LEN + 2);
+		result[2] = rc.readBroadcast(hash * MSG_LEN + 3);
 		return result;
 	}
 	
+	private static void markOrders(int ID) throws GameActionException {
+		int hash = hashID(ID);
+		int foundID = rc.readBroadcast(hash * MSG_LEN);
+		while (foundID != ID && foundID != 0) {
+			hash = hash + 1;
+			hash = hash % NUM_MSG;
+			foundID = rc.readBroadcast(hash * MSG_LEN);
+		}
+		if (foundID == ID) {
+			rc.broadcast(hash * MSG_LEN + 4, 1);
+		}
+	}
+	
+	private static boolean ordersMarked(int ID) throws GameActionException {
+		int hash = hashID(ID);
+		int foundID = rc.readBroadcast(hash * MSG_LEN);
+		while (foundID != ID && foundID != 0) {
+			hash = hash + 1;
+			hash = hash % NUM_MSG;
+			foundID = rc.readBroadcast(hash * MSG_LEN);
+		}
+		if (foundID == ID) {
+			return (1 == rc.readBroadcast(hash * MSG_LEN + 4));
+		}
+		return false;
+	}
+	
 	private static int hashID(int ID) {
-		return ID % (65536 / 4);
+		return ID % NUM_MSG;
 	}
 	
     // This method will attack an enemy in sight, if there is one
@@ -490,7 +577,7 @@ public class RobotPlayer {
 	}
 	
     // This method will attempt to build in the given direction (or as close to it as possible)
-	static void tryBuild(Direction d, RobotType type) throws GameActionException {
+	static boolean tryBuild(Direction d, RobotType type) throws GameActionException {
 		int offsetIndex = 0;
 		int[] offsets = {0,1,-1,2,-2,3,-3,4};
 		int dirint = directionToInt(d);
@@ -500,7 +587,9 @@ public class RobotPlayer {
 		}
 		if (offsetIndex < 8) {
 			rc.build(directions[(dirint+offsets[offsetIndex]+8)%8], type);
+			return true;
 		}
+		return false;
 	}
 	
 	static int directionToInt(Direction d) {
