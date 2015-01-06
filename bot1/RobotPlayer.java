@@ -184,9 +184,9 @@ public class RobotPlayer {
 							break;
 						}
 					}
-					int targetBarracks = 3;
-					int targetTankFactories = 3;
-					int targetHelipads = 3;
+					int targetBarracks = 1;
+					int targetTankFactories = 1;
+					int targetHelipads = 1;
 					int numBuildingBarracks = 0;
 					int numBuildingTankFactories = 0;
 					int numBuildingHelipads = 0;
@@ -281,7 +281,11 @@ public class RobotPlayer {
                 try {
 
 					if (rc.isCoreReady()) {
-						tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
+						if (Clock.getRoundNum() < 1000) {
+							tryMove(directions[rand.nextInt(8)]);
+						} else {
+							tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
+						}
 					}
                 } catch (Exception e) {
 					System.out.println("Basher Exception");
@@ -295,8 +299,11 @@ public class RobotPlayer {
 						attackSomething();
 					}
 					if (rc.isCoreReady()) {
-						tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
-					}
+						if (Clock.getRoundNum() < 1000) {
+							tryMove(directions[rand.nextInt(8)]);
+						} else {
+							tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
+						}					}
                 } catch (Exception e) {
 					System.out.println("Soldier Exception");
 					e.printStackTrace();
@@ -309,8 +316,11 @@ public class RobotPlayer {
 						attackSomething();
 					}
 					if (rc.isCoreReady()) {
-						tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
-					}
+						if (Clock.getRoundNum() < 1000) {
+							tryMove(directions[rand.nextInt(8)]);
+						} else {
+							tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
+						}					}
                 } catch (Exception e) {
 					System.out.println("Soldier Exception");
 					e.printStackTrace();
@@ -323,8 +333,11 @@ public class RobotPlayer {
 						attackSomething();
 					}
 					if (rc.isCoreReady()) {
-						tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
-					}
+						if (Clock.getRoundNum() < 1000) {
+							tryMove(directions[rand.nextInt(8)]);
+						} else {
+							tryMove(rc.getLocation().directionTo(rc.senseEnemyHQLocation()));
+						}					}
                 } catch (Exception e) {
 					System.out.println("Drone Exception");
 					e.printStackTrace();
@@ -430,7 +443,25 @@ public class RobotPlayer {
                     e.printStackTrace();
 				}
 			}
-			
+            try {
+            	RobotInfo[] nearbyAllies = rc.senseNearbyRobots(GameConstants.SUPPLY_TRANSFER_RADIUS_SQUARED, myTeam);
+            	double mySupply = rc.getSupplyLevel();
+            	double lowestSupply = mySupply;
+            	RobotInfo lowestRobot = null;
+            	for (RobotInfo r : nearbyAllies) {
+            		if (r.supplyLevel < lowestSupply) {
+            			lowestSupply = r.supplyLevel;
+            			lowestRobot = r;
+            		}
+            	}
+            	if (lowestRobot != null) {
+            		rc.transferSupplies((int)((mySupply-lowestSupply)/2), lowestRobot.location);
+            	}
+            } catch (Exception e) {
+            	System.out.println("Transfer Exception");
+            	e.printStackTrace();
+            }
+            
 			rc.yield();
 		}
 	}
