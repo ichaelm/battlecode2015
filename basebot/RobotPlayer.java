@@ -19,6 +19,7 @@ public class RobotPlayer {
 	private static Random rand;
 	private static MapLocation HQLoc;
 	private static MapLocation enemyHQLoc;
+	private static int rushDist;
 	private static Direction[] directions = {Direction.NORTH, Direction.NORTH_EAST, Direction.EAST, Direction.SOUTH_EAST, Direction.SOUTH, Direction.SOUTH_WEST, Direction.WEST, Direction.NORTH_WEST};
 	private static RobotType[] robotTypes = {
 		RobotType.HQ,
@@ -65,6 +66,7 @@ public class RobotPlayer {
 		rand = new Random(rc.getID());
 		HQLoc = rc.senseHQLocation();
 		enemyHQLoc = rc.senseEnemyHQLocation();
+		rushDist = HQLoc.distanceSquaredTo(enemyHQLoc);
 
 		switch (myType) {
 		case HQ: runHQ(); break;
@@ -823,29 +825,50 @@ public class RobotPlayer {
 	}
 
 	private static void mine() throws GameActionException {
-		MapLocation loc = rc.getLocation();
-		double ore = rc.senseOre(loc);
-		if (ore > 5) {
+		MapLocation myLoc = rc.getLocation();
+		double myOre = rc.senseOre(myLoc);
+		if (myOre > 5) {
 			rc.mine();
 		} else {
-			boolean moved = false;
+			Direction[] bestDirs = new Direction[8];
+			int numBestDirs = 0;
+			double bestOre = 0;
 			for (int i = 0; i < 8; i++) {
 				Direction d = intToDirection(i);
-				if (rc.senseOre(loc.add(d)) > 5 && rc.canMove(d)) {
-					rc.move(d);
-					moved = true;
-					break;
+				double dirOre = rc.senseOre(myLoc.add(d));
+				if (dirOre > bestOre && rc.canMove(d)) {
+					bestDirs[0] = d;
+					numBestDirs = 1;
+					bestOre = dirOre;
+				} else if (dirOre >= bestOre && rc.canMove(d)) {
+					bestDirs[numBestDirs] = d;
+					numBestDirs++;
 				}
 			}
-			if (!moved) {
-				tryMove(loc.directionTo(HQLoc).opposite());
+			if (numBestDirs > 0) {
+				if (bestOre > myOre) {
+					int choice = rand.nextInt(numBestDirs);
+					rc.move(bestDirs[choice]);
+				} else {
+					rc.mine();
+				}
+			} else {
+				if (myOre > 0) {
+					rc.mine();
+				} else {
+					if (myLoc.distanceSquaredTo(HQLoc) > (rushDist / 2)) {
+						tryMove(myLoc.directionTo(HQLoc));
+					} else {
+						tryMove(directions[rand.nextInt(8)]);
+					}
+				}
 			}
 		}
 	}
 	
 	private static void rally() throws GameActionException {
 		MapLocation myLoc = rc.getLocation();
-		if (myLoc.distanceSquaredTo(HQLoc) > 300) {
+		if (myLoc.distanceSquaredTo(HQLoc) > (rushDist / 2)) {
 			tryMove(myLoc.directionTo(HQLoc));
 		} else {
 			tryMove(directions[rand.nextInt(8)]);
