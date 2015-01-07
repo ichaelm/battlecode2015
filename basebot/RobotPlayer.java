@@ -168,7 +168,7 @@ public class RobotPlayer {
 				int plannedTeamOre = teamOre;
 				
 				
-				if (plannedTeamOre < 600 || estimatedOreConsumption >= estimatedOreGeneration) {
+				if (plannedTeamOre < 600 || estimatedOreConsumption * 1.2 >= estimatedOreGeneration) {
 					// goal: build more miners
 					if (numRobotsByType[robotTypeToNum(RobotType.MINERFACTORY)] + progressRobotsByType[robotTypeToNum(RobotType.MINERFACTORY)] < 1) {
 						// goal: build a miner factory
@@ -210,7 +210,7 @@ public class RobotPlayer {
 					// goal: build more military buildings
 					int numBarracks = numRobotsByType[robotTypeToNum(RobotType.BARRACKS)] + progressRobotsByType[robotTypeToNum(RobotType.BARRACKS)];
 					int numTankFactories = numRobotsByType[robotTypeToNum(RobotType.TANKFACTORY)] + progressRobotsByType[robotTypeToNum(RobotType.TANKFACTORY)];
-					if (numBarracks > numTankFactories) {
+					if (numBarracks >= 1) {
 						// goal: build a tank factory
 						if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
 							// goal: build a beaver
@@ -241,7 +241,7 @@ public class RobotPlayer {
 					int numTanks = numRobotsByType[robotTypeToNum(RobotType.TANK)] + progressRobotsByType[robotTypeToNum(RobotType.TANK)];
 					int numBarracks = numRobotsByType[robotTypeToNum(RobotType.BARRACKS)] + progressRobotsByType[robotTypeToNum(RobotType.BARRACKS)];
 					int numTankFactories = numRobotsByType[robotTypeToNum(RobotType.TANKFACTORY)] + progressRobotsByType[robotTypeToNum(RobotType.TANKFACTORY)];
-					if (numSoldiers + numBashers - 15 < numTanks) {
+					if (false) {
 						// goal: build more soldiers and bashers
 						if (numBarracks < 1) {
 							// goal: build a barracks
@@ -274,14 +274,27 @@ public class RobotPlayer {
 						// goal: build more tanks
 						if (numTankFactories < 1) {
 							// goal: build a tank factory
-							if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
-								// goal: build a beaver
-								order(RobotType.HQ, RobotType.BEAVER);
-								plannedTeamOre -= RobotType.BEAVER.oreCost;
+							if (numBarracks < 1) {
+								// goal: build a barracks
+								if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
+									// goal: build a beaver
+									order(RobotType.HQ, RobotType.BEAVER);
+									plannedTeamOre -= RobotType.BEAVER.oreCost;
+								} else {
+									// goal: build a barracks
+									order(RobotType.BEAVER, RobotType.BARRACKS);
+									plannedTeamOre -= RobotType.BARRACKS.oreCost;
+								}
 							} else {
-								// goal: build a tank factory
-								order(RobotType.BEAVER, RobotType.TANKFACTORY);
-								plannedTeamOre -= RobotType.TANKFACTORY.oreCost;
+								if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
+									// goal: build a beaver
+									order(RobotType.HQ, RobotType.BEAVER);
+									plannedTeamOre -= RobotType.BEAVER.oreCost;
+								} else {
+									// goal: build a tank factory
+									order(RobotType.BEAVER, RobotType.TANKFACTORY);
+									plannedTeamOre -= RobotType.TANKFACTORY.oreCost;
+								}
 							}
 						} else {
 							// goal: build a tank
