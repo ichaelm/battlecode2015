@@ -191,7 +191,7 @@ public class RobotPlayer {
 						}
 					}
 				}
-				if (totalSupplyUpkeep >= totalSupplyGeneration) {
+				if (totalSupplyUpkeep * 1.1 >= totalSupplyGeneration) {
 					// goal: build a supplier if not already being built
 					if (progressRobotsByType[robotTypeToNum(RobotType.SUPPLYDEPOT)] < 1) { // if no supplier is being built
 						// goal: build a supplier
