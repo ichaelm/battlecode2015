@@ -747,11 +747,6 @@ public class RobotPlayer {
 		}
 	}
 	
-	private static RobotType[] calculateBuildPlan() {
-		
-		return null;
-	}
-	
 	private static RobotType builtBy(RobotType target) {
 		switch (target) {
 		case HQ: return null;
@@ -856,7 +851,7 @@ public class RobotPlayer {
 				if (myOre > 0) {
 					rc.mine();
 				} else {
-					if (myLoc.distanceSquaredTo(HQLoc) > (rushDist / 2)) {
+					if (myLoc.distanceSquaredTo(HQLoc) > (rushDist / 4)) {
 						tryMove(myLoc.directionTo(HQLoc));
 					} else {
 						tryMove(directions[rand.nextInt(8)]);
@@ -868,10 +863,21 @@ public class RobotPlayer {
 	
 	private static void rally() throws GameActionException {
 		MapLocation myLoc = rc.getLocation();
-		if (myLoc.distanceSquaredTo(HQLoc) > (rushDist / 2)) {
-			tryMove(myLoc.directionTo(HQLoc));
+		MapLocation invaderLoc = attackingEnemy();
+		if (invaderLoc != null) {
+			tryMove(myLoc.directionTo(invaderLoc));
 		} else {
-			tryMove(directions[rand.nextInt(8)]);
+			if (myLoc.distanceSquaredTo(HQLoc) > (rushDist / 9)) {
+				tryMove(myLoc.directionTo(HQLoc));
+			} else {
+				MapLocation enemy = nearestEnemy();
+				if (enemy == null) {
+					tryMove(directions[rand.nextInt(8)]);
+				} else {
+					tryMove(myLoc.directionTo(enemy));
+				}
+				
+			}
 		}
 	}
 	
@@ -883,6 +889,24 @@ public class RobotPlayer {
 		for (RobotInfo r : enemies) {
 			MapLocation enemyLoc = r.location;
 			int dist = myLoc.distanceSquaredTo(enemyLoc);
+			if (dist < closestDist) {
+				closestDist = dist;
+				closestRobot = r;
+			}
+		}
+		if (closestRobot != null) {
+			return closestRobot.location;
+		}
+		return null;
+	}
+	
+	private static MapLocation attackingEnemy() throws GameActionException {
+		RobotInfo[] enemies = rc.senseNearbyRobots(HQLoc, (rushDist / 9), enemyTeam);
+		int closestDist = 9999999;
+		RobotInfo closestRobot = null;
+		for (RobotInfo r : enemies) {
+			MapLocation enemyLoc = r.location;
+			int dist = HQLoc.distanceSquaredTo(enemyLoc);
 			if (dist < closestDist) {
 				closestDist = dist;
 				closestRobot = r;
