@@ -900,11 +900,13 @@ public class RobotPlayer {
 		int closestDist = 9999;
 		RobotInfo closestRobot = null;
 		for (RobotInfo r : enemies) {
-			MapLocation enemyLoc = r.location;
-			int dist = myLoc.distanceSquaredTo(enemyLoc);
-			if (dist < closestDist) {
-				closestDist = dist;
-				closestRobot = r;
+			if (r.type != RobotType.MISSILE) {
+				MapLocation enemyLoc = r.location;
+				int dist = myLoc.distanceSquaredTo(enemyLoc);
+				if (dist < closestDist) {
+					closestDist = dist;
+					closestRobot = r;
+				}
 			}
 		}
 		if (closestRobot != null) {
@@ -918,11 +920,13 @@ public class RobotPlayer {
 		int closestDist = 9999999;
 		RobotInfo closestRobot = null;
 		for (RobotInfo r : enemies) {
-			MapLocation enemyLoc = r.location;
-			int dist = HQLoc.distanceSquaredTo(enemyLoc);
-			if (dist < closestDist) {
-				closestDist = dist;
-				closestRobot = r;
+			if (r.type != RobotType.MISSILE) {
+				MapLocation enemyLoc = r.location;
+				int dist = HQLoc.distanceSquaredTo(enemyLoc);
+				if (dist < closestDist) {
+					closestDist = dist;
+					closestRobot = r;
+				}
 			}
 		}
 		if (closestRobot != null) {
