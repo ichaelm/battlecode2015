@@ -149,20 +149,21 @@ public class RobotPlayer {
 				newBuildOrders = new RobotType[ARRAY_SIZE][2];
 				numNewBuildOrders = 0;
 				int teamOre = (int)rc.getTeamOre();
+				int plannedTeamOre = teamOre;
 				
 				
-				if (teamOre < 600 || estimatedOreConsumption >= estimatedOreGeneration) {
+				if (plannedTeamOre < 600 || estimatedOreConsumption >= estimatedOreGeneration) {
 					// goal: build more miners
 					if (numRobotsByType[robotTypeToNum(RobotType.MINERFACTORY)] + progressRobotsByType[robotTypeToNum(RobotType.MINERFACTORY)] < 1) {
 						// goal: build a miner factory
 						if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
 							// goal: build a beaver
 							order(RobotType.HQ, RobotType.BEAVER);
-							teamOre -= RobotType.BEAVER.oreCost;
+							plannedTeamOre -= RobotType.BEAVER.oreCost;
 						} else {
 							// goal: build a miner factory
 							order(RobotType.BEAVER, RobotType.MINERFACTORY);
-							teamOre -= RobotType.MINERFACTORY.oreCost;
+							plannedTeamOre -= RobotType.MINERFACTORY.oreCost;
 						}
 					} else {
 						// goal: build a miner
@@ -170,7 +171,7 @@ public class RobotPlayer {
 							// wait
 						} else {
 							order(RobotType.MINERFACTORY, RobotType.MINER);
-							teamOre -= RobotType.MINER.oreCost;
+							plannedTeamOre -= RobotType.MINER.oreCost;
 						}
 					}
 				}
@@ -181,15 +182,43 @@ public class RobotPlayer {
 						if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
 							// goal: build a beaver
 							order(RobotType.HQ, RobotType.BEAVER);
-							teamOre -= RobotType.BEAVER.oreCost;
+							plannedTeamOre -= RobotType.BEAVER.oreCost;
 						} else {
 							// goal: build a supplier
 							order(RobotType.BEAVER, RobotType.SUPPLYDEPOT);
-							teamOre -= RobotType.SUPPLYDEPOT.oreCost;
+							plannedTeamOre -= RobotType.SUPPLYDEPOT.oreCost;
 						}
 					}
 				}
-				if (teamOre >= 600 && estimatedOreConsumption < estimatedOreGeneration) {
+				if (plannedTeamOre >= 1000 && estimatedOreConsumption < estimatedOreGeneration) {
+					// goal: build more military buildings
+					int numBarracks = numRobotsByType[robotTypeToNum(RobotType.BARRACKS)] + progressRobotsByType[robotTypeToNum(RobotType.BARRACKS)];
+					int numTankFactories = numRobotsByType[robotTypeToNum(RobotType.TANKFACTORY)] + progressRobotsByType[robotTypeToNum(RobotType.TANKFACTORY)];
+					if (numBarracks > numTankFactories) {
+						// goal: build a tank factory
+						if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
+							// goal: build a beaver
+							order(RobotType.HQ, RobotType.BEAVER);
+							plannedTeamOre -= RobotType.BEAVER.oreCost;
+						} else {
+							// goal: build a tank factory
+							order(RobotType.BEAVER, RobotType.TANKFACTORY);
+							plannedTeamOre -= RobotType.TANKFACTORY.oreCost;
+						}
+					} else {
+						// goal: build a barracks
+						if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
+							// goal: build a beaver
+							order(RobotType.HQ, RobotType.BEAVER);
+							plannedTeamOre -= RobotType.BEAVER.oreCost;
+						} else {
+							// goal: build a barracks
+							order(RobotType.BEAVER, RobotType.BARRACKS);
+							plannedTeamOre -= RobotType.BARRACKS.oreCost;
+						}
+					}
+				}
+				if (plannedTeamOre >= 600 && estimatedOreConsumption < estimatedOreGeneration) {
 					// goal: build more military units
 					int numSoldiers = numRobotsByType[robotTypeToNum(RobotType.SOLDIER)] + progressRobotsByType[robotTypeToNum(RobotType.SOLDIER)];
 					int numBashers = numRobotsByType[robotTypeToNum(RobotType.BASHER)] + progressRobotsByType[robotTypeToNum(RobotType.BASHER)];
@@ -203,11 +232,11 @@ public class RobotPlayer {
 							if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
 								// goal: build a beaver
 								order(RobotType.HQ, RobotType.BEAVER);
-								teamOre -= RobotType.BEAVER.oreCost;
+								plannedTeamOre -= RobotType.BEAVER.oreCost;
 							} else {
 								// goal: build a barracks
 								order(RobotType.BEAVER, RobotType.BARRACKS);
-								teamOre -= RobotType.BARRACKS.oreCost;
+								plannedTeamOre -= RobotType.BARRACKS.oreCost;
 							}
 						} else {
 							// goal: build a soldier or basher
@@ -217,11 +246,11 @@ public class RobotPlayer {
 								if (numSoldiers > numBashers) {
 									// goal: build a basher
 									order(RobotType.BARRACKS, RobotType.BASHER);
-									teamOre -= RobotType.BASHER.oreCost;
+									plannedTeamOre -= RobotType.BASHER.oreCost;
 								} else {
 									// goal: build a soldier
 									order(RobotType.BARRACKS, RobotType.SOLDIER);
-									teamOre -= RobotType.SOLDIER.oreCost;
+									plannedTeamOre -= RobotType.SOLDIER.oreCost;
 								}
 							}
 						}
@@ -232,11 +261,11 @@ public class RobotPlayer {
 							if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
 								// goal: build a beaver
 								order(RobotType.HQ, RobotType.BEAVER);
-								teamOre -= RobotType.BEAVER.oreCost;
+								plannedTeamOre -= RobotType.BEAVER.oreCost;
 							} else {
 								// goal: build a tank factory
 								order(RobotType.BEAVER, RobotType.TANKFACTORY);
-								teamOre -= RobotType.TANKFACTORY.oreCost;
+								plannedTeamOre -= RobotType.TANKFACTORY.oreCost;
 							}
 						} else {
 							// goal: build a tank
@@ -245,7 +274,7 @@ public class RobotPlayer {
 							} else {
 								// goal: build a tank
 								order(RobotType.TANKFACTORY, RobotType.TANK);
-								teamOre -= RobotType.TANK.oreCost;
+								plannedTeamOre -= RobotType.TANK.oreCost;
 							}
 						}
 					}
@@ -255,20 +284,37 @@ public class RobotPlayer {
 				for (int i = 0; i < numNewBuildOrders; i++) {
 					RobotType source = newBuildOrders[i][0];
 					RobotType target = newBuildOrders[i][1];
-					for (int j = 0; j < numFreeRobotsByType[robotTypeToNum(source)]; j++) {
-						int ID = myFreeRobotsByType[robotTypeToNum(source)][j].ID;
-						if (recieveBuildOrders(ID) == null) {
-							sendOrders(ID, robotTypeToNum(target), 0, 0);
-							break;
+					teamOre -= target.oreCost;
+					if (teamOre >= 0) {
+						for (int j = 0; j < numFreeRobotsByType[robotTypeToNum(source)]; j++) {
+							int ID = myFreeRobotsByType[robotTypeToNum(source)][j].ID;
+							if (recieveBuildOrders(ID) == null) {
+								sendOrders(ID, robotTypeToNum(target), 0, 0);
+								break;
+							}
 						}
+					} else {
+						break;
 					}
 				}
 				
 				if (rc.isWeaponReady()) {
 					attackSomething();
 				}
-				if (rc.isCoreReady() && rc.getTeamOre() >= 350 && numRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 30) {
-					trySpawn(directions[rand.nextInt(8)], RobotType.BEAVER);
+				if (rc.isCoreReady()) {
+					RobotType buildOrder = recieveBuildOrders(rc.getID());
+					if (buildOrder != null) {
+						if (ordersMarked(rc.getID())) {
+							sendOrders(rc.getID(), -1, 0, 0);
+						} else {
+							if (rc.getTeamOre() >= buildOrder.oreCost) {
+								boolean success = trySpawn(directions[rand.nextInt(8)],buildOrder);
+								if (success) {
+									markOrders(rc.getID());
+								}
+							}
+						}
+					}
 				}
 				rc.yield();
 				transferSupply();
