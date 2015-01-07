@@ -142,7 +142,21 @@ public class RobotPlayer {
 					}
 					estimatedOreConsumption += oreConsumptionByType[robotTypeToNum(type)];
 				}
-				
+				// extra loop for hq
+				{
+					RobotInfo rHQ = rc.senseRobotAtLocation(HQLoc);
+					int typeNum = robotTypeToNum(RobotType.HQ);
+					myRobotsByType[typeNum][0] = rHQ;
+					numRobotsByType[typeNum] = 1;
+					RobotType buildOrder = recieveBuildOrders(rHQ.ID);
+					if (buildOrder == null) {
+						myFreeRobotsByType[typeNum][0] = rHQ;
+						numFreeRobotsByType[typeNum] = 1;
+					} else {
+						int buildOrderTypeNum = robotTypeToNum(buildOrder);
+						progressRobotsByType[buildOrderTypeNum]++;
+					}
+				}
 				int totalSupplyGeneration = (int)(100*(2+Math.pow(numRobotsByType[robotTypeToNum(RobotType.SUPPLYDEPOT)],0.7)));
 				
 				// calculate macro build orders for all free units
