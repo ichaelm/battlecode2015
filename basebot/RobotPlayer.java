@@ -259,6 +259,7 @@ public class RobotPlayer {
 						int ID = myFreeRobotsByType[robotTypeToNum(source)][j].ID;
 						if (recieveBuildOrders(ID) == null) {
 							sendOrders(ID, robotTypeToNum(target), 0, 0);
+							break;
 						}
 					}
 				}
@@ -767,12 +768,17 @@ public class RobotPlayer {
 		if (ore > 5) {
 			rc.mine();
 		} else {
+			boolean moved = false;
 			for (int i = 0; i < 8; i++) {
 				Direction d = intToDirection(i);
 				if (rc.senseOre(loc.add(d)) > 5 && rc.canMove(d)) {
 					rc.move(d);
+					moved = true;
 					break;
 				}
+			}
+			if (!moved) {
+				tryMove(loc.directionTo(HQLoc).opposite());
 			}
 		}
 	}
