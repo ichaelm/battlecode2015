@@ -8,7 +8,7 @@ public class RobotPlayer {
 
 	// AI parameters
 	private static final int ARRAY_SIZE = 200;
-	private static final int RUSH_TURN = 1500;
+	private static final int RUSH_TURN = 1600;
 
 	// Cached game information
 	private static RobotController rc;
@@ -241,7 +241,7 @@ public class RobotPlayer {
 					int numTanks = numRobotsByType[robotTypeToNum(RobotType.TANK)] + progressRobotsByType[robotTypeToNum(RobotType.TANK)];
 					int numBarracks = numRobotsByType[robotTypeToNum(RobotType.BARRACKS)] + progressRobotsByType[robotTypeToNum(RobotType.BARRACKS)];
 					int numTankFactories = numRobotsByType[robotTypeToNum(RobotType.TANKFACTORY)] + progressRobotsByType[robotTypeToNum(RobotType.TANKFACTORY)];
-					if (numSoldiers + numBashers - 15 < numTanks) {
+					if (numSoldiers + numBashers - 10 < numTanks / 2) {
 						// goal: build more soldiers and bashers
 						if (numBarracks < 1) {
 							// goal: build a barracks
