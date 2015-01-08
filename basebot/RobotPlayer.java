@@ -168,7 +168,7 @@ public class RobotPlayer {
 				int plannedTeamOre = teamOre;
 
 
-				if (plannedTeamOre < 600 || estimatedOreConsumption * 1.2 >= estimatedOreGeneration) {
+				if (plannedTeamOre < 900 || estimatedOreConsumption * 1.3 >= estimatedOreGeneration) {
 					// goal: build more miners
 					if (numRobotsByType[robotTypeToNum(RobotType.MINERFACTORY)] + progressRobotsByType[robotTypeToNum(RobotType.MINERFACTORY)] < 1) {
 						// goal: build a miner factory
@@ -206,11 +206,11 @@ public class RobotPlayer {
 						}
 					}
 				}
-				if (plannedTeamOre >= 1000 && estimatedOreConsumption < estimatedOreGeneration) {
+				if (plannedTeamOre >= 2000 && estimatedOreConsumption < estimatedOreGeneration) {
 					// goal: build more military buildings
 					int numBarracks = numRobotsByType[robotTypeToNum(RobotType.BARRACKS)] + progressRobotsByType[robotTypeToNum(RobotType.BARRACKS)];
 					int numTankFactories = numRobotsByType[robotTypeToNum(RobotType.TANKFACTORY)] + progressRobotsByType[robotTypeToNum(RobotType.TANKFACTORY)];
-					if (numBarracks >= 1) {
+					if (numBarracks > numTankFactories) {
 						// goal: build a tank factory
 						if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
 							// goal: build a beaver
@@ -241,7 +241,7 @@ public class RobotPlayer {
 					int numTanks = numRobotsByType[robotTypeToNum(RobotType.TANK)] + progressRobotsByType[robotTypeToNum(RobotType.TANK)];
 					int numBarracks = numRobotsByType[robotTypeToNum(RobotType.BARRACKS)] + progressRobotsByType[robotTypeToNum(RobotType.BARRACKS)];
 					int numTankFactories = numRobotsByType[robotTypeToNum(RobotType.TANKFACTORY)] + progressRobotsByType[robotTypeToNum(RobotType.TANKFACTORY)];
-					if (false) {
+					if (numSoldiers + numBashers - 15 < numTanks) {
 						// goal: build more soldiers and bashers
 						if (numBarracks < 1) {
 							// goal: build a barracks
@@ -831,6 +831,8 @@ public class RobotPlayer {
 			return null;
 		}
 	}
+	
+	private static int minOre = 5;
 
 	private static void mine() throws GameActionException {
 		MapLocation myLoc = rc.getLocation();
@@ -839,13 +841,13 @@ public class RobotPlayer {
 			tryMove(myLoc.directionTo(enemyLoc).opposite());
 		} else {
 			double myOre = rc.senseOre(myLoc);
-			if (myOre > 0) {
+			if (myOre > minOre) {
 				rc.mine();
 				markMining(rc.getID());
 			} else {
 				Direction[] bestDirs = new Direction[8];
 				int numBestDirs = 0;
-				double bestOre = 0;
+				double bestOre = minOre;
 				for (int i = 0; i < 8; i++) {
 					Direction d = intToDirection(i);
 					double dirOre = rc.senseOre(myLoc.add(d));
@@ -853,7 +855,7 @@ public class RobotPlayer {
 						bestDirs[0] = d;
 						numBestDirs = 1;
 						bestOre = dirOre;
-					} else if (dirOre >= bestOre && dirOre > 0 && rc.canMove(d)) {
+					} else if (dirOre >= bestOre && dirOre > minOre && rc.canMove(d)) {
 						bestDirs[numBestDirs] = d;
 						numBestDirs++;
 					}
