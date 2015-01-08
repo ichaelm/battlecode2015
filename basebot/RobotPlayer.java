@@ -572,6 +572,24 @@ public class RobotPlayer {
 	private static void runLauncher() {
 		while (true) {
 			try {
+				if (rc.getMissileCount() > 0) {
+					MapLocation target = nearestEnemy();
+					if (target != null) {
+						tryLaunch(rc.getLocation().directionTo(target));
+					}
+				}
+				if (rc.isCoreReady()) {
+					if (Clock.getRoundNum() < RUSH_TURN) {
+						rally();
+					} else {
+						MapLocation enemyLoc = nearestEnemy();
+						if (enemyLoc == null) {
+							tryMove(rc.getLocation().directionTo(enemyHQLoc));
+						} else {
+							//tryMove(rc.getLocation().directionTo(enemyLoc)); // good idea to not move here
+						}
+					}
+				}
 				transferSupply();
 				rc.yield();
 			} catch (Exception e) {
@@ -634,7 +652,21 @@ public class RobotPlayer {
 	private static void runMissile() {
 		while (true) {
 			try {
-				transferSupply();
+				int round = Clock.getRoundNum();
+				if (rc.isCoreReady()) {
+					MapLocation myLoc = rc.getLocation();
+					MapLocation target = nearestEnemy();
+					if (myLoc.distanceSquaredTo(target) <= 2) { // if adjacent
+						tryMove(rc.getLocation().directionTo(target));
+						rc.explode();
+					} else {
+						tryMove(rc.getLocation().directionTo(target));
+					}
+				}
+				if (Clock.getBytecodeNum() > 450 || round != Clock.getRoundNum()) {
+					System.out.println("Missile takes too many bytecodes!");
+					System.err.println("Missile takes too many bytecodes!");
+				}
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("Missile Exception");
@@ -1168,6 +1200,19 @@ public class RobotPlayer {
 		}
 		if (offsetIndex < 5) {
 			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+		}
+	}
+	
+	static void tryLaunch(Direction d) throws GameActionException {
+		int offsetIndex = 0;
+		int[] offsets = {0,1,-1,2,-2};
+		int dirint = directionToInt(d);
+		boolean blocked = false;
+		while (offsetIndex < 5 && !rc.canLaunch(directions[(dirint+offsets[offsetIndex]+8)%8])) {
+			offsetIndex++;
+		}
+		if (offsetIndex < 5) {
+			rc.launchMissile(directions[(dirint+offsets[offsetIndex]+8)%8]);
 		}
 	}
 
