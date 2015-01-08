@@ -726,8 +726,9 @@ public class RobotPlayer {
 							}
 						}
 					}
+				} else { // hack to fix over-bytecode bug
+					transferSupply();
 				}
-				transferSupply();
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("Tank Factory Exception");
