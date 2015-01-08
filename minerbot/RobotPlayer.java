@@ -168,7 +168,7 @@ public class RobotPlayer {
 				int plannedTeamOre = teamOre;
 				
 				
-				if (plannedTeamOre < 600 || estimatedOreConsumption * 1.2 >= estimatedOreGeneration) {
+				if (true) {
 					// goal: build more miners
 					if (numRobotsByType[robotTypeToNum(RobotType.MINERFACTORY)] + progressRobotsByType[robotTypeToNum(RobotType.MINERFACTORY)] < 1) {
 						// goal: build a miner factory
@@ -350,14 +350,17 @@ public class RobotPlayer {
 					} else {
 						RobotType buildOrder = recieveBuildOrders(rc.getID());
 						if (buildOrder == null) {
-							mine();
+							//mine();
+							tryMove(directions[rand.nextInt(8)]);
 						} else {
 							if (ordersMarked(rc.getID())) {
 								sendOrders(rc.getID(), -1, 0, 0);
-								mine();
+								//mine();
+								tryMove(directions[rand.nextInt(8)]);
 							} else {
 								if (rc.getTeamOre() < buildOrder.oreCost) {
-									mine();
+									//mine();
+									tryMove(directions[rand.nextInt(8)]);
 								} else {
 									boolean success = tryBuild(directions[rand.nextInt(8)],buildOrder);
 									if (success) {
@@ -733,8 +736,9 @@ public class RobotPlayer {
 	private static void mine() throws GameActionException {
 		MapLocation myLoc = rc.getLocation();
 		double myOre = rc.senseOre(myLoc);
-		if (myOre > 5) {
+		if (myOre > 0) {
 			rc.mine();
+			markMining(rc.getID());
 		} else {
 			Direction[] bestDirs = new Direction[8];
 			int numBestDirs = 0;
@@ -746,30 +750,50 @@ public class RobotPlayer {
 					bestDirs[0] = d;
 					numBestDirs = 1;
 					bestOre = dirOre;
-				} else if (dirOre >= bestOre && rc.canMove(d)) {
+				} else if (dirOre >= bestOre && dirOre > 0 && rc.canMove(d)) {
 					bestDirs[numBestDirs] = d;
 					numBestDirs++;
 				}
 			}
 			if (numBestDirs > 0) {
-				if (bestOre > myOre) {
-					int choice = rand.nextInt(numBestDirs);
-					rc.move(bestDirs[choice]);
-				} else {
-					rc.mine();
-				}
+				int choice = rand.nextInt(numBestDirs);
+				rc.move(bestDirs[choice]);
+				unmarkMining(rc.getID());
 			} else {
-				if (myOre > 0) {
-					rc.mine();
+				// seek better location
+				MapLocation target = findNearestMarkedMiner();
+				if (target == null) {
+					tryMove(directions[rand.nextInt(8)]);
 				} else {
-					if (myLoc.distanceSquaredTo(HQLoc) > (rushDist / 4)) {
-						tryMove(myLoc.directionTo(HQLoc));
-					} else {
-						tryMove(directions[rand.nextInt(8)]);
+					tryMove(myLoc.directionTo(target));
+				}
+				unmarkMining(rc.getID());
+			}
+		}
+	}
+	
+	private static MapLocation findNearestMarkedMiner() throws GameActionException {
+		MapLocation myLoc = rc.getLocation();
+		RobotInfo[] myRobots = rc.senseNearbyRobots(9999999, myTeam);
+		MapLocation nearest = null;
+		int nearestDist = 9999999;
+		for (RobotInfo ri : myRobots) {
+			if (ri.type == RobotType.MINER) {
+				if (ordersMining(ri.ID)) {
+					MapLocation minerLoc = ri.location;
+					int dist = myLoc.distanceSquaredTo(minerLoc);
+					if (dist < nearestDist) {
+						nearestDist = dist;
+						nearest = minerLoc;
 					}
 				}
 			}
 		}
+		if (nearest != null) {
+			rc.setIndicatorLine(myLoc, nearest, 255,0,0);
+			rc.setIndicatorDot(myLoc, 255,0,0);
+		}
+		return nearest;
 	}
 	
 	private static void rally() throws GameActionException {
@@ -867,9 +891,10 @@ public class RobotPlayer {
 		}
 		return type;
 	}
-
-	private static final int MSG_LEN = 5;
-	private static final int NUM_MSG = 65536 / MSG_LEN;
+	
+	private static final int MSG_SPACE = 65536;
+	private static final int MSG_LEN = 6; // ID, order, x, y, marked, mining
+	private static final int NUM_MSG = MSG_SPACE / MSG_LEN;
 
 	private static void sendOrders(int ID, int order, int x, int y) throws GameActionException {
 		int hash = hashID(ID);
@@ -923,9 +948,44 @@ public class RobotPlayer {
 			hash = hash % NUM_MSG;
 			foundID = rc.readBroadcast(hash * MSG_LEN);
 		}
-		if (foundID == ID) {
-			rc.broadcast(hash * MSG_LEN + 4, 1);
+		rc.broadcast(hash * MSG_LEN, ID);
+		rc.broadcast(hash * MSG_LEN + 4, 1);
+	}
+	
+	private static void unmarkOrders(int ID) throws GameActionException {
+		int hash = hashID(ID);
+		int foundID = rc.readBroadcast(hash * MSG_LEN);
+		while (foundID != ID && foundID != 0) {
+			hash = hash + 1;
+			hash = hash % NUM_MSG;
+			foundID = rc.readBroadcast(hash * MSG_LEN);
 		}
+		rc.broadcast(hash * MSG_LEN, ID);
+		rc.broadcast(hash * MSG_LEN + 4, 0);
+	}
+	
+	private static void markMining(int ID) throws GameActionException {
+		int hash = hashID(ID);
+		int foundID = rc.readBroadcast(hash * MSG_LEN);
+		while (foundID != ID && foundID != 0) {
+			hash = hash + 1;
+			hash = hash % NUM_MSG;
+			foundID = rc.readBroadcast(hash * MSG_LEN);
+		}
+		rc.broadcast(hash * MSG_LEN, ID);
+		rc.broadcast(hash * MSG_LEN + 5, 1);
+	}
+	
+	private static void unmarkMining(int ID) throws GameActionException {
+		int hash = hashID(ID);
+		int foundID = rc.readBroadcast(hash * MSG_LEN);
+		while (foundID != ID && foundID != 0) {
+			hash = hash + 1;
+			hash = hash % NUM_MSG;
+			foundID = rc.readBroadcast(hash * MSG_LEN);
+		}
+		rc.broadcast(hash * MSG_LEN, ID);
+		rc.broadcast(hash * MSG_LEN + 5, 0);
 	}
 
 	private static boolean ordersMarked(int ID) throws GameActionException {
@@ -938,6 +998,20 @@ public class RobotPlayer {
 		}
 		if (foundID == ID) {
 			return (1 == rc.readBroadcast(hash * MSG_LEN + 4));
+		}
+		return false;
+	}
+	
+	private static boolean ordersMining(int ID) throws GameActionException {
+		int hash = hashID(ID);
+		int foundID = rc.readBroadcast(hash * MSG_LEN);
+		while (foundID != ID && foundID != 0) {
+			hash = hash + 1;
+			hash = hash % NUM_MSG;
+			foundID = rc.readBroadcast(hash * MSG_LEN);
+		}
+		if (foundID == ID) {
+			return (1 == rc.readBroadcast(hash * MSG_LEN + 5));
 		}
 		return false;
 	}
