@@ -379,6 +379,21 @@ public class RobotPlayer {
 	private static void runAerospaceLab() {
 		while (true) {
 			try {
+				if (rc.isCoreReady()) {
+					RobotType buildOrder = recieveBuildOrders(rc.getID());
+					if (buildOrder != null) {
+						if (ordersMarked(rc.getID())) {
+							sendOrders(rc.getID(), -1, 0, 0);
+						} else {
+							if (rc.getTeamOre() >= buildOrder.oreCost) {
+								boolean success = trySpawn(directions[rand.nextInt(8)],buildOrder);
+								if (success) {
+									markOrders(rc.getID());
+								}
+							}
+						}
+					}
+				}
 				transferSupply();
 				rc.yield();
 			} catch (Exception e) {
@@ -656,11 +671,15 @@ public class RobotPlayer {
 				if (rc.isCoreReady()) {
 					MapLocation myLoc = rc.getLocation();
 					MapLocation target = nearestEnemy();
-					if (myLoc.distanceSquaredTo(target) <= 2) { // if adjacent
-						tryMove(rc.getLocation().directionTo(target));
-						rc.explode();
+					if (target == null) {
+						rc.disintegrate();
 					} else {
-						tryMove(rc.getLocation().directionTo(target));
+						if (myLoc.distanceSquaredTo(target) <= 2) { // if adjacent
+							tryMove(rc.getLocation().directionTo(target));
+							rc.explode();
+						} else {
+							tryMove(rc.getLocation().directionTo(target));
+						}
 					}
 				}
 				if (Clock.getBytecodeNum() > 450 || round != Clock.getRoundNum()) {
