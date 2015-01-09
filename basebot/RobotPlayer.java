@@ -945,29 +945,28 @@ public class RobotPlayer {
 				}
 			}
 		}
-		if (nearest != null) {
-			rc.setIndicatorLine(myLoc, nearest, 255,0,0);
-			rc.setIndicatorDot(myLoc, 255,0,0);
-		}
 		return nearest;
 	}
 
 	private static void rally() throws GameActionException {
 		MapLocation myLoc = rc.getLocation();
 		MapLocation invaderLoc = attackingEnemy();
-		if (invaderLoc != null) {
-			tryMove(myLoc.directionTo(invaderLoc));
+		MapLocation enemy = nearestEnemy();
+		if (enemy != null) {
+			tryMove(myLoc.directionTo(enemy));
 		} else {
-			if (myLoc.distanceSquaredTo(HQLoc) > (rushDist / 9)) {
-				tryMove(myLoc.directionTo(HQLoc));
+			if (invaderLoc != null) {
+				tryMove(myLoc.directionTo(invaderLoc));
 			} else {
-				MapLocation enemy = nearestEnemy();
-				if (enemy == null) {
-					tryMove(directions[rand.nextInt(8)]);
+				if (myLoc.distanceSquaredTo(HQLoc) < (rushDist / 16)) {
+					tryMove(myLoc.directionTo(enemyHQLoc));
 				} else {
-					tryMove(myLoc.directionTo(enemy));
+					if (myLoc.distanceSquaredTo(HQLoc) > (rushDist / 9)) {
+						tryMove(myLoc.directionTo(HQLoc));
+					} else {
+						tryMove(directions[rand.nextInt(8)]);
+					}
 				}
-
 			}
 		}
 	}
@@ -994,7 +993,7 @@ public class RobotPlayer {
 	}
 
 	private static MapLocation attackingEnemy() throws GameActionException {
-		RobotInfo[] enemies = rc.senseNearbyRobots(HQLoc, (rushDist / 9), enemyTeam);
+		RobotInfo[] enemies = rc.senseNearbyRobots(HQLoc, (int)Math.pow((Math.sqrt(rushDist) / 3 + 6), 2), enemyTeam);
 		int closestDist = 9999999;
 		RobotInfo closestRobot = null;
 		for (RobotInfo r : enemies) {
