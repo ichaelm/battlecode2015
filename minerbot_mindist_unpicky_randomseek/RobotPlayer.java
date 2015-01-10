@@ -1,4 +1,4 @@
-package minerbot;
+package minerbot_mindist_unpicky_randomseek;
 
 import battlecode.common.*;
 
@@ -731,44 +731,40 @@ public class RobotPlayer {
 	}
 
 	private static void mine() throws GameActionException {
+		int minOre = 5;
 		MapLocation myLoc = rc.getLocation();
-		MapLocation enemyLoc = nearestEnemy();
-		if (enemyLoc != null) {
-			tryMove(myLoc.directionTo(enemyLoc).opposite());
+		double myOre = rc.senseOre(myLoc);
+		if (myOre > minOre) {
+			rc.mine();
 		} else {
-			double myOre = rc.senseOre(myLoc);
-			if (myOre > 0) {
-				rc.mine();
-				markMining(rc.getID());
-			} else {
-				Direction[] bestDirs = new Direction[8];
-				int numBestDirs = 0;
-				double bestOre = 0;
-				for (int i = 0; i < 8; i++) {
-					Direction d = intToDirection(i);
-					double dirOre = rc.senseOre(myLoc.add(d));
-					if (dirOre > bestOre && rc.canMove(d)) {
+			Direction[] bestDirs = new Direction[8];
+			int numBestDirs = 0;
+			double bestOre = 0;
+			int bestHQDistSq = 9999999;
+			for (int i = 0; i < 8; i++) {
+				Direction d = intToDirection(i);
+				double dirOre = rc.senseOre(myLoc.add(d));
+				int dirHQDistSq = myLoc.add(d).distanceSquaredTo(HQLoc);
+				if (rc.canMove(d) && dirOre > 0) {
+					if (dirHQDistSq < bestHQDistSq) {
 						bestDirs[0] = d;
 						numBestDirs = 1;
 						bestOre = dirOre;
-					} else if (dirOre >= bestOre && dirOre > 0 && rc.canMove(d)) {
+					} else if (dirHQDistSq <= bestHQDistSq) {
 						bestDirs[numBestDirs] = d;
 						numBestDirs++;
 					}
 				}
-				if (numBestDirs > 0) {
-					int choice = rand.nextInt(numBestDirs);
-					rc.move(bestDirs[choice]);
-					unmarkMining(rc.getID());
+			}
+			if (bestOre > minOre) {
+				int choice = rand.nextInt(numBestDirs);
+				rc.move(bestDirs[choice]);
+			} else {
+				if (myOre > 0) {
+					rc.mine();
 				} else {
 					// seek better location
-					MapLocation target = findNearestMarkedMiner();
-					if (target == null) {
-						tryMove(directions[rand.nextInt(8)]);
-					} else {
-						tryMove(myLoc.directionTo(target));
-					}
-					unmarkMining(rc.getID());
+					tryMove(directions[rand.nextInt(8)]);
 				}
 			}
 		}
