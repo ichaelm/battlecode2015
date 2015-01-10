@@ -20,47 +20,20 @@ public class RobotPlayer {
 	private static MapLocation HQLoc;
 	private static MapLocation enemyHQLoc;
 	private static int rushDist;
-	private static Direction[] directions = {Direction.NORTH, Direction.NORTH_EAST, Direction.EAST, Direction.SOUTH_EAST, Direction.SOUTH, Direction.SOUTH_WEST, Direction.WEST, Direction.NORTH_WEST};
-	private static RobotType[] robotTypes = {
-		RobotType.HQ,
-		RobotType.TOWER,
-		RobotType.SUPPLYDEPOT,
-		RobotType.TECHNOLOGYINSTITUTE,
-		RobotType.BARRACKS,
-		RobotType.HELIPAD,
-		RobotType.TRAININGFIELD,
-		RobotType.TANKFACTORY,
-		RobotType.MINERFACTORY,
-		RobotType.HANDWASHSTATION,
-		RobotType.AEROSPACELAB,
-		RobotType.BEAVER,
-		RobotType.COMPUTER,
-		RobotType.SOLDIER,
-		RobotType.BASHER,
-		RobotType.MINER,
-		RobotType.DRONE,
-		RobotType.TANK,
-		RobotType.COMMANDER,
-		RobotType.LAUNCHER,
-		RobotType.MISSILE,
-	};
-	/*
-	hq	5
-	miner factory	2.5
-	tech institute	0.4
-	barracks	4
-	helipad	4.16666
-	tank factory	5
-	training field	1.25
-	aerospace lab	4
-	 */
-	private static double[] oreConsumptionByType = {5, 0, 0, 0.4, 4, 25/6, 1.25, 5, 2.5, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+	private static final Direction[] directions = Direction.values(); //{Direction.NORTH, Direction.NORTH_EAST, Direction.EAST, Direction.SOUTH_EAST, Direction.SOUTH, Direction.SOUTH_WEST, Direction.WEST, Direction.NORTH_WEST};
+	private static final RobotType[] robotTypes = RobotType.values();
+	private static int[] offsets = {0,1,-1,2,-2};
+	
 
 	public static void run(RobotController myrc) {
 		// Initialize cached game information
 		rc = myrc;
 		myTeam = rc.getTeam();
 		enemyTeam = myTeam.opponent();
+		if (myrc.getType() == RobotType.MISSILE) { //hack for missiles to run faster
+			rc.setIndicatorString(1, "Bytecodes Used: " + Clock.getBytecodeNum() + " Left: " + Clock.getBytecodesLeft());
+			runMissile();
+		}
 		myType = rc.getType();
 		myRange = myType.attackRadiusSquared;
 		rand = new Random(rc.getID());
@@ -99,6 +72,17 @@ public class RobotPlayer {
 
 	private static void runHQ() {
 		// Information stored across rounds
+		/*
+		hq	5
+		miner factory	2.5
+		tech institute	0.4
+		barracks	4
+		helipad	4.16666
+		tank factory	5
+		training field	1.25
+		aerospace lab	4
+		 */
+		double[] oreConsumptionByType = {5, 0, 0, 0.4, 4, 25/6, 1.25, 5, 2.5, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 		RobotInfo[] myRobots = null;
 		RobotInfo[][] myRobotsByType;
 		RobotInfo[][] myFreeRobotsByType;
@@ -627,9 +611,8 @@ public class RobotPlayer {
 	}
 
 	private static void runMissile() {
-		while (true) {
-			try {
-				//int round = Clock.getRoundNum();
+		try {
+			while (true) {
 				if (rc.isCoreReady()) {
 					MapLocation myLoc = rc.getLocation();
 					MapLocation target = fastNearestEnemy();
@@ -637,25 +620,19 @@ public class RobotPlayer {
 						rc.disintegrate();
 					} else {
 						if (myLoc.distanceSquaredTo(target) <= 2) { // if adjacent
-							tryMove(rc.getLocation().directionTo(target));
+							quickTryMove(myLoc.directionTo(target));
 							rc.explode();
 						} else {
-							tryMove(rc.getLocation().directionTo(target));
+							quickTryMove(myLoc.directionTo(target));
 						}
 					}
-
 				}
-				/*
-				if (Clock.getBytecodeNum() > 450 || round != Clock.getRoundNum()) {
-					System.out.println("Missile takes too many bytecodes!");
-					System.err.println("Missile takes too many bytecodes!");
-				}
-				*/
 				rc.yield();
-			} catch (Exception e) {
-				System.out.println("Missile Exception");
-				e.printStackTrace();
 			}
+		}  
+		catch (Exception e) {
+			System.out.println("Missile Exception");
+			e.printStackTrace();
 		}
 	}
 
@@ -1199,6 +1176,18 @@ public class RobotPlayer {
 		}
 	}
 
+	static void quickTryMove(Direction d) throws GameActionException {
+		int offsetIndex = 0;
+		int dirint = directionToInt(d);
+		boolean blocked = false;
+		while (offsetIndex < 3 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
+			offsetIndex++;
+		}
+		if (offsetIndex < 3) {
+			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+		}
+	}
+	
 	// This method will attempt to move in Direction d (or as close to it as possible)
 	static void tryMove(Direction d) throws GameActionException {
 		int offsetIndex = 0;
