@@ -20,6 +20,8 @@ public class RobotPlayer {
 	private static MapLocation HQLoc;
 	private static MapLocation enemyHQLoc;
 	private static int rushDist;
+	private static MapLocation minerTarget;
+	private static boolean brandNew;
 	private static Direction[] directions = {Direction.NORTH, Direction.NORTH_EAST, Direction.EAST, Direction.SOUTH_EAST, Direction.SOUTH, Direction.SOUTH_WEST, Direction.WEST, Direction.NORTH_WEST};
 	private static RobotType[] robotTypes = {
 		RobotType.HQ,
@@ -67,6 +69,8 @@ public class RobotPlayer {
 		HQLoc = rc.senseHQLocation();
 		enemyHQLoc = rc.senseEnemyHQLocation();
 		rushDist = HQLoc.distanceSquaredTo(enemyHQLoc);
+		minerTarget = null;
+		brandNew = true;
 
 		switch (myType) {
 		case HQ: runHQ(); break;
@@ -887,45 +891,91 @@ public class RobotPlayer {
 	private static int minOre = 5;
 
 	private static void mine() throws GameActionException {
+		int minOre = 5;
 		MapLocation myLoc = rc.getLocation();
 		double myOre = rc.senseOre(myLoc);
-		if (myOre > 5) {
+		if (myOre > minOre) {
 			rc.mine();
+			markMining(rc.getID());
 		} else {
 			Direction[] bestDirs = new Direction[8];
 			int numBestDirs = 0;
 			double bestOre = 0;
+			int bestHQDistSq = 9999999;
 			for (int i = 0; i < 8; i++) {
 				Direction d = intToDirection(i);
 				double dirOre = rc.senseOre(myLoc.add(d));
-				if (dirOre > bestOre && rc.canMove(d)) {
-					bestDirs[0] = d;
-					numBestDirs = 1;
-					bestOre = dirOre;
-				} else if (dirOre >= bestOre && rc.canMove(d)) {
-					bestDirs[numBestDirs] = d;
-					numBestDirs++;
-				}
-			}
-			if (numBestDirs > 0) {
-				if (bestOre > myOre) {
-					int choice = rand.nextInt(numBestDirs);
-					rc.move(bestDirs[choice]);
-				} else {
-					rc.mine();
-				}
-			} else {
-				if (myOre > 0) {
-					rc.mine();
-				} else {
-					if (myLoc.distanceSquaredTo(HQLoc) > (rushDist / 4)) {
-						tryMove(myLoc.directionTo(HQLoc));
-					} else {
-						tryMove(directions[rand.nextInt(8)]);
+				int dirHQDistSq = myLoc.add(d).distanceSquaredTo(HQLoc);
+				if (rc.canMove(d) && dirOre > 0) {
+					if (dirOre > bestOre) {
+						bestDirs[0] = d;
+						numBestDirs = 1;
+						bestOre = dirOre;
+						bestHQDistSq = dirHQDistSq;
+					} else if (dirOre >= bestOre) {
+						if (dirHQDistSq < bestHQDistSq) {
+							bestDirs[0] = d;
+							numBestDirs = 1;
+							bestOre = dirOre;
+							bestHQDistSq = dirHQDistSq;
+						} else if (dirHQDistSq <= bestHQDistSq) {
+							bestDirs[numBestDirs] = d;
+							numBestDirs++;
+						}
 					}
 				}
 			}
+			if (bestOre > minOre) {
+				int choice = rand.nextInt(numBestDirs);
+				rc.move(bestDirs[choice]);
+				unmarkMining(rc.getID());
+			} else {
+				// seek better location
+				if (brandNew) {
+					// initial location finding
+					minerTarget = findNearestMarkedMiner();
+					if (minerTarget == null) {
+						tryMove(directions[rand.nextInt(8)]);
+					} else {
+						tryMove(myLoc.directionTo(minerTarget));
+					}
+				} else {
+					if (minerTarget != null) {
+						// continue initial location finding
+						if (myLoc.isAdjacentTo(minerTarget) || myLoc.equals(minerTarget)) {
+							// reached target, use secondary location finding
+							minerTarget = null;
+							tryMove(myLoc.directionTo(HQLoc).opposite());
+						} else {
+							// not reached target, continue initial location finding
+							boolean success = limitedTryMove(myLoc.directionTo(minerTarget));
+							if (!success) {
+								minerTarget = null;
+								limitedTryMove(myLoc.directionTo(HQLoc).opposite());
+							}
+						}
+					} else {
+						// use secondary location finding
+						minerTarget = findNearestMarkedMiner();
+						if (minerTarget == null) {
+							tryMove(directions[rand.nextInt(8)]);
+						} else {
+							boolean success = limitedTryMove(myLoc.directionTo(minerTarget));
+							if (!success) {
+								minerTarget = findNearestMarkedMiner();
+								if (minerTarget == null) {
+									limitedTryMove(directions[rand.nextInt(8)]);
+								} else {
+									limitedTryMove(myLoc.directionTo(minerTarget));
+								}
+							}
+						}
+					}
+				}
+				unmarkMining(rc.getID());
+			}
 		}
+		brandNew = false;
 	}
 
 	private static MapLocation findNearestMarkedMiner() throws GameActionException {
@@ -1208,7 +1258,7 @@ public class RobotPlayer {
 	}
 
 	// This method will attempt to move in Direction d (or as close to it as possible)
-	static void tryMove(Direction d) throws GameActionException {
+	static boolean tryMove(Direction d) throws GameActionException {
 		int offsetIndex = 0;
 		int[] offsets = {0,1,-1,2,-2};
 		int dirint = directionToInt(d);
@@ -1218,7 +1268,54 @@ public class RobotPlayer {
 		}
 		if (offsetIndex < 5) {
 			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+			return true;
 		}
+		return false;
+	}
+	
+	static boolean limitedTryMove(Direction d) throws GameActionException {
+		int offsetIndex = 0;
+		int[] offsets = {0,1,-1};
+		int dirint = directionToInt(d);
+		boolean blocked = false;
+		while (offsetIndex < 3 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
+			offsetIndex++;
+		}
+		if (offsetIndex < 3) {
+			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+			return true;
+		}
+		return false;
+	}
+	
+	static boolean tryMoveLeft(Direction d) throws GameActionException {
+		int offsetIndex = 0;
+		int[] offsets = {0,-1,1,-2,-3};
+		int dirint = directionToInt(d);
+		boolean blocked = false;
+		while (offsetIndex < 5 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
+			offsetIndex++;
+		}
+		if (offsetIndex < 5) {
+			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+			return true;
+		}
+		return false;
+	}
+	
+	static boolean tryMoveRight(Direction d) throws GameActionException {
+		int offsetIndex = 0;
+		int[] offsets = {0,1,-1,2,3};
+		int dirint = directionToInt(d);
+		boolean blocked = false;
+		while (offsetIndex < 5 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
+			offsetIndex++;
+		}
+		if (offsetIndex < 5) {
+			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+			return true;
+		}
+		return false;
 	}
 	
 	static void tryLaunch(Direction d) throws GameActionException {
