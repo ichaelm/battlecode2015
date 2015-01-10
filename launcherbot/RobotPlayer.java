@@ -20,6 +20,11 @@ public class RobotPlayer {
 	private static MapLocation HQLoc;
 	private static MapLocation enemyHQLoc;
 	private static int rushDist;
+	private static MapLocation minerTarget;
+	private static boolean brandNew;
+	private static int lastNumMiners;
+	private static int harassCooldown;
+	private static boolean launched;
 	private static final Direction[] directions = Direction.values(); //{Direction.NORTH, Direction.NORTH_EAST, Direction.EAST, Direction.SOUTH_EAST, Direction.SOUTH, Direction.SOUTH_WEST, Direction.WEST, Direction.NORTH_WEST};
 	private static final RobotType[] robotTypes = RobotType.values();
 	private static int[] offsets = {0,1,-1,2,-2};
@@ -40,6 +45,11 @@ public class RobotPlayer {
 		HQLoc = rc.senseHQLocation();
 		enemyHQLoc = rc.senseEnemyHQLocation();
 		rushDist = HQLoc.distanceSquaredTo(enemyHQLoc);
+		minerTarget = null;
+		brandNew = true;
+		lastNumMiners = 0;
+		harassCooldown = 0;
+		launched = false;
 
 		switch (myType) {
 		case HQ: runHQ(); break;
@@ -144,7 +154,16 @@ public class RobotPlayer {
 					}
 				}
 				int totalSupplyGeneration = (int)(100*(2+Math.pow(numRobotsByType[robotTypeToNum(RobotType.SUPPLYDEPOT)],0.7)));
-
+				
+				if (harassCooldown > 0) {
+					harassCooldown--;
+				}
+				int numMiners = numRobotsByType[robotTypeToNum(RobotType.MINER)];
+				if (numMiners < lastNumMiners) {
+					harassCooldown = 15;
+				}
+				lastNumMiners = numMiners; // update
+				
 				// calculate macro build orders for all free units
 				newBuildOrders = new RobotType[ARRAY_SIZE][2];
 				numNewBuildOrders = 0;
@@ -152,7 +171,7 @@ public class RobotPlayer {
 				int plannedTeamOre = teamOre;
 
 
-				if (plannedTeamOre < 600 || estimatedOreConsumption * 1.3 >= estimatedOreGeneration) {
+				if (harassCooldown <= 0 && Clock.getRoundNum() < RUSH_TURN + 100 && (plannedTeamOre < 600 || estimatedOreConsumption * 1.3 >= estimatedOreGeneration)) {
 					// goal: build more miners
 					if (numRobotsByType[robotTypeToNum(RobotType.MINERFACTORY)] + progressRobotsByType[robotTypeToNum(RobotType.MINERFACTORY)] < 1) {
 						// goal: build a miner factory
@@ -192,7 +211,7 @@ public class RobotPlayer {
 				}
 				int numHelipads = numRobotsByType[robotTypeToNum(RobotType.HELIPAD)] + progressRobotsByType[robotTypeToNum(RobotType.HELIPAD)];
 				int numAerospaceLabs = numRobotsByType[robotTypeToNum(RobotType.AEROSPACELAB)] + progressRobotsByType[robotTypeToNum(RobotType.AEROSPACELAB)];
-				if (plannedTeamOre >= 1000 && estimatedOreConsumption < estimatedOreGeneration) {
+				if (plannedTeamOre >= 1300 && estimatedOreConsumption < estimatedOreGeneration) {
 					// goal: build an aerospace lab
 					if (numHelipads < 1) {
 						// goal: build a helipad
@@ -272,7 +291,7 @@ public class RobotPlayer {
 						break;
 					}
 				}
-
+				
 				if (rc.isWeaponReady()) {
 					attackSomething();
 				}
@@ -431,7 +450,9 @@ public class RobotPlayer {
 						}
 					}
 				}
-				transferSupply();
+				if (Clock.getBytecodesLeft() > 1000) {
+					transferSupply();
+				}
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("Beaver Exception");
@@ -533,21 +554,22 @@ public class RobotPlayer {
 	private static void runLauncher() {
 		while (true) {
 			try {
+				launched = false;
 				if (rc.getMissileCount() > 0) {
 					MapLocation target = nearestEnemy();
 					if (target != null) {
-						tryLaunch(rc.getLocation().directionTo(target));
+						launched = tryLaunch(rc.getLocation().directionTo(target));
 					}
 				}
 				if (rc.isCoreReady()) {
 					if (Clock.getRoundNum() < RUSH_TURN) {
-						rally();
+						launcherRally();
 					} else {
 						MapLocation enemyLoc = nearestEnemy();
 						if (enemyLoc == null) {
-							tryMove(rc.getLocation().directionTo(enemyHQLoc));
+							launcherTryMove(rc.getLocation().directionTo(enemyHQLoc));
 						} else {
-							//tryMove(rc.getLocation().directionTo(enemyLoc)); // good idea to not move here
+							//tryMove(rc.getLocation().directionTo(enemyLoc));
 						}
 					}
 				}
@@ -574,7 +596,9 @@ public class RobotPlayer {
 						mine();
 					}
 				}
-				transferSupply();
+				if (Clock.getBytecodesLeft() > 1000) {
+					transferSupply();
+				}
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("Miner Exception");
@@ -829,45 +853,91 @@ public class RobotPlayer {
 	private static int minOre = 5;
 
 	private static void mine() throws GameActionException {
+		int minOre = 5;
 		MapLocation myLoc = rc.getLocation();
 		double myOre = rc.senseOre(myLoc);
-		if (myOre > 5) {
+		if (myOre > minOre) {
 			rc.mine();
+			markMining(rc.getID());
 		} else {
 			Direction[] bestDirs = new Direction[8];
 			int numBestDirs = 0;
 			double bestOre = 0;
+			int bestHQDistSq = 9999999;
 			for (int i = 0; i < 8; i++) {
 				Direction d = intToDirection(i);
 				double dirOre = rc.senseOre(myLoc.add(d));
-				if (dirOre > bestOre && rc.canMove(d)) {
-					bestDirs[0] = d;
-					numBestDirs = 1;
-					bestOre = dirOre;
-				} else if (dirOre >= bestOre && rc.canMove(d)) {
-					bestDirs[numBestDirs] = d;
-					numBestDirs++;
-				}
-			}
-			if (numBestDirs > 0) {
-				if (bestOre > myOre) {
-					int choice = rand.nextInt(numBestDirs);
-					rc.move(bestDirs[choice]);
-				} else {
-					rc.mine();
-				}
-			} else {
-				if (myOre > 0) {
-					rc.mine();
-				} else {
-					if (myLoc.distanceSquaredTo(HQLoc) > (rushDist / 4)) {
-						tryMove(myLoc.directionTo(HQLoc));
-					} else {
-						tryMove(directions[rand.nextInt(8)]);
+				int dirHQDistSq = myLoc.add(d).distanceSquaredTo(HQLoc);
+				if (rc.canMove(d) && dirOre > 0) {
+					if (dirOre > bestOre) {
+						bestDirs[0] = d;
+						numBestDirs = 1;
+						bestOre = dirOre;
+						bestHQDistSq = dirHQDistSq;
+					} else if (dirOre >= bestOre) {
+						if (dirHQDistSq < bestHQDistSq) {
+							bestDirs[0] = d;
+							numBestDirs = 1;
+							bestOre = dirOre;
+							bestHQDistSq = dirHQDistSq;
+						} else if (dirHQDistSq <= bestHQDistSq) {
+							bestDirs[numBestDirs] = d;
+							numBestDirs++;
+						}
 					}
 				}
 			}
+			if (bestOre > minOre) {
+				int choice = rand.nextInt(numBestDirs);
+				rc.move(bestDirs[choice]);
+				unmarkMining(rc.getID());
+			} else {
+				// seek better location
+				if (brandNew) {
+					// initial location finding
+					minerTarget = findNearestMarkedMiner();
+					if (minerTarget == null) {
+						tryMove(directions[rand.nextInt(8)]);
+					} else {
+						tryMove(myLoc.directionTo(minerTarget));
+					}
+				} else {
+					if (minerTarget != null) {
+						// continue initial location finding
+						if (myLoc.isAdjacentTo(minerTarget) || myLoc.equals(minerTarget)) {
+							// reached target, use secondary location finding
+							minerTarget = null;
+							tryMove(myLoc.directionTo(HQLoc).opposite());
+						} else {
+							// not reached target, continue initial location finding
+							boolean success = limitedTryMove(myLoc.directionTo(minerTarget));
+							if (!success) {
+								minerTarget = null;
+								limitedTryMove(myLoc.directionTo(HQLoc).opposite());
+							}
+						}
+					} else {
+						// use secondary location finding
+						minerTarget = findNearestMarkedMiner();
+						if (minerTarget == null) {
+							tryMove(directions[rand.nextInt(8)]);
+						} else {
+							boolean success = limitedTryMove(myLoc.directionTo(minerTarget));
+							if (!success) {
+								minerTarget = findNearestMarkedMiner();
+								if (minerTarget == null) {
+									limitedTryMove(directions[rand.nextInt(8)]);
+								} else {
+									limitedTryMove(myLoc.directionTo(minerTarget));
+								}
+							}
+						}
+					}
+				}
+				unmarkMining(rc.getID());
+			}
 		}
+		brandNew = false;
 	}
 
 	private static MapLocation findNearestMarkedMiner() throws GameActionException {
@@ -887,31 +957,121 @@ public class RobotPlayer {
 				}
 			}
 		}
-		if (nearest != null) {
-			rc.setIndicatorLine(myLoc, nearest, 255,0,0);
-			rc.setIndicatorDot(myLoc, 255,0,0);
-		}
 		return nearest;
 	}
 
 	private static void rally() throws GameActionException {
 		MapLocation myLoc = rc.getLocation();
 		MapLocation invaderLoc = attackingEnemy();
-		if (invaderLoc != null) {
-			tryMove(myLoc.directionTo(invaderLoc));
+		MapLocation enemy = nearestEnemy();
+		if (enemy != null) {
+			tryMove(myLoc.directionTo(enemy));
 		} else {
-			if (myLoc.distanceSquaredTo(HQLoc) > (rushDist / 9)) {
-				tryMove(myLoc.directionTo(HQLoc));
+			if (invaderLoc != null) {
+				tryMove(myLoc.directionTo(invaderLoc));
 			} else {
-				MapLocation enemy = nearestEnemy();
-				if (enemy == null) {
-					tryMove(directions[rand.nextInt(8)]);
+				if (brandNew) {
+					// initial location finding
+					minerTarget = findNearestMarkedMiner();
+					if (minerTarget == null) {
+						tryMove(directions[rand.nextInt(8)]);
+					} else {
+						tryMove(myLoc.directionTo(minerTarget));
+					}
 				} else {
-					tryMove(myLoc.directionTo(enemy));
+					if (minerTarget != null) {
+						// continue initial location finding
+						if (myLoc.isAdjacentTo(minerTarget) || myLoc.equals(minerTarget)) {
+							// reached target, use secondary location finding
+							minerTarget = null;
+							tryMove(myLoc.directionTo(HQLoc).opposite());
+						} else {
+							// not reached target, continue initial location finding
+							boolean success = tryMove(myLoc.directionTo(minerTarget));
+							if (!success) {
+								minerTarget = null;
+								tryMove(myLoc.directionTo(HQLoc).opposite());
+							}
+						}
+					} else {
+						double myOre = rc.senseOre(myLoc);
+						if (myOre > 5) {
+							tryMove(myLoc.directionTo(HQLoc));
+						} else {
+							tryMove(myLoc.directionTo(HQLoc).opposite());
+						}
+					}
 				}
-
 			}
 		}
+		brandNew = false;
+	}
+	
+	private static void launcherRally() throws GameActionException {
+		MapLocation myLoc = rc.getLocation();
+		MapLocation invaderLoc = attackingEnemy();
+		MapLocation enemy = nearestEnemy();
+		if (enemy != null) {
+			//launcherTryMove(myLoc.directionTo(enemy));
+		} else {
+			if (invaderLoc != null) {
+				launcherTryMove(myLoc.directionTo(invaderLoc));
+			} else {
+				if (brandNew) {
+					// initial location finding
+					minerTarget = findNearestMarkedMiner();
+					if (minerTarget == null) {
+						launcherTryMove(directions[rand.nextInt(8)]);
+					} else {
+						launcherTryMove(myLoc.directionTo(minerTarget));
+					}
+				} else {
+					if (minerTarget != null) {
+						// continue initial location finding
+						if (myLoc.isAdjacentTo(minerTarget) || myLoc.equals(minerTarget)) {
+							// reached target, use secondary location finding
+							minerTarget = null;
+							launcherTryMove(myLoc.directionTo(HQLoc).opposite());
+						} else {
+							// not reached target, continue initial location finding
+							boolean success = launcherTryMove(myLoc.directionTo(minerTarget));
+							if (!success) {
+								minerTarget = null;
+								launcherTryMove(myLoc.directionTo(HQLoc).opposite());
+							}
+						}
+					} else {
+						double myOre = rc.senseOre(myLoc);
+						if (myOre > 5) {
+							launcherTryMove(myLoc.directionTo(HQLoc));
+						} else {
+							launcherTryMove(myLoc.directionTo(HQLoc).opposite());
+						}
+					}
+				}
+			}
+		}
+		brandNew = false;
+	}
+	
+	private static boolean inEnemyRange(MapLocation loc) {
+		MapLocation[] enemyTowers = rc.senseEnemyTowerLocations();
+		MapLocation enemyHQ = enemyHQLoc;
+		int numTowers = enemyTowers.length;
+		int HQRange = 24;
+		if (numTowers >= 2) {
+			HQRange = 35;
+		}
+		int towerRange = 24;
+		if (loc.distanceSquaredTo(enemyHQ) <= HQRange) {
+			return true;
+		}
+		for (MapLocation towerLoc : enemyTowers) {
+			if (loc.distanceSquaredTo(towerLoc) <= towerRange) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static MapLocation nearestEnemy() throws GameActionException {
@@ -962,11 +1122,11 @@ public class RobotPlayer {
 	}
 
 	private static MapLocation attackingEnemy() throws GameActionException {
-		RobotInfo[] enemies = rc.senseNearbyRobots(HQLoc, (rushDist / 9), enemyTeam);
+		RobotInfo[] enemies = rc.senseNearbyRobots(HQLoc, 9999999, enemyTeam);
 		int closestDist = 9999999;
 		RobotInfo closestRobot = null;
 		for (RobotInfo r : enemies) {
-			if (r.type != RobotType.MISSILE) {
+			if (r.type != RobotType.MISSILE && r.type != RobotType.MINER && r.type != RobotType.BEAVER) {
 				MapLocation enemyLoc = r.location;
 				int dist = HQLoc.distanceSquaredTo(enemyLoc);
 				if (dist < closestDist) {
@@ -1189,7 +1349,7 @@ public class RobotPlayer {
 	}
 	
 	// This method will attempt to move in Direction d (or as close to it as possible)
-	static void tryMove(Direction d) throws GameActionException {
+	static boolean tryMove(Direction d) throws GameActionException {
 		int offsetIndex = 0;
 		int[] offsets = {0,1,-1,2,-2};
 		int dirint = directionToInt(d);
@@ -1199,10 +1359,78 @@ public class RobotPlayer {
 		}
 		if (offsetIndex < 5) {
 			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+			return true;
 		}
+		return false;
 	}
 	
-	static void tryLaunch(Direction d) throws GameActionException {
+	static boolean launcherTryMove(Direction d) throws GameActionException {
+		int offsetIndex = 0;
+		int[] offsets = {0,1,-1,2,-2};
+		int dirint = directionToInt(d);
+		boolean blocked = false;
+		while (offsetIndex < 5 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
+			offsetIndex++;
+		}
+		if (offsetIndex < 5) {
+			Direction dir = directions[(dirint+offsets[offsetIndex]+8)%8];
+			if (!inEnemyRange(rc.getLocation().add(dir))) {
+				rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+			} else if (!launched) {
+				tryLaunch(dir);
+			}
+			
+			return true;
+		}
+		return false;
+	}
+	
+	static boolean limitedTryMove(Direction d) throws GameActionException {
+		int offsetIndex = 0;
+		int[] offsets = {0,1,-1};
+		int dirint = directionToInt(d);
+		boolean blocked = false;
+		while (offsetIndex < 3 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
+			offsetIndex++;
+		}
+		if (offsetIndex < 3) {
+			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+			return true;
+		}
+		return false;
+	}
+	
+	static boolean tryMoveLeft(Direction d) throws GameActionException {
+		int offsetIndex = 0;
+		int[] offsets = {0,-1,1,-2,-3};
+		int dirint = directionToInt(d);
+		boolean blocked = false;
+		while (offsetIndex < 5 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
+			offsetIndex++;
+		}
+		if (offsetIndex < 5) {
+			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+			return true;
+		}
+		return false;
+	}
+	
+	static boolean tryMoveRight(Direction d) throws GameActionException {
+		int offsetIndex = 0;
+		int[] offsets = {0,1,-1,2,3};
+		int dirint = directionToInt(d);
+		boolean blocked = false;
+		while (offsetIndex < 5 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
+			offsetIndex++;
+		}
+		if (offsetIndex < 5) {
+			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+			return true;
+		}
+		return false;
+	}
+	
+	static boolean tryLaunch(Direction d) throws GameActionException {
 		int offsetIndex = 0;
 		int[] offsets = {0,1,-1,2,-2};
 		int dirint = directionToInt(d);
@@ -1212,7 +1440,9 @@ public class RobotPlayer {
 		}
 		if (offsetIndex < 5) {
 			rc.launchMissile(directions[(dirint+offsets[offsetIndex]+8)%8]);
+			return true;
 		}
+		return false;
 	}
 
 	// This method will attempt to spawn in the given direction (or as close to it as possible)

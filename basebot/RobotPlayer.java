@@ -489,7 +489,9 @@ public class RobotPlayer {
 						}
 					}
 				}
-				transferSupply();
+				if (Clock.getBytecodesLeft() > 1000) {
+					transferSupply();
+				}
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("Beaver Exception");
@@ -632,7 +634,9 @@ public class RobotPlayer {
 						mine();
 					}
 				}
-				transferSupply();
+				if (Clock.getBytecodesLeft() > 1000) {
+					transferSupply();
+				}
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("Miner Exception");
