@@ -1,4 +1,4 @@
-package minerbot_maxoremindist_picky_savedmarkedminer;
+package minerbot_maxoremindist_picky_savedmarkedminer2;
 
 import battlecode.common.*;
 
@@ -780,7 +780,7 @@ public class RobotPlayer {
 					if (minerTarget == null) {
 						tryMove(directions[rand.nextInt(8)]);
 					} else {
-						tryMove(myLoc.directionTo(minerTarget));
+						tryMoveLeft(myLoc.directionTo(minerTarget));
 					}
 					unmarkMining(rc.getID());
 				} else {
@@ -798,7 +798,12 @@ public class RobotPlayer {
 						}
 					} else {
 						// use secondary location finding
-						tryMove(myLoc.directionTo(HQLoc).opposite());
+						minerTarget = findNearestMarkedMiner();
+						if (minerTarget == null) {
+							tryMove(directions[rand.nextInt(8)]);
+						} else {
+							tryMoveLeft(myLoc.directionTo(minerTarget));
+						}
 						unmarkMining(rc.getID());
 					}
 				}
