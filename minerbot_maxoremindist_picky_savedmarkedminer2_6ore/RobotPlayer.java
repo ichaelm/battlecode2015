@@ -1,4 +1,4 @@
-package minerbot_maxoremindist_picky_savedmarkedminer2;
+package minerbot_maxoremindist_picky_savedmarkedminer2_6ore;
 
 import battlecode.common.*;
 
@@ -371,7 +371,9 @@ public class RobotPlayer {
 						}
 					}
 				}
-				transferSupply();
+				if (Clock.getBytecodesLeft() > 1000) {
+					transferSupply();
+				}
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("Beaver Exception");
@@ -496,7 +498,9 @@ public class RobotPlayer {
 						mine();
 					}
 				}
-				transferSupply();
+				if (Clock.getBytecodesLeft() > 1000) {
+					transferSupply();
+				}
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("Miner Exception");
@@ -734,7 +738,7 @@ public class RobotPlayer {
 	}
 
 	private static void mine() throws GameActionException {
-		int minOre = 5;
+		int minOre = 6;
 		MapLocation myLoc = rc.getLocation();
 		double myOre = rc.senseOre(myLoc);
 		if (myOre > minOre) {
@@ -780,9 +784,8 @@ public class RobotPlayer {
 					if (minerTarget == null) {
 						tryMove(directions[rand.nextInt(8)]);
 					} else {
-						tryMoveLeft(myLoc.directionTo(minerTarget));
+						tryMove(myLoc.directionTo(minerTarget));
 					}
-					unmarkMining(rc.getID());
 				} else {
 					if (minerTarget != null) {
 						// continue initial location finding
@@ -790,11 +793,13 @@ public class RobotPlayer {
 							// reached target, use secondary location finding
 							minerTarget = null;
 							tryMove(myLoc.directionTo(HQLoc).opposite());
-							unmarkMining(rc.getID());
 						} else {
 							// not reached target, continue initial location finding
-							tryMove(myLoc.directionTo(minerTarget));
-							unmarkMining(rc.getID());
+							boolean success = limitedTryMove(myLoc.directionTo(minerTarget));
+							if (!success) {
+								minerTarget = null;
+								limitedTryMove(myLoc.directionTo(HQLoc).opposite());
+							}
 						}
 					} else {
 						// use secondary location finding
@@ -802,11 +807,19 @@ public class RobotPlayer {
 						if (minerTarget == null) {
 							tryMove(directions[rand.nextInt(8)]);
 						} else {
-							tryMoveLeft(myLoc.directionTo(minerTarget));
+							boolean success = limitedTryMove(myLoc.directionTo(minerTarget));
+							if (!success) {
+								minerTarget = findNearestMarkedMiner();
+								if (minerTarget == null) {
+									limitedTryMove(directions[rand.nextInt(8)]);
+								} else {
+									limitedTryMove(myLoc.directionTo(minerTarget));
+								}
+							}
 						}
-						unmarkMining(rc.getID());
 					}
 				}
+				unmarkMining(rc.getID());
 			}
 		}
 		brandNew = false;
@@ -1089,7 +1102,7 @@ public class RobotPlayer {
 	}
 
 	// This method will attempt to move in Direction d (or as close to it as possible)
-	static void tryMove(Direction d) throws GameActionException {
+	static boolean tryMove(Direction d) throws GameActionException {
 		int offsetIndex = 0;
 		int[] offsets = {0,1,-1,2,-2};
 		int dirint = directionToInt(d);
@@ -1099,33 +1112,54 @@ public class RobotPlayer {
 		}
 		if (offsetIndex < 5) {
 			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+			return true;
 		}
+		return false;
 	}
 	
-	static void tryMoveLeft(Direction d) throws GameActionException {
+	static boolean limitedTryMove(Direction d) throws GameActionException {
 		int offsetIndex = 0;
-		int[] offsets = {0,-1,-2,-3};
+		int[] offsets = {0,1,-1};
 		int dirint = directionToInt(d);
 		boolean blocked = false;
-		while (offsetIndex < 4 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
+		while (offsetIndex < 3 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
 			offsetIndex++;
 		}
-		if (offsetIndex < 4) {
+		if (offsetIndex < 3) {
 			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+			return true;
 		}
+		return false;
 	}
 	
-	static void tryMoveRight(Direction d) throws GameActionException {
+	static boolean tryMoveLeft(Direction d) throws GameActionException {
 		int offsetIndex = 0;
-		int[] offsets = {0,1,2,3};
+		int[] offsets = {0,-1,1,-2,-3};
 		int dirint = directionToInt(d);
 		boolean blocked = false;
-		while (offsetIndex < 4 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
+		while (offsetIndex < 5 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
 			offsetIndex++;
 		}
-		if (offsetIndex < 4) {
+		if (offsetIndex < 5) {
 			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+			return true;
 		}
+		return false;
+	}
+	
+	static boolean tryMoveRight(Direction d) throws GameActionException {
+		int offsetIndex = 0;
+		int[] offsets = {0,1,-1,2,3};
+		int dirint = directionToInt(d);
+		boolean blocked = false;
+		while (offsetIndex < 5 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
+			offsetIndex++;
+		}
+		if (offsetIndex < 5) {
+			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+			return true;
+		}
+		return false;
 	}
 
 	// This method will attempt to spawn in the given direction (or as close to it as possible)
