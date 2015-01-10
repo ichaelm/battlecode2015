@@ -88,7 +88,7 @@ public class RobotPlayer {
         for (int i = 0; i < 2; i++) {
             prevPath.add(new MapLocation(-1, -1));
         }
-//    	prevPath.add(rc.getLocation());
+    	prevPath.add(rc.getLocation());
         targetLocation = new MapLocation(rand.nextInt(6) - 3 + rc.senseTowerLocations()[0].x, rand.nextInt(6) - 3 + rc.senseTowerLocations()[0].y); //being used to test movement pathing
 
         while(true) {
@@ -121,8 +121,8 @@ public class RobotPlayer {
                     //sensing and resupplying nearby allies if they have lower supply level
                     resupplyAlliedBots();
 
-                    attackSomething();
-                    while (!rc.isPathable(RobotType.BEAVER, targetLocation) && rc.getLocation().distanceSquaredTo(targetLocation) <= 3) {
+//                    attackSomething();
+                    while (!rc.isPathable(RobotType.BEAVER, targetLocation) && rc.getLocation().distanceSquaredTo(targetLocation) <= 9) {
                     	int towerNumber = rand.nextInt(rc.senseEnemyTowerLocations().length);
                     	targetLocation = new MapLocation(rand.nextInt(6) - 3 + rc.senseEnemyTowerLocations()[towerNumber].x, rand.nextInt(6) - 3 + rc.senseEnemyTowerLocations()[towerNumber].y);
                     }
@@ -208,41 +208,48 @@ public class RobotPlayer {
     }
     
     private static void moveTo(MapLocation targetLocation) throws GameActionException {
-    	Direction direction = rc.getLocation().directionTo(targetLocation);
-    	
-    	MapLocation movableSpace = null;
-    	MapLocation potentialMoveTarget;
+    	if (!rc.isCoreReady()) {
+    		return;
+    	}
+
     	MapLocation currentLocation = rc.getLocation();
-    	for(int i = 0; i < 8; i++) {
-    		potentialMoveTarget = rc.getLocation().add(direction);
-    		if (rc.isCoreReady() && rc.canMove(direction) && !currentLocation.equals(potentialMoveTarget) && !prevPath.contains(potentialMoveTarget)) {
-    			//if we've found a movable space, store it in case no non-adjacent spaces have been found
-    			for (int j = 0; j < 8; j++) {
-    				//check target space to see if it's adjacent to previously moved space; if not, then move there and return
-    				if (prevPath.contains(potentialMoveTarget.add(directions[j])) && rc.canMove(direction)) {
-    	    			movableSpace = potentialMoveTarget;
+    	
+    	Direction direction = currentLocation.directionTo(targetLocation);
+    	rc.setIndicatorString(0, "size: " + prevPath.size() + " first item: " + prevPath.get(0).toString());
+    	rc.setIndicatorString(1, "second item: " + prevPath.get(1).toString());
+    	rc.setIndicatorString(2, "third item: " + prevPath.get(2).toString());
+    	if (rc.canMove(direction) && !prevPath.contains(currentLocation.add(direction))) {
+    		//if we've found a movable space in the direction of the target, move there
+    	} else {
+    		//choose closer movable location
+    		int closestDistance = 100000000;
+    		Direction testedDirection = direction;
+    		direction = null;
+    		for (int i = 0; i < 8; i++) {
+    			testedDirection = testedDirection.rotateLeft();
+    			if (rc.canMove(testedDirection) && !prevPath.contains(currentLocation.add(testedDirection)) && targetLocation.distanceSquaredTo(currentLocation.add(testedDirection)) < closestDistance) {
+    				for (MapLocation j : prevPath) {
+    					if (!currentLocation.add(testedDirection).isAdjacentTo(j)) {
+    						direction = testedDirection;
+    	    				closestDistance = targetLocation.distanceSquaredTo(currentLocation.add(testedDirection));
+
+    					}
     				}
     			}
-    			if (movableSpace != null && movableSpace == potentialMoveTarget) {
-        	    	prevPath.remove(0);
-        	    	prevPath.add(rc.getLocation());
-    				rc.move(direction);
-    			}
-    			break;
-    		} else {
-    			//choose closer movable location
-    			int closestDistance = 100000000;
-    			Direction testedDirection = Direction.NORTH;
-    			for (int j = 0; j < 8; j++) {
-        			direction = direction.rotateLeft();
-        			if (rc.canMove(direction) && targetLocation.distanceSquaredTo(currentLocation.add(direction)) < closestDistance) {
-        				closestDistance = targetLocation.distanceSquaredTo(currentLocation.add(direction));
-        				testedDirection = direction;
+    		}
+    		if (direction == null) {
+    			for (int i = 0; i < 8; i++) {
+        			testedDirection = testedDirection.rotateLeft();
+        			if (rc.canMove(testedDirection) && !prevPath.contains(currentLocation.add(testedDirection)) && targetLocation.distanceSquaredTo(currentLocation.add(testedDirection)) < closestDistance) {
+        				direction = testedDirection;
+        				closestDistance = targetLocation.distanceSquaredTo(currentLocation.add(testedDirection));
         			}
-    			}
-    			direction = testedDirection;
+        		}
     		}
     	}
+    	rc.move(direction);
+    	prevPath.remove(0);
+    	prevPath.add(currentLocation);
     }
 
 	private static Direction moveUnit(Direction direction) throws GameActionException {
