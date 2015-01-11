@@ -9,6 +9,14 @@ public class RobotPlayer {
 	// AI parameters
 	private static final int ARRAY_SIZE = 200;
 	private static final int RUSH_TURN = 1200;
+	private static final int MSG_SPACE = 65532; // minus 4
+	private static final int MSG_LEN = 6; // ID, order, x, y, marked, mining
+	private static final int NUM_MSG = MSG_SPACE / MSG_LEN;
+	private static final int NORTH_BOUND_CHAN = 65532;
+	private static final int EAST_BOUND_CHAN = 65533;
+	private static final int SOUTH_BOUND_CHAN = 65534;
+	private static final int WEST_BOUND_CHAN = 65535;
+	private static final int NO_BOUND = 99999;
 
 	// Cached game information
 	private static RobotController rc;
@@ -112,6 +120,13 @@ public class RobotPlayer {
 				numRobotsByType = new int[21]; // zeros
 				numFreeRobotsByType = new int[21]; // zeros
 				progressRobotsByType = new int[21]; //zeros
+				
+				if (brandNew) {
+					rc.broadcast(NORTH_BOUND_CHAN, NO_BOUND);
+					rc.broadcast(EAST_BOUND_CHAN, NO_BOUND);
+					rc.broadcast(SOUTH_BOUND_CHAN, NO_BOUND);
+					rc.broadcast(WEST_BOUND_CHAN, NO_BOUND);
+				}
 
 				int totalSupplyUpkeep = 0;
 				double estimatedOreGeneration = 5;
@@ -357,6 +372,7 @@ public class RobotPlayer {
 				}
 				rc.yield();
 				transferSupply();
+				brandNew = false;
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("HQ Exception");
@@ -536,6 +552,7 @@ public class RobotPlayer {
 	private static void runDrone() {
 		while (true) {
 			try {
+				lookForBounds();
 				if (rc.isWeaponReady()) {
 					attackSomething();
 				}
@@ -1110,25 +1127,48 @@ public class RobotPlayer {
 		if (brandNew) {
 			leftHanded = rand.nextBoolean();
 		}
-		if (invaderLoc != null) {
-			harasserTryMove(myLoc.directionTo(invaderLoc));
-		} else {
-			if (civilian != null) {
-				harasserTryMove(myLoc.directionTo(civilian));
-			} else {
-				if (missile != null) {
-					harasserTryMove(myLoc.directionTo(missile).opposite());
-				} else {
-					if (startTimer < 25) {
-						startTimer++;
-						if (leftHanded) {
-							harasserTryMove(myLoc.directionTo(enemyHQLoc).rotateLeft());
-						} else {
-							harasserTryMove(myLoc.directionTo(enemyHQLoc).rotateRight());
+		if (missile != null && myLoc.distanceSquaredTo(missile) <= 2) {
+			boolean canDiag = rc.senseRobot(rc.getID()).coreDelay <= 0.6;
+			Direction[] bestDirs = new Direction[8];
+			int numBestDirs = 0;
+			boolean foundSafe = false;
+			int bestEnemyHQDist = 9999999;
+			for (int dirNum = 0; dirNum < 8; dirNum++) {
+				Direction dir = directions[dirNum];
+				MapLocation dirLoc = myLoc.add(dir);
+				int dirEnemyHQDist = dirLoc.distanceSquaredTo(enemyHQLoc);
+				boolean dirSafe = dirLoc.distanceSquaredTo(missile) > 2 && (canDiag || dir.dx*dir.dx+dir.dy*dir.dy <= 1);
+				if (rc.canMove(dir)) {
+					if (dirSafe && !foundSafe) {
+						bestDirs[0] = dir;
+						numBestDirs = 1;
+						foundSafe = dirSafe;
+						bestEnemyHQDist = dirEnemyHQDist;
+					} else if (dirSafe == foundSafe) {
+						if (dirEnemyHQDist < bestEnemyHQDist) {
+							bestDirs[0] = dir;
+							numBestDirs = 1;
+							foundSafe = dirSafe;
+							bestEnemyHQDist = dirEnemyHQDist;
+						} else if (dirEnemyHQDist <= bestEnemyHQDist) {
+							bestDirs[numBestDirs] = dir;
+							numBestDirs++;
 						}
-					} else {
-						harasserTryMove(myLoc.directionTo(enemyHQLoc));
 					}
+				}
+			}
+			if (numBestDirs > 0) {
+				rc.move(bestDirs[rand.nextInt(numBestDirs)]);
+			}
+			//harasserTryMove(myLoc.directionTo(missile).opposite());
+		} else {
+			if (invaderLoc != null) {
+				harasserMoveTo(invaderLoc);
+			} else {
+				if (civilian != null) {
+					harasserMoveTo(civilian);
+				} else {
+					harasserMoveTo(enemyHQLoc);
 				}
 			}
 		}
@@ -1168,6 +1208,25 @@ public class RobotPlayer {
 					closestDist = dist;
 					closestRobot = r;
 				}
+			}
+		}
+		if (closestRobot != null) {
+			return closestRobot.location;
+		}
+		return null;
+	}
+	
+	private static MapLocation nearestEnemyAll() throws GameActionException {
+		MapLocation myLoc = rc.getLocation();
+		RobotInfo[] enemies = rc.senseNearbyRobots(myRange, enemyTeam);
+		int closestDist = 9999;
+		RobotInfo closestRobot = null;
+		for (RobotInfo r : enemies) {
+			MapLocation enemyLoc = r.location;
+			int dist = myLoc.distanceSquaredTo(enemyLoc);
+			if (dist < closestDist) {
+				closestDist = dist;
+				closestRobot = r;
 			}
 		}
 		if (closestRobot != null) {
@@ -1263,6 +1322,108 @@ public class RobotPlayer {
 		}
 		return null;
 	}
+	
+	private static void lookForBounds() throws GameActionException {
+		MapLocation myLoc = rc.getLocation();
+		int range = (int)Math.sqrt(myRange);
+		Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
+		int[] knownBounds = {
+			rc.readBroadcast(NORTH_BOUND_CHAN),
+			rc.readBroadcast(EAST_BOUND_CHAN),
+			rc.readBroadcast(SOUTH_BOUND_CHAN),
+			rc.readBroadcast(WEST_BOUND_CHAN)
+		};
+		for (int dirNum = 0; dirNum < 4; dirNum++) {
+			Direction dir = myDirections[dirNum];
+			int bound = knownBounds[dirNum];
+			if (bound == NO_BOUND) {
+				MapLocation testLoc = myLoc.add(dir, range);
+				if (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP) {
+					do {
+						testLoc.add(dir.opposite());
+					} while (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP);
+					if (dirNum == 0) {
+						// y direction
+						rc.broadcast(NORTH_BOUND_CHAN, testLoc.y);
+					} else if (dirNum == 1) {
+						// x direction
+						rc.broadcast(EAST_BOUND_CHAN, testLoc.x);
+					} else if (dirNum == 2) {
+						// y direction
+						rc.broadcast(SOUTH_BOUND_CHAN, testLoc.y);
+					} else if (dirNum == 3) {
+						// x direction
+						rc.broadcast(WEST_BOUND_CHAN, testLoc.x);
+					}
+				}
+			}
+		}
+	}
+	
+	private static boolean isMoveTooCloseToBounds(Direction moveDir, int depth) throws GameActionException {
+		MapLocation myLoc = rc.getLocation();
+		MapLocation moveLoc = myLoc.add(moveDir);
+		Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
+		int[] knownBounds = {
+			rc.readBroadcast(NORTH_BOUND_CHAN),
+			rc.readBroadcast(EAST_BOUND_CHAN),
+			rc.readBroadcast(SOUTH_BOUND_CHAN),
+			rc.readBroadcast(WEST_BOUND_CHAN)
+		};
+		for (int dirNum = 0; dirNum < 4; dirNum++) {
+			Direction dir = myDirections[dirNum];
+			int bound = knownBounds[dirNum];
+			int myDistToBounds = locDistToBounds(myLoc);
+			int moveDistToBounds = locDistToBounds(moveLoc);
+			if (bound != NO_BOUND) {
+				if (myDistToBounds < depth) {
+					if (moveDistToBounds < myDistToBounds) {
+						return true;
+					}
+				} else {
+					if (moveDistToBounds < depth) {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+	
+	private static int locDistToBounds(MapLocation loc) throws GameActionException {
+		Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
+		int[] knownBounds = {
+			rc.readBroadcast(NORTH_BOUND_CHAN),
+			rc.readBroadcast(EAST_BOUND_CHAN),
+			rc.readBroadcast(SOUTH_BOUND_CHAN),
+			rc.readBroadcast(WEST_BOUND_CHAN)
+		};
+		int leastDist = Integer.MAX_VALUE;
+		for (int dirNum = 0; dirNum < 4; dirNum++) {
+			int bound = knownBounds[dirNum];
+			if (bound != NO_BOUND) {
+				int dist = Integer.MAX_VALUE; // value will never be used, just suppresses warning
+				switch (dirNum) {
+				case 0:
+					dist = loc.y - knownBounds[dirNum];
+					break;
+				case 1:
+					dist = knownBounds[dirNum] - loc.x;
+					break;
+				case 2:
+					dist = knownBounds[dirNum] - loc.y;
+					break;
+				case 3:
+					dist = loc.x - knownBounds[dirNum];
+					break;
+				}
+				if (dist < leastDist) {
+					leastDist = dist;
+				}
+			}
+		}
+		return leastDist;
+	}
 
 	private static int robotTypeToNum(RobotType type) {
 		int num;
@@ -1302,10 +1463,6 @@ public class RobotPlayer {
 		}
 		return type;
 	}
-
-	private static final int MSG_SPACE = 65536;
-	private static final int MSG_LEN = 6; // ID, order, x, y, marked, mining
-	private static final int NUM_MSG = MSG_SPACE / MSG_LEN;
 
 	private static void sendOrders(int ID, int order, int x, int y) throws GameActionException {
 		int hash = hashID(ID);
@@ -1453,7 +1610,7 @@ public class RobotPlayer {
 
 	// This method will attack an enemy in sight, if there is one
 	static void attackSomething() throws GameActionException {
-		MapLocation enemy = nearestEnemy();
+		MapLocation enemy = nearestEnemyAll();
 		if (enemy != null) {
 			rc.attackLocation(enemy);
 		}
@@ -1508,19 +1665,34 @@ public class RobotPlayer {
 		return false;
 	}
 	
-	static boolean harasserTryMove(Direction d) throws GameActionException {
-		// very inefficient!!! make this better someday
-		int offsetIndex = 0;
-		int[] offsets = {0,1,-1,2,-2};
-		int dirint = directionToInt(d);
-		boolean blocked = false;
-		while (offsetIndex < 5 && (!rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8]) || inEnemyRange(rc.getLocation().add(directions[(dirint+offsets[offsetIndex]+8)%8])))) {
-			offsetIndex++;
+	static boolean harasserMoveTo(MapLocation targetLoc) throws GameActionException {
+		MapLocation myLoc = rc.getLocation();
+		Direction d = myLoc.directionTo(targetLoc);
+		int kiteDistSq = 0;
+		if (rc.canSenseLocation(targetLoc)) {
+			RobotInfo targetInfo = rc.senseRobotAtLocation(targetLoc);
+			if (targetInfo.type.attackRadiusSquared < RobotType.DRONE.attackRadiusSquared) {
+				kiteDistSq = targetInfo.type.attackRadiusSquared;
+			}
 		}
-		if (offsetIndex < 5) {
+		int[] offsets = {0,1,-1,2,-2,3,-3,4};
+		int[] leftOffsets = {-1,-2,0,1,2,-3,3,4};
+		int[] rightOffsets = {1,2,0,-1,-2,3,-3,4};
+		if (startTimer < 15) {
+			startTimer++;
+			if (leftHanded) {
+				offsets = leftOffsets;
+			} else {
+				offsets = rightOffsets;
+			}
+		}
+		int dirint = directionToInt(d);
+		for (int offsetIndex = 0; offsetIndex < 8; offsetIndex++) {
 			Direction dir = directions[(dirint+offsets[offsetIndex]+8)%8];
-			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
-			return true;
+			if (rc.canMove(dir) && !inEnemyRange(myLoc.add(dir)) && !isMoveTooCloseToBounds(dir, 6) && myLoc.distanceSquaredTo(targetLoc) > kiteDistSq) {
+				rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+				return true;
+			}
 		}
 		return false;
 	}
