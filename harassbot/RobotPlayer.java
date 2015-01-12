@@ -1704,6 +1704,22 @@ public class RobotPlayer {
 		bytecodes = newBytecodes;
 	}
 	
+	private static boolean shouldIAttack(){
+		RobotInfo[] nearbyUnits = rc.senseNearbyRobots(RobotType.DRONE.attackRadiusSquared);
+		double sumHealth = 0;
+		for(RobotInfo r: nearbyUnits){
+			if(r.type == RobotType.DRONE){
+				if(r.team == myTeam)
+					sumHealth += r.health;
+				else
+					sumHealth -= r.health;
+			}
+		}
+		if(sumHealth > 0)
+			return true;
+		return false;
+	}
+	
 	private static boolean inEnemyBuildingRange(MapLocation loc) {
 		MapLocation[] enemyTowers = enemyTowerLocs;
 		MapLocation enemyHQ = enemyHQLoc;
