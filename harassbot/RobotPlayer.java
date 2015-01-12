@@ -10,6 +10,7 @@ public class RobotPlayer {
 	private static final int RUSH_TURN = 1800;
 	private static final int HARASS_BORDER_BUFFER = 3;
 	private static final int ARRAY_SIZE = 400;
+	private static final int HARASS_COOLDOWN_DELAY = 100;
 	
 	private static final int MSG_SPACE = 65500; // minus 36
 	private static final int MSG_LEN = 6; // ID, order, x, y, marked, mining
@@ -218,7 +219,7 @@ public class RobotPlayer {
 				}
 				int numMiners = numRobotsByType[robotTypeToNum(RobotType.MINER)];
 				if (numMiners < lastNumMiners) {
-					harassCooldown = 15;
+					harassCooldown = HARASS_COOLDOWN_DELAY;
 				}
 				lastNumMiners = numMiners; // update
 				
@@ -453,7 +454,7 @@ public class RobotPlayer {
 				}
 				
 				if (rc.isWeaponReady()) {
-					attackSomething();
+					HQAttackSomething();
 				}
 				if (rc.isCoreReady()) {
 					RobotType buildOrder = recieveBuildOrders(rc.getID());
@@ -1359,10 +1360,7 @@ public class RobotPlayer {
 			for (int sourceY = -1; sourceY <= 1; sourceY++) {
 				int absSourceX = myLoc.x + sourceX;
 				int absSourceY = myLoc.y + sourceY;
-				distX = enemyHQLoc.x - absSourceX;
-				distY = enemyHQLoc.y - absSourceY;
-				distSq = (distX*distX) + (distY*distY);
-				if (distSq <= enemyHQRange) {
+				if (inEnemyHQRange(new MapLocation(absSourceX, absSourceY))) {
 					damageGrid[sourceX+1][sourceY+1] += enemyHQDamage;
 				}
 				for (int i = 0; i < newNumEnemyTowers; i++) {
@@ -1676,6 +1674,70 @@ public class RobotPlayer {
 		bytecodes = newBytecodes;
 	}
 	
+	private static boolean inMyHQRange(MapLocation loc) {
+		MapLocation myHQ = HQLoc;
+		int numTowers = myTowerLocs.length;
+		int HQRange = 24;
+		if (numTowers >= 2) {
+			HQRange = 35;
+		}
+		int dist = loc.distanceSquaredTo(myHQ);
+		if (dist <= HQRange) {
+			return true;
+		}
+		if (numTowers >= 5) {
+			if (dist <= 48) {
+				return true;
+			} else if (dist <= 52) {
+				int x = Math.abs(myHQ.x - loc.x);
+				int y = Math.abs(myHQ.y - loc.y);
+				if (y < x) {
+					int temp = x;
+					x = y;
+					y = temp;
+				}
+				if (x > 2) {
+					//System.out.println("x=" + x + " y=" + y + " is in range");
+					return true;
+				}
+				//System.out.println("x=" + x + " y=" + y + " is out of range");
+			}
+		}
+		return false;
+	}
+	
+	private static boolean inEnemyHQRange(MapLocation loc) {
+		MapLocation enemyHQ = enemyHQLoc;
+		int numTowers = enemyTowerLocs.length;
+		int HQRange = 24;
+		if (numTowers >= 2) {
+			HQRange = 35;
+		}
+		int dist = loc.distanceSquaredTo(enemyHQ);
+		if (dist <= HQRange) {
+			return true;
+		}
+		if (numTowers >= 5) {
+			if (dist <= 48) {
+				return true;
+			} else if (dist <= 52) {
+				int x = Math.abs(enemyHQ.x - loc.x);
+				int y = Math.abs(enemyHQ.y - loc.y);
+				if (y < x) {
+					int temp = x;
+					x = y;
+					y = temp;
+				}
+				if (x > 2) {
+					//System.out.println("x=" + x + " y=" + y + " is in range");
+					return true;
+				}
+				//System.out.println("x=" + x + " y=" + y + " is out of range");
+			}
+		}
+		return false;
+	}
+	
 	private static boolean inEnemyBuildingRange(MapLocation loc) {
 		MapLocation[] enemyTowers = enemyTowerLocs;
 		MapLocation enemyHQ = enemyHQLoc;
@@ -1685,8 +1747,28 @@ public class RobotPlayer {
 			HQRange = 35;
 		}
 		int towerRange = 24;
-		if (loc.distanceSquaredTo(enemyHQ) <= HQRange) {
+		// hq:
+		int dist = loc.distanceSquaredTo(enemyHQ);
+		if (dist <= HQRange) {
 			return true;
+		}
+		if (numTowers >= 5) {
+			if (dist <= 48) {
+				return true;
+			} else if (dist <= 52) {
+				int x = Math.abs(enemyHQ.x - loc.x);
+				int y = Math.abs(enemyHQ.y - loc.y);
+				if (y < x) {
+					int temp = x;
+					x = y;
+					y = temp;
+				}
+				if (x > 2) {
+					//System.out.println("x=" + x + " y=" + y + " is in range");
+					return true;
+				}
+				//System.out.println("x=" + x + " y=" + y + " is out of range");
+			}
 		}
 		for (MapLocation towerLoc : enemyTowers) {
 			if (loc.distanceSquaredTo(towerLoc) <= towerRange) {
@@ -2216,6 +2298,30 @@ public class RobotPlayer {
 		MapLocation enemy = nearestEnemyAll();
 		if (enemy != null) {
 			rc.attackLocation(enemy);
+		}
+		
+	}
+	
+	private static void HQAttackSomething() throws GameActionException {
+		MapLocation myLoc = rc.getLocation();
+		RobotInfo[] enemies = rc.senseNearbyRobots(52, enemyTeam);
+		int closestDist = 9999;
+		RobotInfo closestRobot = null;
+		for (RobotInfo r : enemies) {
+			MapLocation enemyLoc = r.location;
+			int dist = myLoc.distanceSquaredTo(enemyLoc);
+			if (dist < closestDist) {
+				closestDist = dist;
+				closestRobot = r;
+			}
+		}
+		if (closestRobot != null) {
+			if (closestDist <= 35) {
+				rc.attackLocation(closestRobot.location);
+			} else {
+				rc.attackLocation(closestRobot.location.add(closestRobot.location.directionTo(myLoc)));
+			}
+			
 		}
 		
 	}
