@@ -279,7 +279,7 @@ public class RobotPlayer {
 				int plannedTeamOre = teamOre;
 
 
-				if (harassCooldown <= 0 && (estimatedOreConsumption >= estimatedOreGeneration || teamOre < 100)) {
+				if (harassCooldown <= 0 && (estimatedOreConsumption >= 1.5*estimatedOreGeneration || teamOre < 100)) {
 					// goal: build more miners
 					if (numRobotsByType[robotTypeToNum(RobotType.MINERFACTORY)] + progressRobotsByType[robotTypeToNum(RobotType.MINERFACTORY)] < 1) {
 						// goal: build a miner factory
@@ -321,8 +321,7 @@ public class RobotPlayer {
 				int numAerospaceLabs = numRobotsByType[robotTypeToNum(RobotType.AEROSPACELAB)] + progressRobotsByType[robotTypeToNum(RobotType.AEROSPACELAB)];
 				int numDrones = numRobotsByType[robotTypeToNum(RobotType.DRONE)] + progressRobotsByType[robotTypeToNum(RobotType.DRONE)];
 				int numLaunchers = numRobotsByType[robotTypeToNum(RobotType.LAUNCHER)] + progressRobotsByType[robotTypeToNum(RobotType.LAUNCHER)];
-				if (estimatedOreConsumption < estimatedOreGeneration || (Clock.getRoundNum() > 600 && numAerospaceLabs < 1)) {
-					/*
+				if (true) {
 					// goal: build more drones or launchers
 					if (numDrones - 20 < numLaunchers) {
 						// goal: build a drone
@@ -384,7 +383,6 @@ public class RobotPlayer {
 							}
 						}
 					}
-					*/
 					
 					
 					
@@ -590,7 +588,6 @@ public class RobotPlayer {
 		while (true) {
 			try {
 				if (rc.isCoreReady()) {
-					/*
 					RobotType buildOrder = recieveBuildOrders(rc.getID());
 					if (buildOrder != null) {
 						if (ordersMarked(rc.getID())) {
@@ -604,8 +601,6 @@ public class RobotPlayer {
 							}
 						}
 					}
-					*/
-					trySpawn(directions[rand.nextInt(8)], RobotType.LAUNCHER);
 				}
 				transferSupply();
 				rc.yield();
@@ -861,7 +856,6 @@ public class RobotPlayer {
 		while (true) {
 			try {
 				if (rc.isCoreReady()) {
-					/*
 					RobotType buildOrder = recieveBuildOrders(rc.getID());
 					if (buildOrder != null) {
 						if (ordersMarked(rc.getID())) {
@@ -874,10 +868,6 @@ public class RobotPlayer {
 								}
 							}
 						}
-					}
-					*/
-					if (rc.getTeamOre() >= 400) {
-						trySpawn(directions[rand.nextInt(8)], RobotType.DRONE);
 					}
 				}
 				transferSupply();
@@ -1585,7 +1575,7 @@ public class RobotPlayer {
 						}
 					}
 				}
-				if (type != RobotType.COMMANDER && type != RobotType.DRONE && type != RobotType.TANK && type != RobotType.LAUNCHER) {
+				if (type != RobotType.COMMANDER && type != RobotType.TANK && type != RobotType.LAUNCHER) {
 					// can attack safely
 					for (int sourceX = -1; sourceX <= 1; sourceX++) {
 						for (int sourceY = -1; sourceY <= 1; sourceY++) {
