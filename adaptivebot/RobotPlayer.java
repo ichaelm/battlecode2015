@@ -1,4 +1,4 @@
-package harassbot;
+package adaptivebot;
 
 import battlecode.common.*;
 
@@ -60,7 +60,6 @@ public class RobotPlayer {
 	private static RobotInfo[] myRobots;
 	private static RobotInfo[] enemyRobots;
 	private static int selfSwarmTimer;
-	private static LinkedList<MapLocation> minerPaths;
 	
 	// should be final, but can't because set in run()
 	private static Direction[] directions;
@@ -935,13 +934,6 @@ public class RobotPlayer {
 						mine();
 					}
 				}
-				if(minerPaths == null){
-					minerPaths = new LinkedList<MapLocation>();
-					minerPaths.add(rc.getLocation());
-				} else {
-					if(rc.getLocation() != minerPaths.get(0))
-						minerPaths.add(rc.getLocation());
-				}
 				if (Clock.getBytecodesLeft() > 1000) {
 					transferSupply();
 				}
@@ -1554,33 +1546,7 @@ public class RobotPlayer {
 					}
 				}
 			} else if(type == RobotType.DRONE){
-				int rangeSq = type.attackRadiusSquared;
-				int damage = (int)type.attackPower;
-				if (damage > 0 && rangeSq > 0) {
-					for (int sourceX = -1; sourceX <= 1; sourceX++) {
-						for (int sourceY = -1; sourceY <= 1; sourceY++) {
-							distX = targetX - sourceX;
-							distY = targetY - sourceY;
-							distSq = (distX*distX) + (distY*distY);
-							if (distSq <= rangeSq) {
-								damageGrid[sourceX+1][sourceY+1] += damage;
-							}
-						}
-					}
-				}
-				if(shouldIAttack()) {
-					// can attack safely
-					for (int sourceX = -1; sourceX <= 1; sourceX++) {
-						for (int sourceY = -1; sourceY <= 1; sourceY++) {
-							distX = targetX - sourceX;
-							distY = targetY - sourceY;
-							distSq = (distX*distX) + (distY*distY);
-							if (distSq <= 10) { // myRange
-								canAttackGrid[sourceX+1][sourceY+1] = true;
-							}
-						}
-					}
-				}
+				
 			}
 			else {
 				int rangeSq = type.attackRadiusSquared;
@@ -1914,7 +1880,7 @@ public class RobotPlayer {
 					sumHealth -= r.health;
 			}
 		}
-		if(sumHealth >= 0)
+		if(sumHealth > 0)
 			return true;
 		return false;
 	}
@@ -2727,3 +2693,4 @@ public class RobotPlayer {
 		}
 	}
 }
+
