@@ -1072,8 +1072,36 @@ public class RobotPlayer {
 			}
 		}
 		if (lowestRobot != null) {
-			rc.transferSupplies((int)((mySupply-lowestSupply)/2), lowestRobot.location);
+			if(needsSupply()){
+				if(needsSupply(lowestRobot))
+					rc.transferSupplies((int)((mySupply-lowestSupply)/2), lowestRobot.location);
+			}else{
+				if(needsSupply(lowestRobot))
+					rc.transferSupplies((int)(mySupply), lowestRobot.location);
+				else
+					rc.transferSupplies((int)((mySupply-lowestSupply)/2), lowestRobot.location);
+			}
 		}
+	}
+	
+	private static boolean needsSupply(){
+		if(rc.getType() == RobotType.BEAVER || rc.getType() == RobotType.COMPUTER || 
+				rc.getType() == RobotType.COMMANDER || rc.getType() == RobotType.SOLDIER || 
+				rc.getType() == RobotType.BASHER || rc.getType() == RobotType.TANK || 
+				rc.getType() == RobotType.DRONE || rc.getType() == RobotType.LAUNCHER || 
+				rc.getType() == RobotType.MINER)
+			return true;
+		return false;
+	}
+	
+	private static boolean needsSupply(RobotInfo r){
+		if(r.type == RobotType.BEAVER || r.type == RobotType.COMPUTER || 
+				r.type == RobotType.COMMANDER || r.type == RobotType.SOLDIER || 
+				r.type == RobotType.BASHER || r.type == RobotType.TANK || 
+				r.type == RobotType.DRONE || r.type == RobotType.LAUNCHER || 
+				r.type == RobotType.MINER)
+			return true;
+		return false;
 	}
 
 	private static Direction escapeCrowding() {
@@ -1735,6 +1763,22 @@ public class RobotPlayer {
 				//System.out.println("x=" + x + " y=" + y + " is out of range");
 			}
 		}
+		return false;
+	}
+	
+	private static boolean shouldIAttack(){
+		RobotInfo[] nearbyUnits = rc.senseNearbyRobots(RobotType.DRONE.attackRadiusSquared);
+		double sumHealth = 0;
+		for(RobotInfo r: nearbyUnits){
+			if(r.type == RobotType.DRONE){
+				if(r.team == myTeam)
+					sumHealth += r.health;
+				else
+					sumHealth -= r.health;
+			}
+		}
+		if(sumHealth > 0)
+			return true;
 		return false;
 	}
 	
