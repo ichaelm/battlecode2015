@@ -60,6 +60,7 @@ public class RobotPlayer {
 	private static RobotInfo[] myRobots;
 	private static RobotInfo[] enemyRobots;
 	private static int selfSwarmTimer;
+	private static LinkedList<MapLocation> minerPaths;
 	
 	// should be final, but can't because set in run()
 	private static Direction[] directions;
@@ -933,6 +934,13 @@ public class RobotPlayer {
 					} else {
 						mine();
 					}
+				}
+				if(minerPaths == null){
+					minerPaths = new LinkedList<MapLocation>();
+					minerPaths.add(rc.getLocation());
+				} else {
+					if(rc.getLocation() != minerPaths.get(0))
+						minerPaths.add(rc.getLocation());
 				}
 				if (Clock.getBytecodesLeft() > 1000) {
 					transferSupply();
