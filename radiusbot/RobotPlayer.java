@@ -1,4 +1,4 @@
-package minerbot_mindist_unpicky_randomseek;
+package radiusbot;
 
 import battlecode.common.*;
 
@@ -6,22 +6,17 @@ import java.util.*;
 
 public class RobotPlayer {
 
-	// AI parameters
+	// constant AI parameters
 	private static final int ARRAY_SIZE = 200;
-	private static final int RUSH_TURN = 1500;
-
-	// Cached game information
-	private static RobotController rc;
-	private static Team myTeam;
-	private static Team enemyTeam;
-	private static RobotType myType;
-	private static int myRange;
-	private static Random rand;
-	private static MapLocation HQLoc;
-	private static MapLocation enemyHQLoc;
-	private static int rushDist;
-	private static Direction[] directions = {Direction.NORTH, Direction.NORTH_EAST, Direction.EAST, Direction.SOUTH_EAST, Direction.SOUTH, Direction.SOUTH_WEST, Direction.WEST, Direction.NORTH_WEST};
-	private static RobotType[] robotTypes = {
+	private static final int RUSH_TURN = 1200;
+	private static final int MSG_SPACE = 65535; // 1 missing
+	private static final int MSG_LEN = 6; // ID, order, x, y, marked, mining
+	private static final int SAFETY_RADIUS_CHAN = 65535; // last channel
+	
+	// constant stored info for all bots
+	private static final int NUM_MSG = MSG_SPACE / MSG_LEN;
+	private static final Direction[] directions = {Direction.NORTH, Direction.NORTH_EAST, Direction.EAST, Direction.SOUTH_EAST, Direction.SOUTH, Direction.SOUTH_WEST, Direction.WEST, Direction.NORTH_WEST};
+	private static final RobotType[] robotTypes = {
 		RobotType.HQ,
 		RobotType.TOWER,
 		RobotType.SUPPLYDEPOT,
@@ -44,18 +39,19 @@ public class RobotPlayer {
 		RobotType.LAUNCHER,
 		RobotType.MISSILE,
 	};
-	/*
-	hq	5
-	miner factory	2.5
-	tech institute	0.4
-	barracks	4
-	helipad	4.16666
-	tank factory	5
-	training field	1.25
-	aerospace lab	4
-	*/
 	private static double[] oreConsumptionByType = {5, 0, 0, 0.4, 4, 25/6, 1.25, 5, 2.5, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 	
+	// Cached game information for all bots
+	private static RobotController rc;
+	private static Team myTeam;
+	private static Team enemyTeam;
+	private static RobotType myType;
+	private static int myRange;
+	private static Random rand;
+	private static MapLocation HQLoc;
+	private static MapLocation enemyHQLoc;
+	private static int rushDist;
+
 	public static void run(RobotController myrc) {
 		// Initialize cached game information
 		rc = myrc;
@@ -94,20 +90,23 @@ public class RobotPlayer {
 		}
 	}
 	
-	static RobotType[][] newBuildOrders;
-	static int numNewBuildOrders;
+	// must be static to be accessed by other methods
+	private static RobotType[][] newBuildOrders;
+	private static int numNewBuildOrders;
 
 	private static void runHQ() {
-		// Information stored across rounds
+		// this is not cached information, just preallocated
 		RobotInfo[] myRobots = null;
 		RobotInfo[][] myRobotsByType;
 		RobotInfo[][] myFreeRobotsByType;
-		int[] numRobotsByType; // zeros
-		int[] numFreeRobotsByType; // zeros
-		int[] progressRobotsByType; //zeros
+		int[] numRobotsByType;
+		int[] numFreeRobotsByType;
+		int[] progressRobotsByType;
 
 		while (true) {
 			try {
+				
+				// initialize preallocated vars
 				myRobots = rc.senseNearbyRobots(999999, myTeam);
 				myRobotsByType = new RobotInfo[21][ARRAY_SIZE];
 				myFreeRobotsByType = new RobotInfo[21][ARRAY_SIZE];
@@ -118,7 +117,7 @@ public class RobotPlayer {
 				int totalSupplyUpkeep = 0;
 				double estimatedOreGeneration = 5;
 				double estimatedOreConsumption = 5; //  because hq is not included in myrobots
-				
+
 				// loop to count units, and get orders, and calculate total supply upkeep and ore generation and consumption
 				for (RobotInfo r : myRobots) {
 					// count units
@@ -160,15 +159,23 @@ public class RobotPlayer {
 					}
 				}
 				int totalSupplyGeneration = (int)(100*(2+Math.pow(numRobotsByType[robotTypeToNum(RobotType.SUPPLYDEPOT)],0.7)));
-				
+
 				// calculate macro build orders for all free units
 				newBuildOrders = new RobotType[ARRAY_SIZE][2];
 				numNewBuildOrders = 0;
 				int teamOre = (int)rc.getTeamOre();
 				int plannedTeamOre = teamOre;
 				
+				int numCombatUnits = numRobotsByType[robotTypeToNum(RobotType.LAUNCHER)]
+						   + numRobotsByType[robotTypeToNum(RobotType.DRONE)]
+				           + numRobotsByType[robotTypeToNum(RobotType.SOLDIER)]
+				           + numRobotsByType[robotTypeToNum(RobotType.BASHER)]
+				           + numRobotsByType[robotTypeToNum(RobotType.TANK)];
 				
-				if (true) {
+				int numMiners = numRobotsByType[robotTypeToNum(RobotType.MINER)];
+
+
+				if ((plannedTeamOre < 600 || estimatedOreConsumption * 1.3 >= estimatedOreGeneration)) { // hack, used to include numMiners - 3 < numCombatUnits * 3 / 2 && 
 					// goal: build more miners
 					if (numRobotsByType[robotTypeToNum(RobotType.MINERFACTORY)] + progressRobotsByType[robotTypeToNum(RobotType.MINERFACTORY)] < 1) {
 						// goal: build a miner factory
@@ -206,7 +213,100 @@ public class RobotPlayer {
 						}
 					}
 				}
-				
+				int numHelipads = numRobotsByType[robotTypeToNum(RobotType.HELIPAD)] + progressRobotsByType[robotTypeToNum(RobotType.HELIPAD)];
+				int numAerospaceLabs = numRobotsByType[robotTypeToNum(RobotType.AEROSPACELAB)] + progressRobotsByType[robotTypeToNum(RobotType.AEROSPACELAB)];
+				int numDrones = numRobotsByType[robotTypeToNum(RobotType.DRONE)] + progressRobotsByType[robotTypeToNum(RobotType.DRONE)];
+				int numLaunchers = numRobotsByType[robotTypeToNum(RobotType.LAUNCHER)] + progressRobotsByType[robotTypeToNum(RobotType.LAUNCHER)];
+				if (plannedTeamOre >= 1000 && estimatedOreConsumption < estimatedOreGeneration) {
+					// goal: build an aerospace lab
+					if (numHelipads < 1) {
+						// goal: build a helipad
+						if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
+							// goal: build a beaver
+							order(RobotType.HQ, RobotType.BEAVER);
+							plannedTeamOre -= RobotType.BEAVER.oreCost;
+						} else {
+							// goal: build a helipad
+							order(RobotType.BEAVER, RobotType.HELIPAD);
+							plannedTeamOre -= RobotType.HELIPAD.oreCost;
+						}
+					} else {
+						if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
+							// goal: build a beaver
+							order(RobotType.HQ, RobotType.BEAVER);
+							plannedTeamOre -= RobotType.BEAVER.oreCost;
+						} else {
+							// goal: build an aerospace lab
+							order(RobotType.BEAVER, RobotType.AEROSPACELAB);
+							plannedTeamOre -= RobotType.AEROSPACELAB.oreCost;
+						}
+					}
+				}
+				if (plannedTeamOre >= 600 && estimatedOreConsumption < estimatedOreGeneration) {
+					// goal build more launchers and drones
+					if (false) { //hack, replaced numDrones - 10 < numLaunchers / 2
+						// goal: build a drone
+						if (numHelipads < 1) {
+							// goal: build a helipad
+							if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
+								// goal: build a beaver
+								order(RobotType.HQ, RobotType.BEAVER);
+								plannedTeamOre -= RobotType.BEAVER.oreCost;
+							} else {
+								// goal: build a helipad
+								order(RobotType.BEAVER, RobotType.HELIPAD);
+								plannedTeamOre -= RobotType.HELIPAD.oreCost;
+							}
+						} else {
+							// goal: build a drone
+							if (numFreeRobotsByType[robotTypeToNum(RobotType.HELIPAD)] < 1) {
+								// wait
+							} else {
+								// goal: build a launcher
+								order(RobotType.HELIPAD, RobotType.DRONE);
+								plannedTeamOre -= RobotType.DRONE.oreCost;
+							}
+						}
+					} else {
+						// goal: build a launcher
+						if (numAerospaceLabs < 1) {
+							// goal: build an aerospace lab
+							if (numHelipads < 1) {
+								// goal: build a helipad
+								if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
+									// goal: build a beaver
+									order(RobotType.HQ, RobotType.BEAVER);
+									plannedTeamOre -= RobotType.BEAVER.oreCost;
+								} else {
+									// goal: build a helipad
+									order(RobotType.BEAVER, RobotType.HELIPAD);
+									plannedTeamOre -= RobotType.HELIPAD.oreCost;
+								}
+							} else {
+								if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
+									// goal: build a beaver
+									order(RobotType.HQ, RobotType.BEAVER);
+									plannedTeamOre -= RobotType.BEAVER.oreCost;
+								} else {
+									// goal: build an aerospace lab
+									order(RobotType.BEAVER, RobotType.AEROSPACELAB);
+									plannedTeamOre -= RobotType.AEROSPACELAB.oreCost;
+								}
+							}
+						} else {
+							// goal: build a launcher
+							if (numFreeRobotsByType[robotTypeToNum(RobotType.AEROSPACELAB)] < 1) {
+								// wait
+							} else {
+								// goal: build a launcher
+								order(RobotType.AEROSPACELAB, RobotType.LAUNCHER);
+								plannedTeamOre -= RobotType.LAUNCHER.oreCost;
+							}
+						}
+					}
+					
+				}
+
 				// send orders loop
 				for (int i = 0; i < numNewBuildOrders; i++) {
 					RobotType source = newBuildOrders[i][0];
@@ -225,6 +325,17 @@ public class RobotPlayer {
 					}
 				}
 				
+				// calculate safety radius
+				int safetyRadiusSq;
+				if (numCombatUnits < 9) {
+					safetyRadiusSq = 34;
+				} else {
+					safetyRadiusSq = (int)Math.pow((double)numCombatUnits / (Math.PI / 3), 2);
+				}
+				safetyRadiusSq = rushDist / 9; // hack
+				// send safety radius
+				rc.broadcast(SAFETY_RADIUS_CHAN, safetyRadiusSq);
+
 				if (rc.isWeaponReady()) {
 					attackSomething();
 				}
@@ -277,6 +388,21 @@ public class RobotPlayer {
 	private static void runAerospaceLab() {
 		while (true) {
 			try {
+				if (rc.isCoreReady()) {
+					RobotType buildOrder = recieveBuildOrders(rc.getID());
+					if (buildOrder != null) {
+						if (ordersMarked(rc.getID())) {
+							sendOrders(rc.getID(), -1, 0, 0);
+						} else {
+							if (rc.getTeamOre() >= buildOrder.oreCost) {
+								boolean success = trySpawn(directions[rand.nextInt(8)],buildOrder);
+								if (success) {
+									markOrders(rc.getID());
+								}
+							}
+						}
+					}
+				}
 				transferSupply();
 				rc.yield();
 			} catch (Exception e) {
@@ -470,6 +596,24 @@ public class RobotPlayer {
 	private static void runLauncher() {
 		while (true) {
 			try {
+				if (rc.getMissileCount() > 0) {
+					MapLocation target = nearestEnemy();
+					if (target != null) {
+						tryLaunch(rc.getLocation().directionTo(target));
+					}
+				}
+				if (rc.isCoreReady()) {
+					if (Clock.getRoundNum() < RUSH_TURN) {
+						rally();
+					} else {
+						MapLocation enemyLoc = nearestEnemy();
+						if (enemyLoc == null) {
+							tryMove(rc.getLocation().directionTo(enemyHQLoc));
+						} else {
+							//tryMove(rc.getLocation().directionTo(enemyLoc)); // good idea to not move here
+						}
+					}
+				}
 				transferSupply();
 				rc.yield();
 			} catch (Exception e) {
@@ -532,7 +676,25 @@ public class RobotPlayer {
 	private static void runMissile() {
 		while (true) {
 			try {
-				transferSupply();
+				int round = Clock.getRoundNum();
+				if (rc.isCoreReady()) {
+					MapLocation myLoc = rc.getLocation();
+					MapLocation target = nearestEnemy();
+					if (target == null) {
+						rc.disintegrate();
+					} else {
+						if (myLoc.distanceSquaredTo(target) <= 2) { // if adjacent
+							tryMove(rc.getLocation().directionTo(target));
+							rc.explode();
+						} else {
+							tryMove(rc.getLocation().directionTo(target));
+						}
+					}
+				}
+				if (Clock.getBytecodeNum() > 450 || round != Clock.getRoundNum()) {
+					System.out.println("Missile takes too many bytecodes!");
+					System.err.println("Missile takes too many bytecodes!");
+				}
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("Missile Exception");
@@ -624,8 +786,9 @@ public class RobotPlayer {
 							}
 						}
 					}
+				} else { // hack to fix over-bytecode bug
+					transferSupply();
 				}
-				transferSupply();
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("Tank Factory Exception");
@@ -657,7 +820,7 @@ public class RobotPlayer {
 			}
 		}
 	}
-	
+
 	private static RobotType builtBy(RobotType target) {
 		switch (target) {
 		case HQ: return null;
@@ -700,7 +863,7 @@ public class RobotPlayer {
 			rc.transferSupplies((int)((mySupply-lowestSupply)/2), lowestRobot.location);
 		}
 	}
-	
+
 	private static Direction escapeCrowding() {
 		RobotInfo[] myRobots = rc.senseNearbyRobots(2);
 		MapLocation myLoc = rc.getLocation();
@@ -729,47 +892,56 @@ public class RobotPlayer {
 			return null;
 		}
 	}
+	
+	private static int minOre = 5;
 
 	private static void mine() throws GameActionException {
-		int minOre = 5;
 		MapLocation myLoc = rc.getLocation();
 		double myOre = rc.senseOre(myLoc);
-		if (myOre > minOre) {
-			rc.mine();
+		if (false) { // hack, replaced !isInsideSafetyRadius(myLoc)
+			tryMove(myLoc.directionTo(HQLoc));
 		} else {
-			Direction[] bestDirs = new Direction[8];
-			int numBestDirs = 0;
-			double bestOre = 0;
-			int bestHQDistSq = 9999999;
-			for (int i = 0; i < 8; i++) {
-				Direction d = intToDirection(i);
-				double dirOre = rc.senseOre(myLoc.add(d));
-				int dirHQDistSq = myLoc.add(d).distanceSquaredTo(HQLoc);
-				if (rc.canMove(d) && dirOre > 0) {
-					if (dirHQDistSq < bestHQDistSq) {
+			if (myOre > 5) {
+				rc.mine();
+			} else {
+				Direction[] bestDirs = new Direction[8];
+				int numBestDirs = 0;
+				double bestOre = 0;
+				for (int i = 0; i < 8; i++) {
+					Direction d = intToDirection(i);
+					double dirOre = rc.senseOre(myLoc.add(d));
+					if (dirOre > bestOre && rc.canMove(d)) {
 						bestDirs[0] = d;
 						numBestDirs = 1;
 						bestOre = dirOre;
-					} else if (dirHQDistSq <= bestHQDistSq) {
+					} else if (dirOre >= bestOre && rc.canMove(d)) {
 						bestDirs[numBestDirs] = d;
 						numBestDirs++;
 					}
 				}
-			}
-			if (bestOre > minOre) {
-				int choice = rand.nextInt(numBestDirs);
-				rc.move(bestDirs[choice]);
-			} else {
-				if (myOre > 0) {
-					rc.mine();
+				if (numBestDirs > 0) {
+					if (bestOre > myOre) {
+						int choice = rand.nextInt(numBestDirs);
+						rc.move(bestDirs[choice]);
+					} else {
+						rc.mine();
+					}
 				} else {
-					// seek better location
-					tryMove(directions[rand.nextInt(8)]);
+					if (myOre > 0) {
+						rc.mine();
+					} else {
+						if (myLoc.distanceSquaredTo(HQLoc) > (rushDist / 4)) {
+							tryMove(myLoc.directionTo(HQLoc));
+						} else {
+							tryMove(directions[rand.nextInt(8)]);
+						}
+					}
 				}
 			}
 		}
+		
 	}
-	
+
 	private static MapLocation findNearestMarkedMiner() throws GameActionException {
 		MapLocation myLoc = rc.getLocation();
 		RobotInfo[] myRobots = rc.senseNearbyRobots(9999999, myTeam);
@@ -787,44 +959,50 @@ public class RobotPlayer {
 				}
 			}
 		}
-		if (nearest != null) {
-			rc.setIndicatorLine(myLoc, nearest, 255,0,0);
-			rc.setIndicatorDot(myLoc, 255,0,0);
-		}
 		return nearest;
 	}
-	
+
 	private static void rally() throws GameActionException {
 		MapLocation myLoc = rc.getLocation();
 		MapLocation invaderLoc = attackingEnemy();
-		if (invaderLoc != null) {
-			tryMove(myLoc.directionTo(invaderLoc));
+		MapLocation enemy = nearestEnemy();
+		if (enemy != null) {
+			tryMove(myLoc.directionTo(enemy));
 		} else {
-			if (myLoc.distanceSquaredTo(HQLoc) > (rushDist / 9)) {
-				tryMove(myLoc.directionTo(HQLoc));
+			if (invaderLoc != null) {
+				tryMove(myLoc.directionTo(invaderLoc));
 			} else {
-				MapLocation enemy = nearestEnemy();
-				if (enemy == null) {
-					tryMove(directions[rand.nextInt(8)]);
+				if (!isForwardOfHQ(myLoc)) {
+					tryMove(myLoc.directionTo(enemyHQLoc));
 				} else {
-					tryMove(myLoc.directionTo(enemy));
+					int distSq = myLoc.distanceSquaredTo(HQLoc);
+					int safetyRadiusSq = getSafetyRadiusSq();
+					int minSafetyRadiusSq = (int)Math.pow(Math.sqrt((double)safetyRadiusSq)-2, 2);
+					if (false) { // hack, used to be distSq < minSafetyRadiusSq
+						tryMove(myLoc.directionTo(enemyHQLoc)); // hack, replaced myLoc.directionTo(HQLoc).opposite()
+					} else if (distSq > safetyRadiusSq) {
+						tryMove(myLoc.directionTo(HQLoc));
+					} else {
+						tryMove(directions[rand.nextInt(8)]);
+					}
 				}
-				
 			}
 		}
 	}
-	
+
 	private static MapLocation nearestEnemy() throws GameActionException {
 		MapLocation myLoc = rc.getLocation();
 		RobotInfo[] enemies = rc.senseNearbyRobots(24, enemyTeam);
 		int closestDist = 9999;
 		RobotInfo closestRobot = null;
 		for (RobotInfo r : enemies) {
-			MapLocation enemyLoc = r.location;
-			int dist = myLoc.distanceSquaredTo(enemyLoc);
-			if (dist < closestDist) {
-				closestDist = dist;
-				closestRobot = r;
+			if (r.type != RobotType.MISSILE) {
+				MapLocation enemyLoc = r.location;
+				int dist = myLoc.distanceSquaredTo(enemyLoc);
+				if (dist < closestDist) {
+					closestDist = dist;
+					closestRobot = r;
+				}
 			}
 		}
 		if (closestRobot != null) {
@@ -832,17 +1010,20 @@ public class RobotPlayer {
 		}
 		return null;
 	}
-	
+
 	private static MapLocation attackingEnemy() throws GameActionException {
-		RobotInfo[] enemies = rc.senseNearbyRobots(HQLoc, (rushDist / 9), enemyTeam);
+		int SenseRadiusSq = (int)Math.pow(Math.sqrt((double)getSafetyRadiusSq())+6, 2);
+		RobotInfo[] enemies = rc.senseNearbyRobots(HQLoc, SenseRadiusSq, enemyTeam);
 		int closestDist = 9999999;
 		RobotInfo closestRobot = null;
 		for (RobotInfo r : enemies) {
-			MapLocation enemyLoc = r.location;
-			int dist = HQLoc.distanceSquaredTo(enemyLoc);
-			if (dist < closestDist) {
-				closestDist = dist;
-				closestRobot = r;
+			if (r.type != RobotType.MISSILE) {
+				MapLocation enemyLoc = r.location;
+				int dist = HQLoc.distanceSquaredTo(enemyLoc);
+				if (dist < closestDist) {
+					closestDist = dist;
+					closestRobot = r;
+				}
 			}
 		}
 		if (closestRobot != null) {
@@ -889,10 +1070,6 @@ public class RobotPlayer {
 		}
 		return type;
 	}
-	
-	private static final int MSG_SPACE = 65536;
-	private static final int MSG_LEN = 6; // ID, order, x, y, marked, mining
-	private static final int NUM_MSG = MSG_SPACE / MSG_LEN;
 
 	private static void sendOrders(int ID, int order, int x, int y) throws GameActionException {
 		int hash = hashID(ID);
@@ -954,7 +1131,7 @@ public class RobotPlayer {
 			rc.broadcast(hash * MSG_LEN + 4, 1);
 		}
 	}
-	
+
 	private static void unmarkOrders(int ID) throws GameActionException {
 		int hash = hashID(ID);
 		int foundID = rc.readBroadcast(hash * MSG_LEN);
@@ -971,7 +1148,7 @@ public class RobotPlayer {
 			rc.broadcast(hash * MSG_LEN + 4, 0);
 		}
 	}
-	
+
 	private static void markMining(int ID) throws GameActionException {
 		int hash = hashID(ID);
 		int foundID = rc.readBroadcast(hash * MSG_LEN);
@@ -988,7 +1165,7 @@ public class RobotPlayer {
 			rc.broadcast(hash * MSG_LEN + 5, 1);
 		}
 	}
-	
+
 	private static void unmarkMining(int ID) throws GameActionException {
 		int hash = hashID(ID);
 		int foundID = rc.readBroadcast(hash * MSG_LEN);
@@ -1019,7 +1196,7 @@ public class RobotPlayer {
 		}
 		return false;
 	}
-	
+
 	private static boolean ordersMining(int ID) throws GameActionException {
 		int hash = hashID(ID);
 		int foundID = rc.readBroadcast(hash * MSG_LEN);
@@ -1036,6 +1213,55 @@ public class RobotPlayer {
 
 	private static int hashID(int ID) {
 		return ID % NUM_MSG;
+	}
+	
+	private static int getSafetyRadiusSq() throws GameActionException {
+		return rc.readBroadcast(SAFETY_RADIUS_CHAN);
+	}
+	
+	private static boolean isInsideSafetyRadius(MapLocation loc) throws GameActionException {
+		int safetyRadiusSq = getSafetyRadiusSq();
+		int myX = loc.x;
+		int myY = loc.y;
+		int centerX = HQLoc.x;
+		int centerY = HQLoc.y;
+		int diffX = myX-centerX;
+		int diffY = myY-centerY;
+		if ((diffX*diffX)+(diffY*diffY) < safetyRadiusSq) {
+			return true;
+		} else {
+			Direction rushDir = HQLoc.directionTo(enemyHQLoc);
+			Direction perpDir = rushDir.rotateLeft().rotateLeft();
+			int dirMagnitudeSq = (perpDir.dx*perpDir.dx)+(perpDir.dy*perpDir.dy); // applies to rush and perp dirs
+			int dotProduct = perpDir.dx*diffX + perpDir.dy*diffY;
+			int perpDistanceSq = dotProduct*dotProduct / dirMagnitudeSq;
+			if (perpDistanceSq > safetyRadiusSq) {
+				return false;
+			} else {
+				dotProduct = rushDir.dx*diffX + rushDir.dy*diffY;
+				if (dotProduct <= 0) {
+					return true;
+				} else {
+					return false;
+				}
+			}
+		}
+	}
+	
+	private static boolean isForwardOfHQ(MapLocation loc) {
+		int myX = loc.x;
+		int myY = loc.y;
+		int centerX = HQLoc.x;
+		int centerY = HQLoc.y;
+		int diffX = myX-centerX;
+		int diffY = myY-centerY;
+		Direction dir = HQLoc.directionTo(enemyHQLoc);
+		int dotProduct = dir.dx*diffX + dir.dy*diffY;
+		if (dotProduct > 0) {
+			return true;
+		} else {
+			return false;
+		}
 	}
 
 	// This method will attack an enemy in sight, if there is one
@@ -1057,6 +1283,19 @@ public class RobotPlayer {
 		}
 		if (offsetIndex < 5) {
 			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+		}
+	}
+	
+	static void tryLaunch(Direction d) throws GameActionException {
+		int offsetIndex = 0;
+		int[] offsets = {0,1,-1,2,-2};
+		int dirint = directionToInt(d);
+		boolean blocked = false;
+		while (offsetIndex < 5 && !rc.canLaunch(directions[(dirint+offsets[offsetIndex]+8)%8])) {
+			offsetIndex++;
+		}
+		if (offsetIndex < 5) {
+			rc.launchMissile(directions[(dirint+offsets[offsetIndex]+8)%8]);
 		}
 	}
 
