@@ -1,4 +1,4 @@
-package harassbot;
+package mainbot;
 
 import battlecode.common.*;
 
@@ -2657,6 +2657,22 @@ public class RobotPlayer {
 			return true;
 		}
 		return false;
+	}
+	
+	private static boolean isForwardOfHQ(MapLocation loc) {
+		int myX = loc.x;
+		int myY = loc.y;
+		int centerX = HQLoc.x;
+		int centerY = HQLoc.y;
+		int diffX = myX-centerX;
+		int diffY = myY-centerY;
+		Direction dir = HQLoc.directionTo(enemyHQLoc);
+		int dotProduct = dir.dx*diffX + dir.dy*diffY;
+		if (dotProduct > 0) {
+			return true;
+		} else {
+			return false;
+		}
 	}
 
 	private static int directionToInt(Direction d) {
