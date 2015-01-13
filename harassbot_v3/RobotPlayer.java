@@ -1,4 +1,4 @@
-package harassbot;
+package harassbot_v3;
 
 import battlecode.common.*;
 
