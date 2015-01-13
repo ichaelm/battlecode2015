@@ -321,9 +321,10 @@ public class RobotPlayer {
 				int numAerospaceLabs = numRobotsByType[robotTypeToNum(RobotType.AEROSPACELAB)] + progressRobotsByType[robotTypeToNum(RobotType.AEROSPACELAB)];
 				int numDrones = numRobotsByType[robotTypeToNum(RobotType.DRONE)] + progressRobotsByType[robotTypeToNum(RobotType.DRONE)];
 				int numLaunchers = numRobotsByType[robotTypeToNum(RobotType.LAUNCHER)] + progressRobotsByType[robotTypeToNum(RobotType.LAUNCHER)];
-				if (estimatedOreConsumption < estimatedOreGeneration) {
+				if (estimatedOreConsumption < estimatedOreGeneration || (Clock.getRoundNum() > 600 && numAerospaceLabs < 1)) {
+					/*
 					// goal: build more drones or launchers
-					if (numDrones - 20 < numLaunchers*3/2) {
+					if (numDrones - 20 < numLaunchers) {
 						// goal: build a drone
 						if (numHelipads < 1) {
 							// goal: build a helipad
@@ -383,11 +384,11 @@ public class RobotPlayer {
 							}
 						}
 					}
+					*/
 					
 					
 					
-					
-					if (numDrones - 30 < numLaunchers*2) {
+					if (numHelipads - 2 < numAerospaceLabs*3/2) {
 						// goal: build a helipad
 						if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
 							// goal: build a beaver
@@ -589,6 +590,7 @@ public class RobotPlayer {
 		while (true) {
 			try {
 				if (rc.isCoreReady()) {
+					/*
 					RobotType buildOrder = recieveBuildOrders(rc.getID());
 					if (buildOrder != null) {
 						if (ordersMarked(rc.getID())) {
@@ -602,6 +604,8 @@ public class RobotPlayer {
 							}
 						}
 					}
+					*/
+					trySpawn(directions[rand.nextInt(8)], RobotType.LAUNCHER);
 				}
 				transferSupply();
 				rc.yield();
@@ -872,7 +876,9 @@ public class RobotPlayer {
 						}
 					}
 					*/
-					trySpawn(directions[rand.nextInt(8)], RobotType.DRONE);
+					if (rc.getTeamOre() >= 400) {
+						trySpawn(directions[rand.nextInt(8)], RobotType.DRONE);
+					}
 				}
 				transferSupply();
 				rc.yield();
@@ -1564,36 +1570,7 @@ public class RobotPlayer {
 						}
 					}
 				}
-			} else if(type == RobotType.DRONE){
-				int rangeSq = type.attackRadiusSquared;
-				int damage = (int)type.attackPower;
-				if (damage > 0 && rangeSq > 0) {
-					for (int sourceX = -1; sourceX <= 1; sourceX++) {
-						for (int sourceY = -1; sourceY <= 1; sourceY++) {
-							distX = targetX - sourceX;
-							distY = targetY - sourceY;
-							distSq = (distX*distX) + (distY*distY);
-							if (distSq <= rangeSq) {
-								damageGrid[sourceX+1][sourceY+1] += damage;
-							}
-						}
-					}
-				}
-				if(shouldIAttack()) {
-					// can attack safely
-					for (int sourceX = -1; sourceX <= 1; sourceX++) {
-						for (int sourceY = -1; sourceY <= 1; sourceY++) {
-							distX = targetX - sourceX;
-							distY = targetY - sourceY;
-							distSq = (distX*distX) + (distY*distY);
-							if (distSq <= 10) { // myRange
-								canAttackGrid[sourceX+1][sourceY+1] = true;
-							}
-						}
-					}
-				}
-			}
-			else {
+			} else {
 				int rangeSq = type.attackRadiusSquared;
 				int damage = (int)type.attackPower;
 				if (damage > 0 && rangeSq > 0) {
