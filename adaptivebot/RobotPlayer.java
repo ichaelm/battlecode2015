@@ -1,4 +1,4 @@
-package harassbot;
+package adaptivebot;
 
 import battlecode.common.*;
 
@@ -60,7 +60,6 @@ public class RobotPlayer {
 	private static RobotInfo[] myRobots;
 	private static RobotInfo[] enemyRobots;
 	private static int selfSwarmTimer;
-	private static LinkedList<MapLocation> minerPaths;
 	
 	// should be final, but can't because set in run()
 	private static Direction[] directions;
@@ -203,7 +202,7 @@ public class RobotPlayer {
 
 				int totalSupplyUpkeep = 0;
 				double estimatedOreGeneration = 5;
-				double estimatedOreConsumption = 5;
+				double estimatedOreConsumption = 5; //  because hq is not included in myrobots
 				MapLocation buildingLocations[] = new MapLocation[ARRAY_SIZE];
 				int numBuildingLocations = 0;
 
@@ -225,7 +224,7 @@ public class RobotPlayer {
 						myFreeRobotsByType[typeNum][numFreeRobotsByType[typeNum]] = r;
 						numFreeRobotsByType[typeNum]++;
 						if (type == RobotType.BEAVER) {
-							estimatedOreGeneration += 0;
+							estimatedOreGeneration += 1;
 						}
 					} else {
 						int buildOrderTypeNum = robotTypeToNum(buildOrder);
@@ -279,7 +278,7 @@ public class RobotPlayer {
 				int plannedTeamOre = teamOre;
 
 
-				if (harassCooldown <= 0 && (estimatedOreConsumption >= estimatedOreGeneration || teamOre < 100)) {
+				if (harassCooldown <= 0 && plannedTeamOre < 600) {
 					// goal: build more miners
 					if (numRobotsByType[robotTypeToNum(RobotType.MINERFACTORY)] + progressRobotsByType[robotTypeToNum(RobotType.MINERFACTORY)] < 1) {
 						// goal: build a miner factory
@@ -302,7 +301,7 @@ public class RobotPlayer {
 						}
 					}
 				}
-				if (totalSupplyUpkeep >= totalSupplyGeneration) {
+				if (totalSupplyUpkeep * 1.2 >= totalSupplyGeneration) {
 					// goal: build a supplier if not already being built
 					if (progressRobotsByType[robotTypeToNum(RobotType.SUPPLYDEPOT)] < 1) { // if no supplier is being built
 						// goal: build a supplier
@@ -321,7 +320,45 @@ public class RobotPlayer {
 				int numAerospaceLabs = numRobotsByType[robotTypeToNum(RobotType.AEROSPACELAB)] + progressRobotsByType[robotTypeToNum(RobotType.AEROSPACELAB)];
 				int numDrones = numRobotsByType[robotTypeToNum(RobotType.DRONE)] + progressRobotsByType[robotTypeToNum(RobotType.DRONE)];
 				int numLaunchers = numRobotsByType[robotTypeToNum(RobotType.LAUNCHER)] + progressRobotsByType[robotTypeToNum(RobotType.LAUNCHER)];
-				if (estimatedOreConsumption < estimatedOreGeneration) {
+				if (plannedTeamOre >= 700) {
+					if (numDrones - 30 < numLaunchers*2) {
+						// goal: build a helipad
+						if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
+							// goal: build a beaver
+							order(RobotType.HQ, RobotType.BEAVER);
+							plannedTeamOre -= RobotType.BEAVER.oreCost;
+						} else {
+							// goal: build a helipad
+							order(RobotType.BEAVER, RobotType.HELIPAD);
+							plannedTeamOre -= RobotType.HELIPAD.oreCost;
+						}
+					} else {
+						// goal: build an aerospace lab
+						if (numHelipads < 1) {
+							// goal: build a helipad
+							if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
+								// goal: build a beaver
+								order(RobotType.HQ, RobotType.BEAVER);
+								plannedTeamOre -= RobotType.BEAVER.oreCost;
+							} else {
+								// goal: build a helipad
+								order(RobotType.BEAVER, RobotType.HELIPAD);
+								plannedTeamOre -= RobotType.HELIPAD.oreCost;
+							}
+						} else {
+							if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
+								// goal: build a beaver
+								order(RobotType.HQ, RobotType.BEAVER);
+								plannedTeamOre -= RobotType.BEAVER.oreCost;
+							} else {
+								// goal: build an aerospace lab
+								order(RobotType.BEAVER, RobotType.AEROSPACELAB);
+								plannedTeamOre -= RobotType.AEROSPACELAB.oreCost;
+							}
+						}
+					}
+				}
+				if (plannedTeamOre >= 600) {
 					// goal: build more drones or launchers
 					if (numDrones - 20 < numLaunchers*3/2) {
 						// goal: build a drone
@@ -383,53 +420,7 @@ public class RobotPlayer {
 							}
 						}
 					}
-					
-					
-					
-					
-					if (numDrones - 30 < numLaunchers*2) {
-						// goal: build a helipad
-						if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
-							// goal: build a beaver
-							order(RobotType.HQ, RobotType.BEAVER);
-							plannedTeamOre -= RobotType.BEAVER.oreCost;
-						} else {
-							// goal: build a helipad
-							order(RobotType.BEAVER, RobotType.HELIPAD);
-							plannedTeamOre -= RobotType.HELIPAD.oreCost;
-						}
-					} else {
-						// goal: build an aerospace lab
-						if (numHelipads < 1) {
-							// goal: build a helipad
-							if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
-								// goal: build a beaver
-								order(RobotType.HQ, RobotType.BEAVER);
-								plannedTeamOre -= RobotType.BEAVER.oreCost;
-							} else {
-								// goal: build a helipad
-								order(RobotType.BEAVER, RobotType.HELIPAD);
-								plannedTeamOre -= RobotType.HELIPAD.oreCost;
-							}
-						} else {
-							if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
-								// goal: build a beaver
-								order(RobotType.HQ, RobotType.BEAVER);
-								plannedTeamOre -= RobotType.BEAVER.oreCost;
-							} else {
-								// goal: build an aerospace lab
-								order(RobotType.BEAVER, RobotType.AEROSPACELAB);
-								plannedTeamOre -= RobotType.AEROSPACELAB.oreCost;
-							}
-						}
-					}
-					
-					
-					
-					
 				}
-
-				
 
 				// send orders loop
 				for (int i = 0; i < numNewBuildOrders; i++) {
@@ -857,7 +848,6 @@ public class RobotPlayer {
 		while (true) {
 			try {
 				if (rc.isCoreReady()) {
-					/*
 					RobotType buildOrder = recieveBuildOrders(rc.getID());
 					if (buildOrder != null) {
 						if (ordersMarked(rc.getID())) {
@@ -871,8 +861,6 @@ public class RobotPlayer {
 							}
 						}
 					}
-					*/
-					trySpawn(directions[rand.nextInt(8)], RobotType.DRONE);
 				}
 				transferSupply();
 				rc.yield();
@@ -945,13 +933,6 @@ public class RobotPlayer {
 					} else {
 						mine();
 					}
-				}
-				if(minerPaths == null){
-					minerPaths = new LinkedList<MapLocation>();
-					minerPaths.add(rc.getLocation());
-				} else {
-					if(rc.getLocation() != minerPaths.get(0))
-						minerPaths.add(rc.getLocation());
 				}
 				if (Clock.getBytecodesLeft() > 1000) {
 					transferSupply();
@@ -1459,7 +1440,7 @@ public class RobotPlayer {
 	private static void harass() throws GameActionException {
 		if (rc.getSupplyLevel() <= 0) {
 			//System.out.println("fall back due to supply");
-			//harasserMoveTo(HQLoc);
+			harasserMoveTo(HQLoc);
 			return;
 		}
 		// setup
@@ -1565,33 +1546,7 @@ public class RobotPlayer {
 					}
 				}
 			} else if(type == RobotType.DRONE){
-				int rangeSq = type.attackRadiusSquared;
-				int damage = (int)type.attackPower;
-				if (damage > 0 && rangeSq > 0) {
-					for (int sourceX = -1; sourceX <= 1; sourceX++) {
-						for (int sourceY = -1; sourceY <= 1; sourceY++) {
-							distX = targetX - sourceX;
-							distY = targetY - sourceY;
-							distSq = (distX*distX) + (distY*distY);
-							if (distSq <= rangeSq) {
-								damageGrid[sourceX+1][sourceY+1] += damage;
-							}
-						}
-					}
-				}
-				if(shouldIAttack()) {
-					// can attack safely
-					for (int sourceX = -1; sourceX <= 1; sourceX++) {
-						for (int sourceY = -1; sourceY <= 1; sourceY++) {
-							distX = targetX - sourceX;
-							distY = targetY - sourceY;
-							distSq = (distX*distX) + (distY*distY);
-							if (distSq <= 10) { // myRange
-								canAttackGrid[sourceX+1][sourceY+1] = true;
-							}
-						}
-					}
-				}
+				
 			}
 			else {
 				int rangeSq = type.attackRadiusSquared;
@@ -1925,7 +1880,7 @@ public class RobotPlayer {
 					sumHealth -= r.health;
 			}
 		}
-		if(sumHealth >= 0)
+		if(sumHealth > 0)
 			return true;
 		return false;
 	}
@@ -2738,3 +2693,4 @@ public class RobotPlayer {
 		}
 	}
 }
+
