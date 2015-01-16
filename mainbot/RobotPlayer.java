@@ -47,7 +47,7 @@ public class RobotPlayer {
 	private static Random rand;
 	private static MapLocation HQLoc;
 	private static MapLocation enemyHQLoc;
-	private static int rushDist;
+	private static int rushDistSq;
 	private static MapLocation minerTarget;
 	private static boolean brandNew;
 	private static int lastNumMiners;
@@ -61,6 +61,7 @@ public class RobotPlayer {
 	private static RobotInfo[] enemyRobots;
 	private static int selfSwarmTimer;
 	private static LinkedList<MapLocation> minerPaths;
+	private static boolean mineWithBeavers;
 	
 	// should be final, but can't because set in run()
 	private static Direction[] directions;
@@ -85,7 +86,7 @@ public class RobotPlayer {
 		rand = new Random(rc.getID());
 		HQLoc = rc.senseHQLocation();
 		enemyHQLoc = rc.senseEnemyHQLocation();
-		rushDist = HQLoc.distanceSquaredTo(enemyHQLoc);
+		rushDistSq = HQLoc.distanceSquaredTo(enemyHQLoc);
 		minerTarget = null;
 		brandNew = true;
 		lastNumMiners = 0;
@@ -170,7 +171,6 @@ public class RobotPlayer {
 		int[] numRobotsByType; // zeros
 		int[] numFreeRobotsByType; // zeros
 		int[] progressRobotsByType; //zeros
-		int numBuilt = 0;
 
 		while (true) {
 			try {
@@ -198,6 +198,202 @@ public class RobotPlayer {
 					for (int i = 0; i < enemyTowerLocs.length; i++) {
 						rc.broadcast(LAUNCHER_ORDER_COORDS_CHANS[i+1][0], enemyTowerLocs[i].x);
 						rc.broadcast(LAUNCHER_ORDER_COORDS_CHANS[i+1][1], enemyTowerLocs[i].y);
+					}
+					
+					/*
+					Arrays.sort(enemyTowerLocs);
+					
+					// decisions
+					// determine symmetry
+					boolean couldBeHorizontal = true;
+					boolean couldBeVertical = true;
+					boolean couldBeDiagonalPos = true;
+					boolean couldBeDiagonalNeg = true;
+					boolean couldBeRotational = true;
+					int numPossible = 5;
+					int rushX = enemyHQLoc.x - HQLoc.x;
+					int rushY = enemyHQLoc.y - HQLoc.y;
+					if (rushX != 0) {
+						couldBeHorizontal = false;
+						numPossible--;
+					}
+					if (rushY != 0) {
+						couldBeVertical = false;
+						numPossible--;
+					}
+					if (rushX != rushY) {
+						couldBeDiagonalNeg = false;
+						numPossible--;
+					}
+					if (rushX != -rushY) {
+						couldBeDiagonalPos = false;
+						numPossible--;
+					}
+					for (MapLocation loc : myTowerLocs) {
+						int relX = loc.x - HQLoc.x;
+						int relY = loc.y - HQLoc.y;
+						MapLocation expectedLoc;
+						if (couldBeHorizontal) {
+							expectedLoc = new MapLocation(enemyHQLoc.x + relX, enemyHQLoc.y - relY);
+							if (Arrays.binarySearch(enemyTowerLocs, expectedLoc) < 0) { // if does not contain it
+								couldBeHorizontal = false;
+								numPossible--;
+							}
+						}
+						if (couldBeVertical) {
+							expectedLoc = new MapLocation(enemyHQLoc.x - relX, enemyHQLoc.y + relY);
+							if (Arrays.binarySearch(enemyTowerLocs, expectedLoc) < 0) { // if does not contain it
+								couldBeVertical = false;
+								numPossible--;
+							}
+						}
+						if (couldBeDiagonalPos) {
+							expectedLoc = new MapLocation(enemyHQLoc.x + relY, enemyHQLoc.y + relX);
+							if (Arrays.binarySearch(enemyTowerLocs, expectedLoc) < 0) { // if does not contain it
+								couldBeDiagonalPos = false;
+								numPossible--;
+							}
+						}
+						if (couldBeDiagonalNeg) {
+							expectedLoc = new MapLocation(enemyHQLoc.x - relY, enemyHQLoc.y - relX);
+							if (Arrays.binarySearch(enemyTowerLocs, expectedLoc) < 0) { // if does not contain it
+								couldBeDiagonalNeg = false;
+								numPossible--;
+							}
+						}
+						if (couldBeRotational) {
+							expectedLoc = new MapLocation(enemyHQLoc.x - relX, enemyHQLoc.y - relY);
+							if (Arrays.binarySearch(enemyTowerLocs, expectedLoc) < 0) { // if does not contain it
+								couldBeRotational = false;
+								numPossible--;
+							}
+						}
+						if (numPossible <= 1) {
+							break;
+						}
+					}
+					Direction symmetryDirection;
+					if (couldBeRotational) {
+						symmetryDirection = Direction.OMNI;
+					} else if (couldBeHorizontal) {
+						symmetryDirection = Direction.EAST;
+					} else if (couldBeVertical) {
+						symmetryDirection = Direction.SOUTH;
+					} else if (couldBeDiagonalPos) {
+						symmetryDirection = Direction.SOUTH_EAST;
+					} else if (couldBeDiagonalNeg) {
+						symmetryDirection = Direction.NORTH_EAST;
+					} else {
+						// never happen
+						symmetryDirection = null;
+					}
+					// find area
+					int maxX = 0;
+					int minX = 0;
+					int maxY = 0;
+					int minY = 0;
+					lookForBounds();
+					for (MapLocation loc : myTowerLocs) {
+						lookForBounds(loc, 35);
+						if (loc.x-HQLoc.x > maxX) maxX = loc.x-HQLoc.x;
+						if (loc.x-HQLoc.x < minX) minX = loc.x-HQLoc.x;
+						if (loc.y-HQLoc.y > maxY) maxY = loc.y-HQLoc.y;
+						if (loc.y-HQLoc.y > minY) minY = loc.y-HQLoc.y;
+					}
+					Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
+
+					int northBound = rc.readBroadcast(NORTH_BOUND_CHAN);
+					int eastBound = rc.readBroadcast(EAST_BOUND_CHAN);
+					int southBound = rc.readBroadcast(SOUTH_BOUND_CHAN);
+					int westBound = rc.readBroadcast(WEST_BOUND_CHAN);
+					if (northBound != NO_BOUND) minY = Math.min(minY, northBound);
+					if (eastBound != NO_BOUND) maxX = Math.max(maxX, eastBound);
+					if (southBound != NO_BOUND) maxY = Math.max(maxY, southBound);
+					if (westBound != NO_BOUND) minX = Math.min(minX, westBound);
+
+					int rangeX;
+					int rangeY;
+					switch (symmetryDirection) {
+					case OMNI:
+						if (rushX > 0) {
+							rangeX = rushX - 2*minX;
+						} else {
+							rangeX = -rushX + 2*maxX;
+						}
+						if (rushY > 0) {
+							rangeY = rushY - 2*minY;
+						} else {
+							rangeY = -rushY + 2*maxY;
+						}
+						break;
+					case EAST:
+						rangeX = maxX - minX;
+						if (rushY > 0) {
+							rangeY = rushY - 2*minY;
+						} else {
+							rangeY = -rushY + 2*maxY;
+						}
+						break;
+					case SOUTH:
+						if (rushX > 0) {
+							rangeX = rushX - 2*minX;
+						} else {
+							rangeX = -rushX + 2*maxX;
+						}
+						rangeY = maxY - minY;
+						break;
+					case SOUTH_EAST:
+						if (rushX > 0) {
+							rangeX = -minX + rushX + maxY;
+						} else {
+							rangeX = maxX - rushX - minY;
+						}
+						if (rushY > 0) {
+							rangeY = -minY + rushY + maxX;
+						} else {
+							rangeY = maxY - rushY - minX;
+						}
+						break;
+					case NORTH_EAST:
+						if (rushX > 0) {
+							rangeX = -minX + rushX - minY;
+						} else {
+							rangeX = maxX - rushX + maxY;
+						}
+						if (rushY > 0) {
+							rangeY = -minY + rushY - minX;
+						} else {
+							rangeY = maxY - rushY + maxX;
+						}
+						break;
+					default:
+						// should not happen
+						rangeX = 0;
+						rangeY = 0;
+						break;
+					}
+					int numSquares = rangeX * rangeY / 3; // approximate
+					int numSafeSquares = (int)(Math.PI * (HQEffectiveRangeSq() + myTowerLocs.length*RobotType.TOWER.attackRadiusSquared)); // approximate
+					
+					int oreNeededtoRepelRush = RobotType.BEAVER.oreCost + RobotType.HELIPAD.oreCost + RobotType.AEROSPACELAB.oreCost + 10*RobotType.LAUNCHER.oreCost;
+					
+					int earliestDroneTurn = RobotType.BEAVER.buildTurns + RobotType.HELIPAD.buildTurns + RobotType.DRONE.buildTurns;
+					int earliestSoldierTurn = RobotType.BEAVER.buildTurns + RobotType.BARRACKS.buildTurns + RobotType.SOLDIER.buildTurns;
+					int earliestDroneRushTurn = earliestDroneTurn + rushDist;
+					int earliestSoldierRushTurn = earliestSoldierTurn + rushDist*2;
+					int earliestRushTurn = Math.min(earliestDroneRushTurn, earliestSoldierRushTurn);
+					*/
+					
+					double orePerSquare = rc.senseOre(HQLoc); // approximate
+					int rushDist = (int)Math.sqrt(rushDistSq);
+					int turnToMaximize = 300 + 2*rushDist + 100*myTowerLocs.length;
+					// forget about rush safety for now, just go long term
+					double beaverEarlyOre = Simulator.simulateMaximumEarlyMiningOre(RobotType.BEAVER, orePerSquare, turnToMaximize);
+					double minerEarlyOre = Simulator.simulateMaximumEarlyMiningOre(RobotType.MINER, orePerSquare, turnToMaximize);
+					if (beaverEarlyOre > minerEarlyOre) {
+						mineWithBeavers = true;
+					} else {
+						mineWithBeavers = false;
 					}
 				}
 
@@ -2115,9 +2311,45 @@ public class RobotPlayer {
 		return sum;
 	}
 	
+	private static void lookForBounds(MapLocation myLoc, int rangeSq) throws GameActionException {
+		int range = (int)Math.sqrt(rangeSq);
+		Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
+		int[] knownBounds = {
+			rc.readBroadcast(NORTH_BOUND_CHAN),
+			rc.readBroadcast(EAST_BOUND_CHAN),
+			rc.readBroadcast(SOUTH_BOUND_CHAN),
+			rc.readBroadcast(WEST_BOUND_CHAN)
+		};
+		for (int dirNum = 0; dirNum < 4; dirNum++) {
+			Direction dir = myDirections[dirNum];
+			int bound = knownBounds[dirNum];
+			if (bound == NO_BOUND) {
+				MapLocation testLoc = myLoc.add(dir, range);
+				if (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP) {
+					do {
+						testLoc = testLoc.add(dir.opposite());
+					} while (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP && !testLoc.equals(myLoc));
+					if (dirNum == 0) {
+						// y direction
+						rc.broadcast(NORTH_BOUND_CHAN, testLoc.y);
+					} else if (dirNum == 1) {
+						// x direction
+						rc.broadcast(EAST_BOUND_CHAN, testLoc.x);
+					} else if (dirNum == 2) {
+						// y direction
+						rc.broadcast(SOUTH_BOUND_CHAN, testLoc.y);
+					} else if (dirNum == 3) {
+						// x direction
+						rc.broadcast(WEST_BOUND_CHAN, testLoc.x);
+					}
+				}
+			}
+		}
+	}
+	
 	private static void lookForBounds() throws GameActionException {
 		MapLocation myLoc = rc.getLocation();
-		int range = (int)Math.sqrt(myRange);
+		int range = (int)Math.sqrt(rc.getType().sensorRadiusSquared);
 		Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
 		int[] knownBounds = {
 			rc.readBroadcast(NORTH_BOUND_CHAN),
@@ -2673,6 +2905,82 @@ public class RobotPlayer {
 		} else {
 			return false;
 		}
+	}
+	
+	private static MapLocation[] findTowerChain() {
+		// does not consider hq
+		MapLocation[] startingFoundTowers = new MapLocation[myTowerLocs.length + 2];
+		MapLocation[] foundTowers;
+		for (MapLocation startTower : myTowerLocs) {
+			MapLocation[] possibleEdges = MapLocation.getAllMapLocationsWithinRadiusSq(startTower, 35);
+			boolean bordersEdge = false;
+			for (int i = 0; i < possibleEdges.length; i++) {
+				if (rc.senseTerrainTile((possibleEdges[i])) == TerrainTile.OFF_MAP) {
+					bordersEdge = true;
+					break;
+				}
+			}
+			if (bordersEdge) {
+				startingFoundTowers[0] = startTower;
+				foundTowers = findTowerChainStartingAt(startingFoundTowers, 1);
+				if (foundTowers != null) {
+					for (int numFoundTowers = 1; numFoundTowers < foundTowers.length; numFoundTowers++) {
+						if (foundTowers[numFoundTowers] == null) {
+							possibleEdges = MapLocation.getAllMapLocationsWithinRadiusSq(foundTowers[numFoundTowers-1], 35);
+							bordersEdge = false;
+							for (int i = 0; i < possibleEdges.length; i++) {
+								if (rc.senseTerrainTile((possibleEdges[i])) == TerrainTile.OFF_MAP) {
+									bordersEdge = true;
+									break;
+								}
+							}
+							if (bordersEdge) {
+								return foundTowers;
+							}
+						}
+					}
+				}
+			}
+		}
+		return null;
+	}
+	
+	private static MapLocation[] findTowerChainStartingAt(MapLocation[] foundTowers, int numFoundTowers) {
+		for (MapLocation tower : myTowerLocs) {
+			// ensure not already found
+			boolean alreadyFound = false;
+			for (int i = 0; i < numFoundTowers; i++) {
+				if (tower == foundTowers[i]) {
+					alreadyFound = true;
+				}
+			}
+			if (!alreadyFound) {
+				MapLocation prevTower;
+				if (numFoundTowers > 0) {
+					prevTower = foundTowers[numFoundTowers - 1];
+				} else {
+					// should not happen!
+					prevTower = myTowerLocs[0];
+				}
+				if (prevTower.distanceSquaredTo(tower) <= 80) { // i think?
+					foundTowers[numFoundTowers] = tower;
+					numFoundTowers++;
+					return findTowerChainStartingAt(foundTowers, numFoundTowers);
+				}
+			}
+		}
+		return null;
+	}
+	
+	private static int HQEffectiveRangeSq() { // approximate for splash
+		int numTowers = rc.senseTowerLocations().length;
+		int HQRange = 24;
+		if (numTowers >= 2) {
+			HQRange = 35;
+		} else if (numTowers >= 5) {
+			HQRange = 52;
+		}
+		return HQRange;
 	}
 
 	private static int directionToInt(Direction d) {
