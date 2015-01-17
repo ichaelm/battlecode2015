@@ -7,12 +7,24 @@ import java.util.*;
 public class RobotPlayer {
 
 	// AI parameters
-	private static final int RUSH_TURN = 1800;
+	private static final int RUSH_TURN = 1200;
 	private static final int HARASS_BORDER_BUFFER = 3;
 	private static final int ARRAY_SIZE = 400;
-	private static final int HARASS_COOLDOWN_DELAY = 100;
+	private static final int HARASS_COOLDOWN_DELAY = 15;
 	
-	private static final int MSG_SPACE = 65500; // minus 36
+	private static RobotType unitToBuild(int roundNum, int numDrones, int numLaunchers) {
+		RobotType result;
+		if (roundNum < 400) {
+			result = (numDrones - 20 > numLaunchers*3)?RobotType.LAUNCHER:RobotType.DRONE;
+		} else if (roundNum < 1200) {
+			result = (numDrones - 10 > numLaunchers*2)?RobotType.LAUNCHER:RobotType.DRONE;
+		} else {
+			result = (numDrones > numLaunchers - 10)?RobotType.LAUNCHER:RobotType.DRONE;
+		}
+		return result;
+	}
+	
+	private static final int MSG_SPACE = 65496; // minus 39
 	private static final int MSG_LEN = 6; // ID, order, x, y, marked, mining
 	private static final int NUM_MSG = MSG_SPACE / MSG_LEN;
 	private static final int NORTH_BOUND_CHAN = 65532;
@@ -28,6 +40,10 @@ public class RobotPlayer {
 	private static final int LAUNCHER_ORDER_NUM_COORDS_CHAN = 65501;
 	private static final int LAUNCHER_ORDER_MAX_COORDS = 7;
 	private static final int[][] LAUNCHER_ORDER_COORDS_CHANS = {{65502,65503},{65504,65505},{65506,65507},{65508,65509},{65510,65511},{65512,65513},{65514,65515}};
+	private static final int ORE_COUNTER_CHAN = 65499;
+	private static final int HQ_TURN_CHAN = 65498;
+	private static final int MIN_ORE_CHAN = 65497;
+	private static final int GLOBAL_UNIT_ORDER_CHAN = 65496;
 	
 	private static final int DRONE_ORDER_NONE = 0;
 	private static final int DRONE_ORDER_SWARM_HARASS = 1;
@@ -77,6 +93,7 @@ public class RobotPlayer {
 		directions = Direction.values(); //{Direction.NORTH, Direction.NORTH_EAST, Direction.EAST, Direction.SOUTH_EAST, Direction.SOUTH, Direction.SOUTH_WEST, Direction.WEST, Direction.NORTH_WEST};
 		robotTypes = RobotType.values();
 		offsets = new int[] {0,1,-1,2,-2};
+		enemyHQLoc = rc.senseEnemyHQLocation();
 		if (myrc.getType() == RobotType.MISSILE) { //hack for missiles to run faster
 			rc.setIndicatorString(1, "Bytecodes Used: " + Clock.getBytecodeNum() + " Left: " + Clock.getBytecodesLeft());
 			runMissile();
@@ -85,7 +102,6 @@ public class RobotPlayer {
 		myRange = myType.attackRadiusSquared;
 		rand = new Random(rc.getID());
 		HQLoc = rc.senseHQLocation();
-		enemyHQLoc = rc.senseEnemyHQLocation();
 		rushDistSq = HQLoc.distanceSquaredTo(enemyHQLoc);
 		minerTarget = null;
 		brandNew = true;
@@ -171,6 +187,8 @@ public class RobotPlayer {
 		int[] numRobotsByType; // zeros
 		int[] numFreeRobotsByType; // zeros
 		int[] progressRobotsByType; //zeros
+		double[] oreMinedByTurn = new double[100]; // uses mod 100
+		double idealOreGenerationPerUnit = 0; // throws exception of not initialized to nonzero
 
 		while (true) {
 			try {
@@ -390,16 +408,27 @@ public class RobotPlayer {
 					// forget about rush safety for now, just go long term
 					double beaverEarlyOre = Simulator.simulateMaximumEarlyMiningOre(RobotType.BEAVER, orePerSquare, turnToMaximize);
 					double minerEarlyOre = Simulator.simulateMaximumEarlyMiningOre(RobotType.MINER, orePerSquare, turnToMaximize);
-					if (beaverEarlyOre > minerEarlyOre) {
+					double minOre;
+					if (/*beaverEarlyOre > minerEarlyOre*/false) {
 						mineWithBeavers = true;
+						idealOreGenerationPerUnit = Simulator.beaverOreRateGivenNumMines(orePerSquare, Simulator.beaverOptimalNumMines(orePerSquare));
+						minOre = Simulator.beaverOreLeftAfterMining(orePerSquare, Simulator.beaverOptimalNumMines(orePerSquare)) + 0.1;
 					} else {
 						mineWithBeavers = false;
+						idealOreGenerationPerUnit = Simulator.minerOreRateGivenNumMines(orePerSquare, Simulator.minerOptimalNumMines(orePerSquare));
+						minOre = Simulator.beaverOreLeftAfterMining(orePerSquare, Simulator.beaverOptimalNumMines(orePerSquare)) + 0.1;
 					}
+					rc.broadcast(MIN_ORE_CHAN, (int)(minOre * 1000));
 				}
 
+				int roundNum = Clock.getRoundNum();
+				rc.broadcast(HQ_TURN_CHAN, roundNum);
+				oreMinedByTurn[roundNum%100] = (double)rc.readBroadcast(ORE_COUNTER_CHAN) / 1000;
+				rc.broadcast(ORE_COUNTER_CHAN, 0);
+
+
 				int totalSupplyUpkeep = 0;
-				double estimatedOreGeneration = 5;
-				double estimatedOreConsumption = 5;
+				double estimatedOreConsumption = 0;
 				MapLocation buildingLocations[] = new MapLocation[ARRAY_SIZE];
 				int numBuildingLocations = 0;
 
@@ -420,9 +449,6 @@ public class RobotPlayer {
 					if (buildOrder == null) {
 						myFreeRobotsByType[typeNum][numFreeRobotsByType[typeNum]] = r;
 						numFreeRobotsByType[typeNum]++;
-						if (type == RobotType.BEAVER) {
-							estimatedOreGeneration += 0;
-						}
 					} else {
 						int buildOrderTypeNum = robotTypeToNum(buildOrder);
 						progressRobotsByType[buildOrderTypeNum]++;
@@ -430,12 +456,10 @@ public class RobotPlayer {
 							MapLocation buildLocation = recieveOrderLocation(r.ID);
 							buildingLocations[numBuildingLocations] = buildLocation;
 							numBuildingLocations++;
+							estimatedOreConsumption += oreConsumptionByType[robotTypeToNum(buildOrder)];
 						}
 					}
 					totalSupplyUpkeep += (type.supplyUpkeep + 8);
-					if (type == RobotType.MINER) {
-						estimatedOreGeneration += 1.5;
-					}
 					estimatedOreConsumption += oreConsumptionByType[robotTypeToNum(type)];
 				}
 				// extra loop for hq
@@ -454,6 +478,17 @@ public class RobotPlayer {
 					}
 				}
 				int totalSupplyGeneration = (int)(100*(2+Math.pow(numRobotsByType[robotTypeToNum(RobotType.SUPPLYDEPOT)],0.7)));
+				double estimatedOreGeneration = oreMinedByTurn[roundNum%100]
+						+ oreMinedByTurn[(roundNum+99)%100]
+						+ oreMinedByTurn[(roundNum+98)%100]
+						+ oreMinedByTurn[(roundNum+97)%100]
+						+ oreMinedByTurn[(roundNum+96)%100]
+						+ oreMinedByTurn[(roundNum+95)%100]
+						+ oreMinedByTurn[(roundNum+94)%100]
+						+ oreMinedByTurn[(roundNum+93)%100]
+						+ oreMinedByTurn[(roundNum+92)%100]
+						+ oreMinedByTurn[(roundNum+91)%100];
+				estimatedOreGeneration = estimatedOreGeneration / 10 + 5;
 				
 				if (harassCooldown > 0) {
 					harassCooldown--;
@@ -473,9 +508,12 @@ public class RobotPlayer {
 				numNewBuildOrders = 0;
 				int teamOre = (int)rc.getTeamOre();
 				int plannedTeamOre = teamOre;
-
-
-				if (harassCooldown <= 0 && (estimatedOreConsumption >= 1.5*estimatedOreGeneration || teamOre < 100)) {
+				
+				rc.setIndicatorString(0, "estimated ore generation = " + estimatedOreGeneration);
+				rc.setIndicatorString(1, "estimated ore generation per unit = " + estimatedOreGeneration/(numMiners+1) + " compared to ideal = " + idealOreGenerationPerUnit/2);
+				rc.setIndicatorString(2, "estimated ore consumption = " + estimatedOreConsumption);
+				
+				if (harassCooldown <= 0 && (Clock.getRoundNum() < 200 || estimatedOreGeneration/(numMiners+1) > 0.2) && Clock.getRoundNum() < 2000 - Math.sqrt(rushDistSq)) {
 					// goal: build more miners
 					if (numRobotsByType[robotTypeToNum(RobotType.MINERFACTORY)] + progressRobotsByType[robotTypeToNum(RobotType.MINERFACTORY)] < 1) {
 						// goal: build a miner factory
@@ -498,7 +536,7 @@ public class RobotPlayer {
 						}
 					}
 				}
-				if (totalSupplyUpkeep >= totalSupplyGeneration) {
+				if (totalSupplyUpkeep * 1.1 >= totalSupplyGeneration) {
 					// goal: build a supplier if not already being built
 					if (progressRobotsByType[robotTypeToNum(RobotType.SUPPLYDEPOT)] < 1) { // if no supplier is being built
 						// goal: build a supplier
@@ -517,85 +555,10 @@ public class RobotPlayer {
 				int numAerospaceLabs = numRobotsByType[robotTypeToNum(RobotType.AEROSPACELAB)] + progressRobotsByType[robotTypeToNum(RobotType.AEROSPACELAB)];
 				int numDrones = numRobotsByType[robotTypeToNum(RobotType.DRONE)] + progressRobotsByType[robotTypeToNum(RobotType.DRONE)];
 				int numLaunchers = numRobotsByType[robotTypeToNum(RobotType.LAUNCHER)] + progressRobotsByType[robotTypeToNum(RobotType.LAUNCHER)];
-				if (true) {
-					// goal: build more drones or launchers
-					if (numDrones - 20 < numLaunchers) {
-						// goal: build a drone
-						if (numHelipads < 1) {
-							// goal: build a helipad
-							if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
-								// goal: build a beaver
-								order(RobotType.HQ, RobotType.BEAVER);
-								plannedTeamOre -= RobotType.BEAVER.oreCost;
-							} else {
-								// goal: build a helipad
-								order(RobotType.BEAVER, RobotType.HELIPAD);
-								plannedTeamOre -= RobotType.HELIPAD.oreCost;
-							}
-						} else {
-							// goal: build a drone
-							if (numFreeRobotsByType[robotTypeToNum(RobotType.HELIPAD)] < 1) {
-								// wait
-							} else {
-								// goal: build a launcher
-								order(RobotType.HELIPAD, RobotType.DRONE);
-								plannedTeamOre -= RobotType.DRONE.oreCost;
-							}
-						}
-					} else {
-						// goal: build a launcher
-						if (numAerospaceLabs < 1) {
-							// goal: build an aerospace lab
-							if (numHelipads < 1) {
-								// goal: build a helipad
-								if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
-									// goal: build a beaver
-									order(RobotType.HQ, RobotType.BEAVER);
-									plannedTeamOre -= RobotType.BEAVER.oreCost;
-								} else {
-									// goal: build a helipad
-									order(RobotType.BEAVER, RobotType.HELIPAD);
-									plannedTeamOre -= RobotType.HELIPAD.oreCost;
-								}
-							} else {
-								if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
-									// goal: build a beaver
-									order(RobotType.HQ, RobotType.BEAVER);
-									plannedTeamOre -= RobotType.BEAVER.oreCost;
-								} else {
-									// goal: build an aerospace lab
-									order(RobotType.BEAVER, RobotType.AEROSPACELAB);
-									plannedTeamOre -= RobotType.AEROSPACELAB.oreCost;
-								}
-							}
-						} else {
-							// goal: build a launcher
-							if (numFreeRobotsByType[robotTypeToNum(RobotType.AEROSPACELAB)] < 1) {
-								// wait
-							} else {
-								// goal: build a launcher
-								order(RobotType.AEROSPACELAB, RobotType.LAUNCHER);
-								plannedTeamOre -= RobotType.LAUNCHER.oreCost;
-							}
-						}
-					}
-					
-					
-					
-					if (numHelipads - 2 < numAerospaceLabs*3/2) {
-						// goal: build a helipad
-						if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
-							// goal: build a beaver
-							order(RobotType.HQ, RobotType.BEAVER);
-							plannedTeamOre -= RobotType.BEAVER.oreCost;
-						} else {
-							// goal: build a helipad
-							order(RobotType.BEAVER, RobotType.HELIPAD);
-							plannedTeamOre -= RobotType.HELIPAD.oreCost;
-						}
-					} else {
+				if (estimatedOreGeneration > (estimatedOreConsumption)) {
+					if (unitToBuild(roundNum, numDrones, numLaunchers) == RobotType.LAUNCHER) {
 						// goal: build an aerospace lab
-						if (numHelipads < 1) {
+						if (rc.checkDependencyProgress(RobotType.HELIPAD) == DependencyProgress.NONE && numHelipads < 1) {
 							// goal: build a helipad
 							if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
 								// goal: build a beaver
@@ -606,7 +569,7 @@ public class RobotPlayer {
 								order(RobotType.BEAVER, RobotType.HELIPAD);
 								plannedTeamOre -= RobotType.HELIPAD.oreCost;
 							}
-						} else {
+						} else if (rc.checkDependencyProgress(RobotType.HELIPAD) == DependencyProgress.DONE) {
 							if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
 								// goal: build a beaver
 								order(RobotType.HQ, RobotType.BEAVER);
@@ -617,14 +580,65 @@ public class RobotPlayer {
 								plannedTeamOre -= RobotType.AEROSPACELAB.oreCost;
 							}
 						}
+					} else {
+						// goal: build a helipad
+						if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
+							// goal: build a beaver
+							order(RobotType.HQ, RobotType.BEAVER);
+							plannedTeamOre -= RobotType.BEAVER.oreCost;
+						} else {
+							// goal: build a helipad
+							order(RobotType.BEAVER, RobotType.HELIPAD);
+							plannedTeamOre -= RobotType.HELIPAD.oreCost;
+						}
 					}
-					
-					
-					
-					
 				}
-
-				
+				/*
+				if (plannedTeamOre >= 600) {
+					// goal: build more LAUNCHERS
+					if (numAerospaceLabs < 1) {
+						// goal: build an aerospace lab
+						if (rc.checkDependencyProgress(RobotType.HELIPAD) == DependencyProgress.NONE) {
+							// goal: build a helipad
+							if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
+								// goal: build a beaver
+								order(RobotType.HQ, RobotType.BEAVER);
+								plannedTeamOre -= RobotType.BEAVER.oreCost;
+							} else {
+								// goal: build a helipad
+								order(RobotType.BEAVER, RobotType.HELIPAD);
+								plannedTeamOre -= RobotType.HELIPAD.oreCost;
+							}
+						} else if (rc.checkDependencyProgress(RobotType.HELIPAD) == DependencyProgress.DONE) {
+							if (numFreeRobotsByType[robotTypeToNum(RobotType.BEAVER)] < 1) {
+								// goal: build a beaver
+								order(RobotType.HQ, RobotType.BEAVER);
+								plannedTeamOre -= RobotType.BEAVER.oreCost;
+							} else {
+								// goal: build an aerospace lab
+								order(RobotType.BEAVER, RobotType.AEROSPACELAB);
+								plannedTeamOre -= RobotType.AEROSPACELAB.oreCost;
+							}
+						}
+					} else {
+						// goal: build a launcher
+						if (numFreeRobotsByType[robotTypeToNum(RobotType.AEROSPACELAB)] < 1) {
+							// wait
+						} else {
+							// goal: build a launcher
+							order(RobotType.AEROSPACELAB, RobotType.LAUNCHER);
+							plannedTeamOre -= RobotType.LAUNCHER.oreCost;
+						}
+					}
+				}
+				*/
+				if (unitToBuild(roundNum, numDrones, numLaunchers) == RobotType.DRONE || numRobotsByType[robotTypeToNum(RobotType.AEROSPACELAB)] < 1) {
+					System.out.println("A");
+					rc.broadcast(GLOBAL_UNIT_ORDER_CHAN, robotTypeToNum(RobotType.DRONE));
+				} else {
+					System.out.println(" B");
+					rc.broadcast(GLOBAL_UNIT_ORDER_CHAN, robotTypeToNum(RobotType.LAUNCHER));
+				}
 
 				// send orders loop
 				for (int i = 0; i < numNewBuildOrders; i++) {
@@ -784,6 +798,7 @@ public class RobotPlayer {
 		while (true) {
 			try {
 				if (rc.isCoreReady()) {
+					/*
 					RobotType buildOrder = recieveBuildOrders(rc.getID());
 					if (buildOrder != null) {
 						if (ordersMarked(rc.getID())) {
@@ -796,6 +811,10 @@ public class RobotPlayer {
 								}
 							}
 						}
+					}
+					*/
+					if (rc.readBroadcast(GLOBAL_UNIT_ORDER_CHAN) == robotTypeToNum(RobotType.LAUNCHER)) {
+						trySpawn(directions[rand.nextInt(8)],RobotType.LAUNCHER);
 					}
 				}
 				transferSupply();
@@ -1052,6 +1071,7 @@ public class RobotPlayer {
 		while (true) {
 			try {
 				if (rc.isCoreReady()) {
+					/*
 					RobotType buildOrder = recieveBuildOrders(rc.getID());
 					if (buildOrder != null) {
 						if (ordersMarked(rc.getID())) {
@@ -1065,7 +1085,12 @@ public class RobotPlayer {
 							}
 						}
 					}
+					*/
+					if (rc.readBroadcast(GLOBAL_UNIT_ORDER_CHAN) == robotTypeToNum(RobotType.DRONE)) {
+						trySpawn(directions[rand.nextInt(8)],RobotType.DRONE);
+					}
 				}
+
 				transferSupply();
 				rc.yield();
 			} catch (Exception e) {
@@ -1075,6 +1100,7 @@ public class RobotPlayer {
 		}
 	}
 
+	/*
 	private static void runLauncher() {
 		while (true) {
 			try {
@@ -1112,6 +1138,37 @@ public class RobotPlayer {
 							tryMove(rc.getLocation().directionTo(enemyHQLoc));
 						} else {
 							tryMove(rc.getLocation().directionTo(enemyLoc));
+						}
+					}
+				}
+				transferSupply();
+				rc.yield();
+			} catch (Exception e) {
+				System.out.println("Launcher Exception");
+				e.printStackTrace();
+			}
+		}
+	}
+	*/
+	private static void runLauncher() {
+		while (true) {
+			try {
+				launched = false;
+				if (rc.getMissileCount() > 0) {
+					MapLocation target = nearestEnemy();
+					if (target != null) {
+						launched = tryLaunch(rc.getLocation().directionTo(target));
+					}
+				}
+				if (rc.isCoreReady()) {
+					if (Clock.getRoundNum() < RUSH_TURN) {
+						launcherRally();
+					} else {
+						MapLocation enemyLoc = nearestEnemy();
+						if (enemyLoc == null) {
+							launcherTryMove(rc.getLocation().directionTo(enemyHQLoc));
+						} else {
+							//tryMove(rc.getLocation().directionTo(enemyLoc));
 						}
 					}
 				}
@@ -1190,7 +1247,7 @@ public class RobotPlayer {
 					MapLocation myLoc = rc.getLocation();
 					MapLocation target = fastNearestEnemy();
 					if (target == null) {
-						rc.disintegrate();
+						quickTryMove(myLoc.directionTo(enemyHQLoc));
 					} else {
 						if (myLoc.distanceSquaredTo(target) <= 2) { // if adjacent
 							quickTryMove(myLoc.directionTo(target));
@@ -1422,14 +1479,13 @@ public class RobotPlayer {
 			return null;
 		}
 	}
-	
-	private static int minOre = 5;
 
 	private static void mine() throws GameActionException {
-		int minOre = 5;
+		double minOre = (double)rc.readBroadcast(MIN_ORE_CHAN) / 1000;
 		MapLocation myLoc = rc.getLocation();
 		double myOre = rc.senseOre(myLoc);
 		if (myOre > minOre) {
+			rc.broadcast(ORE_COUNTER_CHAN, (int)(Math.min(Math.max(Math.min(myOre/GameConstants.BEAVER_MINE_RATE,GameConstants.BEAVER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre)*1000) + rc.readBroadcast(ORE_COUNTER_CHAN));
 			rc.mine();
 			markMining(rc.getID());
 		} else {
@@ -1514,24 +1570,92 @@ public class RobotPlayer {
 	}
 	
 	private static void mineBeaver() throws GameActionException {
+		double minOre = (double)rc.readBroadcast(MIN_ORE_CHAN) / 1000;
 		MapLocation myLoc = rc.getLocation();
-		int safeDistSq;
-		if (myTowerLocs.length >= 5) {
-			safeDistSq = 15;
-		} else if (myTowerLocs.length >= 2) {
-			safeDistSq = 8;
+		double myOre = rc.senseOre(myLoc);
+		if (myOre > minOre) {
+			rc.broadcast(ORE_COUNTER_CHAN, (int)(Math.min(Math.max(Math.min(myOre/GameConstants.BEAVER_MINE_RATE,GameConstants.BEAVER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre)*1000) + rc.readBroadcast(ORE_COUNTER_CHAN));
+			rc.mine();
+			markMining(rc.getID());
 		} else {
-			safeDistSq = 2;
+			Direction[] bestDirs = new Direction[8];
+			int numBestDirs = 0;
+			double bestOre = 0;
+			int bestHQDistSq = 9999999;
+			for (int i = 0; i < 8; i++) {
+				Direction d = intToDirection(i);
+				double dirOre = rc.senseOre(myLoc.add(d));
+				int dirHQDistSq = myLoc.add(d).distanceSquaredTo(HQLoc);
+				if (rc.canMove(d) && dirOre > 0) {
+					if (dirOre > bestOre) {
+						bestDirs[0] = d;
+						numBestDirs = 1;
+						bestOre = dirOre;
+						bestHQDistSq = dirHQDistSq;
+					} else if (dirOre >= bestOre) {
+						if (dirHQDistSq < bestHQDistSq) {
+							bestDirs[0] = d;
+							numBestDirs = 1;
+							bestOre = dirOre;
+							bestHQDistSq = dirHQDistSq;
+						} else if (dirHQDistSq <= bestHQDistSq) {
+							bestDirs[numBestDirs] = d;
+							numBestDirs++;
+						}
+					}
+				}
+			}
+			if (bestOre > minOre) {
+				int choice = rand.nextInt(numBestDirs);
+				rc.move(bestDirs[choice]);
+				unmarkMining(rc.getID());
+			} else {
+				// seek better location
+				if (brandNew) {
+					// initial location finding
+					minerTarget = findNearestMarkedMiner();
+					if (minerTarget == null) {
+						tryMove(directions[rand.nextInt(8)]);
+					} else {
+						tryMove(myLoc.directionTo(minerTarget));
+					}
+				} else {
+					if (minerTarget != null) {
+						// continue initial location finding
+						if (myLoc.isAdjacentTo(minerTarget) || myLoc.equals(minerTarget)) {
+							// reached target, use secondary location finding
+							minerTarget = null;
+							tryMove(myLoc.directionTo(HQLoc).opposite());
+						} else {
+							// not reached target, continue initial location finding
+							boolean success = limitedTryMove(myLoc.directionTo(minerTarget));
+							if (!success) {
+								minerTarget = null;
+								limitedTryMove(myLoc.directionTo(HQLoc).opposite());
+							}
+						}
+					} else {
+						// use secondary location finding
+						minerTarget = findNearestMarkedMiner();
+						if (minerTarget == null) {
+							tryMove(directions[rand.nextInt(8)]);
+						} else {
+							boolean success = limitedTryMove(myLoc.directionTo(minerTarget));
+							if (!success) {
+								minerTarget = findNearestMarkedMiner();
+								if (minerTarget == null) {
+									limitedTryMove(directions[rand.nextInt(8)]);
+								} else {
+									limitedTryMove(myLoc.directionTo(minerTarget));
+								}
+							}
+						}
+					}
+				}
+				unmarkMining(rc.getID());
+			}
 		}
-		Direction dir;
-		if (myLoc.distanceSquaredTo(HQLoc) > safeDistSq) {
-			dir = myLoc.directionTo(HQLoc);
-		} else {
-			dir = directions[rand.nextInt(8)];
-		}
-		if (rc.canMove(dir) && myLoc.add(dir).distanceSquaredTo(HQLoc) <= safeDistSq) {
-			rc.move(dir);
-		}
+		brandNew = false;
 	}
 
 	private static MapLocation findNearestMarkedMiner() throws GameActionException {
@@ -1540,7 +1664,7 @@ public class RobotPlayer {
 		MapLocation nearest = null;
 		int nearestDist = 9999999;
 		for (RobotInfo ri : myRobots) {
-			if (ri.type == RobotType.MINER) {
+			if (ri.type == RobotType.MINER || ri.type == RobotType.BEAVER) {
 				if (ordersMining(ri.ID)) {
 					MapLocation minerLoc = ri.location;
 					int dist = myLoc.distanceSquaredTo(minerLoc);
