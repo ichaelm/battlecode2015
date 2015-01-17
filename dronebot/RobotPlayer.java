@@ -1,4 +1,4 @@
-package launcherbot_v1;
+package dronebot;
 
 import battlecode.common.*;
 
@@ -1523,3 +1523,4 @@ public class RobotPlayer {
 		}
 	}
 }
+
