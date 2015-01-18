@@ -1,4 +1,4 @@
-package newsoldierbot;
+package mainbot_soldiers;
 
 import battlecode.common.GameConstants;
 import battlecode.common.RobotType;

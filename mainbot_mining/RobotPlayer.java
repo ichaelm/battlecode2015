@@ -1,8 +1,10 @@
-package newsoldierbot;
+package mainbot_mining;
 
 import battlecode.common.*;
 
 import java.util.*;
+
+import testingbot.Simulator;
 
 public class RobotPlayer {
 
@@ -615,7 +617,7 @@ public class RobotPlayer {
 						if (escapeDir != null) {
 							tryMove(escapeDir);
 						} else {
-							mine();
+							mineBeaver();
 						}
 					}
 				}
@@ -1304,7 +1306,7 @@ public class RobotPlayer {
 	}
 
 	private static void writeMiningTable(int[][] miningTable) throws GameActionException {
-		for (int row = 0; row < MINING_TABLE_NUM_ROWS; row++) {
+		for (int row = 0; row < miningTable.length; row++) {
 			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 0, miningTable[row][0]);
 			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 1, miningTable[row][1]);
 			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 2, miningTable[row][2]);
@@ -1438,47 +1440,98 @@ public class RobotPlayer {
 	}
 
 	// TODO: mining code
-	private static void mine() throws GameActionException {
-		MapLocation myLoc = rc.getLocation();
-		double myOre = rc.senseOre(myLoc);
-		if (myOre > 5) {
-			rc.mine();
-		} else {
-			Direction[] bestDirs = new Direction[8];
-			int numBestDirs = 0;
-			double bestOre = 0;
-			for (int i = 0; i < 8; i++) {
-				Direction d = intToDirection(i);
-				double dirOre = rc.senseOre(myLoc.add(d));
-				if (dirOre > bestOre && rc.canMove(d)) {
-					bestDirs[0] = d;
-					numBestDirs = 1;
-					bestOre = dirOre;
-				} else if (dirOre >= bestOre && rc.canMove(d)) {
-					bestDirs[numBestDirs] = d;
-					numBestDirs++;
-				}
-			}
-			if (numBestDirs > 0) {
-				if (bestOre > myOre) {
-					int choice = rand.nextInt(numBestDirs);
-					rc.move(bestDirs[choice]);
-				} else {
-					rc.mine();
-				}
+		private static void mine() throws GameActionException {
+			double myOre = rc.senseOre(myLoc);
+			if (mining && mineCounter > 0) {
+				mineCounter--;
+				double oreMined = Math.min(Math.max(Math.min(myOre/GameConstants.MINER_MINE_RATE,GameConstants.MINER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre);
+				markMinerOreCounter(oreMined);
+				rc.mine();
 			} else {
-				if (myOre > 0) {
+				if (mining) {
+					mining = false;
+				}
+				// if my location has tied for the most ore in sensor range, mine here
+				// else move towards that location without mining
+				// break ties by closeness to top of the table
+				MapLocation targetLoc = getTopMiningTarget();
+				double bestOre = myOre;
+				int bestTargetDistSq = myLoc.distanceSquaredTo(targetLoc);
+				MapLocation bestLoc = null;
+				MapLocation[] nearbyLocs = MapLocation.getAllMapLocationsWithinRadiusSq(myLoc, mySensorRangeSq);
+				for (int i = 0; i < nearbyLocs.length; i++) {
+					MapLocation loc = nearbyLocs[i];
+					double ore = rc.senseOre(loc);
+					int targetDistSq = myLoc.distanceSquaredTo(targetLoc);
+					if (!loc.equals(myLoc) && ore > myOre) {
+						if (ore > bestOre) {
+							bestLoc = loc;
+							bestOre = ore;
+							bestTargetDistSq = targetDistSq;
+						} else if (ore >= bestOre && targetDistSq > bestTargetDistSq) {
+							bestLoc = loc;
+							bestOre = ore;
+							bestTargetDistSq = targetDistSq;
+						}
+					}
+				}
+				if (bestLoc == null) {
+					mineCounter = Simulator.minerOptimalNumMines(myOre);
+					double oreMined = Math.min(Math.max(Math.min(myOre/GameConstants.MINER_MINE_RATE,GameConstants.MINER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre);
+					markMinerOreCounter(oreMined);
 					rc.mine();
 				} else {
-					if (myLoc.distanceSquaredTo(myHQLoc) > (rushDist / 4)) {
-						tryMove(myLoc.directionTo(myHQLoc));
-					} else {
-						tryMove(directions[rand.nextInt(8)]);
-					}
+					tryMove(myLoc.directionTo(bestLoc));
 				}
 			}
 		}
-	}
+		
+		// TODO: join duplicate miner and beaver mining code
+		private static void mineBeaver() throws GameActionException {
+			double myOre = rc.senseOre(myLoc);
+			if (mining && mineCounter > 0) {
+				mineCounter--;
+				double oreMined = Math.min(Math.max(Math.min(myOre/GameConstants.BEAVER_MINE_RATE,GameConstants.BEAVER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre);
+				markBeaverOreCounter(oreMined);
+				rc.mine();
+			} else {
+				if (mining) {
+					mining = false;
+				}
+				// if my location has tied for the most ore in sensor range, mine here
+				// else move towards that location without mining
+				// break ties by closeness to top of the table
+				MapLocation targetLoc = getTopMiningTarget();
+				double bestOre = myOre;
+				int bestTargetDistSq = myLoc.distanceSquaredTo(targetLoc);
+				MapLocation bestLoc = null;
+				MapLocation[] nearbyLocs = MapLocation.getAllMapLocationsWithinRadiusSq(myLoc, mySensorRangeSq);
+				for (int i = 0; i < nearbyLocs.length; i++) {
+					MapLocation loc = nearbyLocs[i];
+					double ore = rc.senseOre(loc);
+					int targetDistSq = myLoc.distanceSquaredTo(targetLoc);
+					if (!loc.equals(myLoc) && ore > myOre) {
+						if (ore > bestOre) {
+							bestLoc = loc;
+							bestOre = ore;
+							bestTargetDistSq = targetDistSq;
+						} else if (ore >= bestOre && targetDistSq > bestTargetDistSq) {
+							bestLoc = loc;
+							bestOre = ore;
+							bestTargetDistSq = targetDistSq;
+						}
+					}
+				}
+				if (bestLoc == null) {
+					mineCounter = Simulator.beaverOptimalNumMines(myOre);
+					double oreMined = Math.min(Math.max(Math.min(myOre/GameConstants.BEAVER_MINE_RATE,GameConstants.BEAVER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre);
+					markBeaverOreCounter(oreMined);
+					rc.mine();
+				} else {
+					tryMove(myLoc.directionTo(bestLoc));
+				}
+			}
+		}
 	
 	private static void rally() throws GameActionException {
 		MapLocation myLoc = rc.getLocation();

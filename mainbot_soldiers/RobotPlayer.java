@@ -1,4 +1,4 @@
-package mainbot;
+package mainbot_soldiers;
 
 import battlecode.common.*;
 

@@ -1,4 +1,4 @@
-package soldierbot;
+package mainbot_mining;
 
 import battlecode.common.GameConstants;
 import battlecode.common.RobotType;

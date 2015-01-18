@@ -1,4 +1,4 @@
-package soldierbot;
+package oldsoldierbot;
 
 import battlecode.common.*;
 
