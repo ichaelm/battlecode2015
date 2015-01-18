@@ -174,7 +174,8 @@ public class RobotPlayer {
 		try {
 			// initialize bounds channels
 			initBounds();
-
+			
+			// TODO: better mining strategy picking
 			double orePerSquare = rc.senseOre(myHQLoc); // approximate
 			int turnToMaximize = 300 + 2*rushDist + 100*rc.senseTowerLocations().length;
 			// forget about rush safety for now, just go long term
@@ -196,23 +197,42 @@ public class RobotPlayer {
 
 		while (true) {
 			try {
+				int[] bytecodes = new int[50];
+				bytecodes[0] = Clock.getBytecodeNum();
+				
 				// participate in census
 				markCensus();
 				
+				bytecodes[1] = Clock.getBytecodeNum();
+				
 				// update locations
 				updateLocations();
+				
+				bytecodes[2] = Clock.getBytecodeNum();
 				
 				// read unit census, progress table, and completed table
 				int[] numRobotsByType = readCensus();
 				int[] numInProgressByType = readProgressTable();
 				int[] numCompletedByType = readCompletedTable();
 				
+				bytecodes[3] = Clock.getBytecodeNum();
+				
+				/*
+				rc.setIndicatorString(0, numRobotsByType[HQ.ordinal()] + " " + numRobotsByType[BEAVER.ordinal()] + " " + numRobotsByType[MINERFACTORY.ordinal()] + " " + numRobotsByType[MINER.ordinal()] + " " + numRobotsByType[BARRACKS.ordinal()] + " " + numRobotsByType[SOLDIER.ordinal()]);
+				rc.setIndicatorString(1, numInProgressByType[HQ.ordinal()] + " " + numInProgressByType[BEAVER.ordinal()] + " " + numInProgressByType[MINERFACTORY.ordinal()] + " " + numInProgressByType[MINER.ordinal()] + " " + numInProgressByType[BARRACKS.ordinal()] + " " + numInProgressByType[SOLDIER.ordinal()]);
+				rc.setIndicatorString(2, numCompletedByType[HQ.ordinal()] + " " + numCompletedByType[BEAVER.ordinal()] + " " + numCompletedByType[MINERFACTORY.ordinal()] + " " + numCompletedByType[MINER.ordinal()] + " " + numCompletedByType[BARRACKS.ordinal()] + " " + numCompletedByType[SOLDIER.ordinal()]);
+				*/
+				
+				bytecodes[4] = Clock.getBytecodeNum();
+				
 				// sensing all enemy robots
 				enemyRobots = rc.senseNearbyRobots(999999, enemyTeam);
 				
+				bytecodes[5] = Clock.getBytecodeNum();
+				
 				// calculate destroyed robots
 				int[] numDestroyedByType = new int[21];
-				for (int i = 0; i < 21; i++) {
+				for (int i = 21; --i >= 0;) {
 					int diff = numRobotsByType[i] - oldNumRobotsByType[i];
 					int expectedDiff = numCompletedByType[i];
 					numDestroyedByType[i] = expectedDiff - diff;
@@ -222,16 +242,24 @@ public class RobotPlayer {
 					}
 				}
 				
+				bytecodes[6] = Clock.getBytecodeNum();
+				
 				// save round number to ensure I don't go over bytecode limit
 				int roundNum = Clock.getRoundNum();
+				
+				bytecodes[7] = Clock.getBytecodeNum();
 				
 				// read ore counters
 				double oreMinedLastTurnByMiners = readMinerOreCounter();
 				double oreMinedLastTurnByBeavers = readBeaverOreCounter();
 				double oreMinedLastTurn = oreMinedLastTurnByMiners + oreMinedLastTurnByBeavers;
 				
+				bytecodes[8] = Clock.getBytecodeNum();
+				
 				// read builder beaver counter
 				int numBuilderBeavers = readBuilderBeaverCounter();
+				
+				bytecodes[9] = Clock.getBytecodeNum();
 				
 				// calculate average mining rate and ore income rate for past 10 turns
 				oreMinedByTurn[roundNum%10] = oreMinedLastTurn;
@@ -258,9 +286,11 @@ public class RobotPlayer {
 				beaverMiningRate = beaverMiningRate / 10;
 				double oreMinedPerBeaver = beaverMiningRate / (numRobotsByType[BEAVER.ordinal()] - numBuilderBeavers); // ignores the fact that builder beavers can mine
 				
+				bytecodes[10] = Clock.getBytecodeNum();
+				
 				// calculate supply upkeep
 				int totalSupplyUpkeep = 0;
-				for (int i = 0; i < 21; i++) {
+				for (int i = 21; --i >= 0;) {
 					RobotType type = robotTypes[i];
 					int numRobots = numRobotsByType[i];
 					int supplyUpkeepPerRobot = type.supplyUpkeep;
@@ -270,19 +300,25 @@ public class RobotPlayer {
 					totalSupplyUpkeep += numRobots * supplyUpkeepPerRobot;
 				}
 				
+				bytecodes[11] = Clock.getBytecodeNum();
+				
 				// calculate supply generation
 				int totalSupplyGeneration = (int)(100*(2+Math.pow(numRobotsByType[SUPPLYDEPOT.ordinal()],0.6)));
+				
+				bytecodes[12] = Clock.getBytecodeNum();
 				
 				// calculate build queue
 				int[][] buildQueue = new int[BUILD_QUEUE_NUM_ROWS][2];
 				int row = 0;
 				if (numBuilderBeavers < 2) { // HACK, CALCULATE REAL NUMBER
-					System.out.println("flag1");
 					buildQueue[row][0] = BEAVER.ordinal();
 					buildQueue[row][1] = 1;
 					row++;
 					requestBuilderBeaver();
 				}
+				
+				bytecodes[13] = Clock.getBytecodeNum();
+				
 				if (mineWithBeavers) {
 					if (numRobotsByType[BEAVER.ordinal()] - numBuilderBeavers < 2) {
 						buildQueue[row][0] = BEAVER.ordinal();
@@ -310,11 +346,16 @@ public class RobotPlayer {
 						}
 					}
 				}
+				
+				bytecodes[14] = Clock.getBytecodeNum();
+				
 				if (totalSupplyUpkeep > totalSupplyGeneration) {
 					buildQueue[row][0] = SUPPLYDEPOT.ordinal();
 					buildQueue[row][1] = 1;
 					row++;
 				}
+				
+				bytecodes[15] = Clock.getBytecodeNum();
 				
 				//updating unit counts
 				int numSoldiers = numRobotsByType[SOLDIER.ordinal()] + numInProgressByType[SOLDIER.ordinal()];
@@ -325,54 +366,81 @@ public class RobotPlayer {
 					buildQueue[row][1] = 1;
 					row++;
 				}
+				
+				bytecodes[16] = Clock.getBytecodeNum();
+				
 				if (numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()] < 4) {
 					buildQueue[row][0] = BARRACKS.ordinal();
 					buildQueue[row][1] = 1;
 					row++;
 				}
+				
+				bytecodes[17] = Clock.getBytecodeNum();
+				
 				writeBuildQueue(buildQueue);
+				
+				bytecodes[18] = Clock.getBytecodeNum();
 				
 				// telling units what to do
 				if (selfSwarmTimer > 0) {
 					selfSwarmTimer--;
 				}
-				enemyTowerLocs = rc.senseEnemyTowerLocations(); //refreshing tower locations
+				
+				bytecodes[19] = Clock.getBytecodeNum();
 				
 				// check if good time to swarm myself
-				if (numEnemiesSwarmingBase() >= 10 || enemyTowerLocs.length < rc.senseTowerLocations().length) {
+				if (/*numEnemiesSwarmingBase() >= 10*/ false || enemyTowerLocs.length < myTowerLocs.length) { // hack for bytecodes
 					selfSwarmTimer = 75;
 					rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_DEFEND);
 					// check if good time to stop swarming myself
-				} else if (selfSwarmTimer <= 0 && numEnemiesSwarmingBase() < 3) {
+				} else if (selfSwarmTimer <= 0 /*&& numEnemiesSwarmingBase() < 3*/) { // hack for bytecodes
 					// check if good time to attack
 					if (numSoldiers >= 50) {
 						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_ATTACK_TOWERS);
 					} else { //check if a good time to retreat
 						if (numSoldiers <= 30) {
-							rc.setIndicatorString(0,"4");
 							rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_RALLY);
 						}
 					}
 				}
 				
+				bytecodes[20] = Clock.getBytecodeNum();
+				
+				// attack
 				if (rc.isWeaponReady()) {
 					HQAttackSomething();
 				}
+				
+				bytecodes[21] = Clock.getBytecodeNum();
+				
+				// spawn orders
 				if (rc.isCoreReady()) {
-					RobotType buildOrder = getMyBuildOrder();
-					if (buildOrder != null) {
-						System.out.println("flag2");
-						boolean success = trySpawn(directions[rand.nextInt(8)],buildOrder);
-						if (success) {
-							System.out.println("flag3");
-							markCompletedTable(buildOrder);
-						} else {
-							System.out.println("Failed spawn");
-						}
-					}
+					buildingFollowOrders();
 				}
+				
+				bytecodes[22] = Clock.getBytecodeNum();
+				
+				// transfer supply
 				transferSupply();
+				
+				bytecodes[23] = Clock.getBytecodeNum();
+				
+				// store old values
 				oldNumRobotsByType = numRobotsByType;
+				
+				bytecodes[24] = Clock.getBytecodeNum();
+				
+				/*
+				StringBuilder sb = new StringBuilder();
+				for (int i = 1; i < 25; i++) {
+					sb.append(i + ": ");
+					sb.append((bytecodes[i] - bytecodes[i-1]) + " ");
+				}
+				
+				rc.setIndicatorString(0, sb.toString());
+				*/
+				
+				// end round
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("HQ Exception");
@@ -522,6 +590,9 @@ public class RobotPlayer {
 				// progress
 				if (rc.isBuildingSomething()) {
 					markProgressTable(thingIJustBuilt);
+				} else if (thingIJustBuilt != null) {
+					markCompletedTable(thingIJustBuilt);
+					thingIJustBuilt = null;
 				}
 				
 				// attack
@@ -838,10 +909,12 @@ public class RobotPlayer {
 				// update locations
 				updateLocations();
 				
+				// attack
 				if (rc.isWeaponReady()) {
 					focusAttackEnemies();
 				}
 				
+				// move according to orders
 				if (rc.isCoreReady()) {
 					int order = rc.readBroadcast(UNIT_ORDER_CHAN);
 					if (order == UNIT_ORDER_ATTACK_TOWERS) {
@@ -853,7 +926,11 @@ public class RobotPlayer {
 						rally();
 					}
 				}
+				
+				// transfer supply
 				transferSupply();
+				
+				// end round
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("Soldier Exception");
@@ -894,21 +971,19 @@ public class RobotPlayer {
 				
 				// attack
 				if (rc.isWeaponReady()) {
-					attackSomething();
+					focusAttackEnemies();
 				}
 				
-				// move
-				// TODO: tank movement code
+				// move according to orders
 				if (rc.isCoreReady()) {
-					if (Clock.getRoundNum() < RUSH_TURN) {
+					int order = rc.readBroadcast(UNIT_ORDER_CHAN);
+					if (order == UNIT_ORDER_ATTACK_TOWERS) {
+						MapLocation[] targets = rc.senseEnemyTowerLocations();
+						tryMove(rc.getLocation().directionTo(closestLocation(mapCenter, targets)));
+					} else  if (order == UNIT_ORDER_DEFEND) {
+						launcherTryMove(rc.getLocation().directionTo(closestLocation(mapCenter, myTowerLocs)));
+					} else if (order == UNIT_ORDER_RALLY) {
 						rally();
-					} else {
-						MapLocation enemyLoc = nearestSensedEnemy();
-						if (enemyLoc == null) {
-							tryMove(rc.getLocation().directionTo(enemyHQLoc));
-						} else {
-							tryMove(rc.getLocation().directionTo(enemyLoc));
-						}
 					}
 				}
 				
@@ -1043,9 +1118,13 @@ public class RobotPlayer {
 
 	private static int[] readCensus() throws GameActionException {
 		int[] census = new int[21];
-		for (int i = 0; i < 21; i++) {
-			census[i] = rc.readBroadcast(CENSUS_CHAN + i);
-			rc.broadcast(CENSUS_CHAN + i, 0);
+		int channel = CENSUS_CHAN + 21;
+		for (int i = 21; --i >= 0;) {
+			channel--;
+			census[i] = rc.readBroadcast(channel);
+			if (census[i] != 0) {
+				rc.broadcast(channel, 0);
+			}
 		}
 		return census;
 	}
@@ -1057,9 +1136,13 @@ public class RobotPlayer {
 
 	private static int[] readProgressTable() throws GameActionException {
 		int[] progress = new int[21];
-		for (int i = 0; i < 21; i++) {
-			progress[i] = rc.readBroadcast(PROGRESS_TABLE_CHAN + i);
-			rc.broadcast(PROGRESS_TABLE_CHAN + i, 0);
+		int channel = PROGRESS_TABLE_CHAN + 21;
+		for (int i = 21; --i >= 0;) {
+			channel--;
+			progress[i] = rc.readBroadcast(channel);
+			if (progress[i] != 0) {
+				rc.broadcast(channel, 0);
+			}
 		}
 		return progress;
 	}
@@ -1076,9 +1159,13 @@ public class RobotPlayer {
 
 	private static int[] readCompletedTable() throws GameActionException {
 		int[] completed = new int[21];
-		for (int i = 0; i < 21; i++) {
-			completed[i] = rc.readBroadcast(COMPLETED_TABLE_CHAN + i);
-			rc.broadcast(COMPLETED_TABLE_CHAN + i, 0);
+		int channel = COMPLETED_TABLE_CHAN + 21;
+		for (int i = 21; --i >= 0;) {
+			channel--;
+			completed[i] = rc.readBroadcast(channel);
+			if (completed[i] != 0) {
+				rc.broadcast(channel, 0);
+			}
 		}
 		return completed;
 	}
@@ -1142,7 +1229,6 @@ public class RobotPlayer {
 		for (int row = 0; row < BUILD_QUEUE_NUM_ROWS; row++) {
 			rc.broadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 0, buildQueue[row][0]);
 			rc.broadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 1, buildQueue[row][1]);
-			System.out.println("send row = " + row + " typeNum = " + buildQueue[row][0] + " number = " + buildQueue[row][1]);
 			if (buildQueue[row][0] == 0) { // must be at end to ensure 0 is written
 				break;
 			}
@@ -1176,7 +1262,6 @@ public class RobotPlayer {
 		for (int row = 0; row < BUILD_QUEUE_NUM_ROWS && cumOre <= teamOre; row++) {
 			int typeNum = rc.readBroadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 0);
 			int number = rc.readBroadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 1);
-			System.out.println("row = " + row + " typeNum = " + typeNum + " number = " + number);
 			if (typeNum == 0) {
 				break;
 			}
@@ -1547,7 +1632,7 @@ public class RobotPlayer {
 			}
 			counter++;
 			if (Clock.getBytecodesLeft() < 2500) {
-				System.out.println(counter);
+				//System.out.println(counter);
 				break;
 			}
 		}
