@@ -1255,655 +1255,107 @@ public class RobotPlayer {
 
 	// TODO: mining code
 	private static void mine() throws GameActionException {
+		double myOre = rc.senseOre(myLoc);
 		if (mining && mineCounter > 0) {
 			mineCounter--;
+			double oreMined = Math.min(Math.max(Math.min(myOre/GameConstants.MINER_MINE_RATE,GameConstants.MINER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre);
+			markMinerOreCounter(oreMined);
 			rc.mine();
 		} else {
 			if (mining) {
 				mining = false;
 			}
-			// movement code
-			// if my location has the most ore in sensor range, mine here
-			double myOre = rc.senseOre(myLoc);
-			MapLocation[] nearbyLocs = MapLocation.getAllMapLocationsWithinRadiusSq(myLoc, mySensorRangeSq);
-			for 
+			// if my location has tied for the most ore in sensor range, mine here
 			// else move towards that location without mining
 			// break ties by closeness to top of the table
-		}
-		
-		
-		
-		
-		double minOre = (double)rc.readBroadcast(MIN_ORE_CHAN) / 1000;
-		double myOre = rc.senseOre(myLoc);
-		if (myOre > minOre) {
-			double oreMined = Math.min(Math.max(Math.min(myOre/GameConstants.BEAVER_MINE_RATE,GameConstants.BEAVER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre);
-			markMinerOreCounter(oreMined);
-			rc.mine();
-		} else {
-			Direction[] bestDirs = new Direction[8];
-			int numBestDirs = 0;
-			double bestOre = 0;
-			int bestHQDistSq = 9999999;
-			for (int i = 0; i < 8; i++) {
-				Direction d = intToDirection(i);
-				double dirOre = rc.senseOre(myLoc.add(d));
-				int dirHQDistSq = myLoc.add(d).distanceSquaredTo(myHQLoc);
-				if (rc.canMove(d) && dirOre > 0) {
-					if (dirOre > bestOre) {
-						bestDirs[0] = d;
-						numBestDirs = 1;
-						bestOre = dirOre;
-						bestHQDistSq = dirHQDistSq;
-					} else if (dirOre >= bestOre) {
-						if (dirHQDistSq < bestHQDistSq) {
-							bestDirs[0] = d;
-							numBestDirs = 1;
-							bestOre = dirOre;
-							bestHQDistSq = dirHQDistSq;
-						} else if (dirHQDistSq <= bestHQDistSq) {
-							bestDirs[numBestDirs] = d;
-							numBestDirs++;
-						}
+			MapLocation targetLoc = getTopMiningTarget();
+			double bestOre = myOre;
+			int bestTargetDistSq = myLoc.distanceSquaredTo(targetLoc);
+			MapLocation bestLoc = null;
+			MapLocation[] nearbyLocs = MapLocation.getAllMapLocationsWithinRadiusSq(myLoc, mySensorRangeSq);
+			for (int i = 0; i < nearbyLocs.length; i++) {
+				MapLocation loc = nearbyLocs[i];
+				double ore = rc.senseOre(loc);
+				int targetDistSq = myLoc.distanceSquaredTo(targetLoc);
+				if (!loc.equals(myLoc) && ore > myOre) {
+					if (ore > bestOre) {
+						bestLoc = loc;
+						bestOre = ore;
+						bestTargetDistSq = targetDistSq;
+					} else if (ore >= bestOre && targetDistSq > bestTargetDistSq) {
+						bestLoc = loc;
+						bestOre = ore;
+						bestTargetDistSq = targetDistSq;
 					}
 				}
 			}
-			if (bestOre > minOre) {
-				int choice = rand.nextInt(numBestDirs);
-				rc.move(bestDirs[choice]);
-				unmarkMining(rc.getID());
+			if (bestLoc == null) {
+				mineCounter = Simulator.minerOptimalNumMines(myOre);
+				double oreMined = Math.min(Math.max(Math.min(myOre/GameConstants.MINER_MINE_RATE,GameConstants.MINER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre);
+				markMinerOreCounter(oreMined);
+				rc.mine();
 			} else {
-				// seek better location
-				if (brandNew) {
-					// initial location finding
-					minerTarget = findNearestMarkedMiner();
-					if (minerTarget == null) {
-						tryMove(directions[rand.nextInt(8)]);
-					} else {
-						tryMove(myLoc.directionTo(minerTarget));
-					}
-				} else {
-					if (minerTarget != null) {
-						// continue initial location finding
-						if (myLoc.isAdjacentTo(minerTarget) || myLoc.equals(minerTarget)) {
-							// reached target, use secondary location finding
-							minerTarget = null;
-							tryMove(myLoc.directionTo(myHQLoc).opposite());
-						} else {
-							// not reached target, continue initial location finding
-							boolean success = limitedTryMove(myLoc.directionTo(minerTarget));
-							if (!success) {
-								minerTarget = null;
-								limitedTryMove(myLoc.directionTo(myHQLoc).opposite());
-							}
-						}
-					} else {
-						// use secondary location finding
-						minerTarget = findNearestMarkedMiner();
-						if (minerTarget == null) {
-							tryMove(directions[rand.nextInt(8)]);
-						} else {
-							boolean success = limitedTryMove(myLoc.directionTo(minerTarget));
-							if (!success) {
-								minerTarget = findNearestMarkedMiner();
-								if (minerTarget == null) {
-									limitedTryMove(directions[rand.nextInt(8)]);
-								} else {
-									limitedTryMove(myLoc.directionTo(minerTarget));
-								}
-							}
-						}
-					}
-				}
-				unmarkMining(rc.getID());
+				tryMove(myLoc.directionTo(bestLoc));
 			}
 		}
-		brandNew = false;
 	}
 	
-	// TODO: beaver mining code
+	// TODO: join duplicate miner and beaver mining code
 	private static void mineBeaver() throws GameActionException {
-		double minOre = (double)rc.readBroadcast(MIN_ORE_CHAN) / 1000;
 		double myOre = rc.senseOre(myLoc);
-		if (myOre > minOre) {
-			rc.broadcast(ORE_COUNTER_CHAN, (int)(Math.min(Math.max(Math.min(myOre/GameConstants.BEAVER_MINE_RATE,GameConstants.BEAVER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre)*1000) + rc.readBroadcast(ORE_COUNTER_CHAN));
+		if (mining && mineCounter > 0) {
+			mineCounter--;
+			double oreMined = Math.min(Math.max(Math.min(myOre/GameConstants.BEAVER_MINE_RATE,GameConstants.BEAVER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre);
+			markBeaverOreCounter(oreMined);
 			rc.mine();
-			markMining(rc.getID());
 		} else {
-			Direction[] bestDirs = new Direction[8];
-			int numBestDirs = 0;
-			double bestOre = 0;
-			int bestHQDistSq = 9999999;
-			for (int i = 0; i < 8; i++) {
-				Direction d = intToDirection(i);
-				double dirOre = rc.senseOre(myLoc.add(d));
-				int dirHQDistSq = myLoc.add(d).distanceSquaredTo(myHQLoc);
-				if (rc.canMove(d) && dirOre > 0) {
-					if (dirOre > bestOre) {
-						bestDirs[0] = d;
-						numBestDirs = 1;
-						bestOre = dirOre;
-						bestHQDistSq = dirHQDistSq;
-					} else if (dirOre >= bestOre) {
-						if (dirHQDistSq < bestHQDistSq) {
-							bestDirs[0] = d;
-							numBestDirs = 1;
-							bestOre = dirOre;
-							bestHQDistSq = dirHQDistSq;
-						} else if (dirHQDistSq <= bestHQDistSq) {
-							bestDirs[numBestDirs] = d;
-							numBestDirs++;
-						}
+			if (mining) {
+				mining = false;
+			}
+			// if my location has tied for the most ore in sensor range, mine here
+			// else move towards that location without mining
+			// break ties by closeness to top of the table
+			MapLocation targetLoc = getTopMiningTarget();
+			double bestOre = myOre;
+			int bestTargetDistSq = myLoc.distanceSquaredTo(targetLoc);
+			MapLocation bestLoc = null;
+			MapLocation[] nearbyLocs = MapLocation.getAllMapLocationsWithinRadiusSq(myLoc, mySensorRangeSq);
+			for (int i = 0; i < nearbyLocs.length; i++) {
+				MapLocation loc = nearbyLocs[i];
+				double ore = rc.senseOre(loc);
+				int targetDistSq = myLoc.distanceSquaredTo(targetLoc);
+				if (!loc.equals(myLoc) && ore > myOre) {
+					if (ore > bestOre) {
+						bestLoc = loc;
+						bestOre = ore;
+						bestTargetDistSq = targetDistSq;
+					} else if (ore >= bestOre && targetDistSq > bestTargetDistSq) {
+						bestLoc = loc;
+						bestOre = ore;
+						bestTargetDistSq = targetDistSq;
 					}
 				}
 			}
-			if (bestOre > minOre) {
-				int choice = rand.nextInt(numBestDirs);
-				rc.move(bestDirs[choice]);
-				unmarkMining(rc.getID());
+			if (bestLoc == null) {
+				mineCounter = Simulator.beaverOptimalNumMines(myOre);
+				double oreMined = Math.min(Math.max(Math.min(myOre/GameConstants.BEAVER_MINE_RATE,GameConstants.BEAVER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre);
+				markBeaverOreCounter(oreMined);
+				rc.mine();
 			} else {
-				// seek better location
-				if (brandNew) {
-					// initial location finding
-					minerTarget = findNearestMarkedMiner();
-					if (minerTarget == null) {
-						tryMove(directions[rand.nextInt(8)]);
-					} else {
-						tryMove(myLoc.directionTo(minerTarget));
-					}
-				} else {
-					if (minerTarget != null) {
-						// continue initial location finding
-						if (myLoc.isAdjacentTo(minerTarget) || myLoc.equals(minerTarget)) {
-							// reached target, use secondary location finding
-							minerTarget = null;
-							tryMove(myLoc.directionTo(myHQLoc).opposite());
-						} else {
-							// not reached target, continue initial location finding
-							boolean success = limitedTryMove(myLoc.directionTo(minerTarget));
-							if (!success) {
-								minerTarget = null;
-								limitedTryMove(myLoc.directionTo(myHQLoc).opposite());
-							}
-						}
-					} else {
-						// use secondary location finding
-						minerTarget = findNearestMarkedMiner();
-						if (minerTarget == null) {
-							tryMove(directions[rand.nextInt(8)]);
-						} else {
-							boolean success = limitedTryMove(myLoc.directionTo(minerTarget));
-							if (!success) {
-								minerTarget = findNearestMarkedMiner();
-								if (minerTarget == null) {
-									limitedTryMove(directions[rand.nextInt(8)]);
-								} else {
-									limitedTryMove(myLoc.directionTo(minerTarget));
-								}
-							}
-						}
-					}
-				}
-				unmarkMining(rc.getID());
+				tryMove(myLoc.directionTo(bestLoc));
 			}
 		}
-		brandNew = false;
 	}
 	
 	// TODO: replace rally and launcherRally with alec's rallying system
 	private static void rally() throws GameActionException {
-		MapLocation invaderLoc = attackingEnemy();
-		MapLocation enemy = nearestSensedEnemy();
-		if (enemy != null) {
-			tryMove(myLoc.directionTo(enemy));
-		} else {
-			if (invaderLoc != null) {
-				tryMove(myLoc.directionTo(invaderLoc));
-			} else {
-				if (brandNew) {
-					// initial location finding
-					minerTarget = findNearestMarkedMiner();
-					if (minerTarget == null) {
-						tryMove(directions[rand.nextInt(8)]);
-					} else {
-						tryMove(myLoc.directionTo(minerTarget));
-					}
-				} else {
-					if (minerTarget != null) {
-						// continue initial location finding
-						if (myLoc.isAdjacentTo(minerTarget) || myLoc.equals(minerTarget)) {
-							// reached target, use secondary location finding
-							minerTarget = null;
-							tryMove(myLoc.directionTo(myHQLoc).opposite());
-						} else {
-							// not reached target, continue initial location finding
-							boolean success = tryMove(myLoc.directionTo(minerTarget));
-							if (!success) {
-								minerTarget = null;
-								tryMove(myLoc.directionTo(myHQLoc).opposite());
-							}
-						}
-					} else {
-						double myOre = rc.senseOre(myLoc);
-						if (myOre > 5) {
-							tryMove(myLoc.directionTo(myHQLoc));
-						} else {
-							tryMove(myLoc.directionTo(myHQLoc).opposite());
-						}
-					}
-				}
-			}
-		}
-		brandNew = false;
 	}
 	
 	private static void launcherRally() throws GameActionException {
-		MapLocation invaderLoc = attackingEnemy();
-		MapLocation enemy = nearestSensedEnemy();
-		if (enemy != null) {
-			//launcherTryMove(myLoc.directionTo(enemy));
-		} else {
-			if (invaderLoc != null) {
-				launcherTryMove(myLoc.directionTo(invaderLoc));
-			} else {
-				if (brandNew) {
-					// initial location finding
-					minerTarget = findNearestMarkedMiner();
-					if (minerTarget == null) {
-						launcherTryMove(directions[rand.nextInt(8)]);
-					} else {
-						launcherTryMove(myLoc.directionTo(minerTarget));
-					}
-				} else {
-					if (minerTarget != null) {
-						// continue initial location finding
-						if (myLoc.isAdjacentTo(minerTarget) || myLoc.equals(minerTarget)) {
-							// reached target, use secondary location finding
-							minerTarget = null;
-							launcherTryMove(myLoc.directionTo(myHQLoc).opposite());
-						} else {
-							// not reached target, continue initial location finding
-							boolean success = launcherTryMove(myLoc.directionTo(minerTarget));
-							if (!success) {
-								minerTarget = null;
-								launcherTryMove(myLoc.directionTo(myHQLoc).opposite());
-							}
-						}
-					} else {
-						double myOre = rc.senseOre(myLoc);
-						if (myOre > 5) {
-							launcherTryMove(myLoc.directionTo(myHQLoc));
-						} else {
-							launcherTryMove(myLoc.directionTo(myHQLoc).opposite());
-						}
-					}
-				}
-			}
-		}
-		brandNew = false;
 	}
 	
 	// TODO: replace harass with josh's drone micro
 	private static void harass() throws GameActionException {
-		if (rc.getSupplyLevel() <= 0) {
-			return;
-		}
-		// setup
-		//System.out.println("Start with: " + Clock.getBytecodesLeft());
-		//System.out.println("supply = " + rc.getSupplyLevel());
-		int bytecodes = Clock.getBytecodeNum();
-		int newBytecodes;
-		RobotInfo[] nearbyEnemies = rc.senseNearbyRobots(25, enemyTeam);
-		int numEnemyTowers = enemyTowerLocs.length;
-		int enemyHQRange = 24;
-		if (numEnemyTowers >= 2) {
-			enemyHQRange = 35;
-		}
-		int enemyTowerRange = 24;
-		int enemyHQDamage = 24;
-		if (numEnemyTowers >= 3) {
-			enemyHQDamage = enemyHQDamage * 3 / 2;
-		}
-		if (numEnemyTowers >= 6) {
-			enemyHQDamage = enemyHQDamage * 10;
-		}
-		int enemyTowerDamage = 8;
-		if (brandNew) {
-			leftHanded = rand.nextBoolean();
-		}
-		int distX;
-		int distY;
-		int distSq;
-		int[][] damageGrid = new int[3][3];
-		boolean[][] canAttackGrid = new boolean[3][3];
-		// populate grids with hq and towers
-		newBytecodes = Clock.getBytecodeNum();
-		//System.out.println("setup: " + (newBytecodes - bytecodes));
-		bytecodes = newBytecodes;
-		MapLocation[] newEnemyTowerLocs = new MapLocation[6];
-		int newNumEnemyTowers = 0;
-		for (MapLocation towerLoc : enemyTowerLocs) {
-			if (towerLoc.distanceSquaredTo(myLoc) <= 36) {
-				newEnemyTowerLocs[newNumEnemyTowers] = towerLoc;
-				newNumEnemyTowers++;
-			}
-		}
-		for (int sourceX = -1; sourceX <= 1; sourceX++) {
-			for (int sourceY = -1; sourceY <= 1; sourceY++) {
-				int absSourceX = myLoc.x + sourceX;
-				int absSourceY = myLoc.y + sourceY;
-				if (inEnemyHQRange(new MapLocation(absSourceX, absSourceY))) {
-					damageGrid[sourceX+1][sourceY+1] += enemyHQDamage;
-				}
-				for (int i = 0; i < newNumEnemyTowers; i++) {
-					MapLocation towerLoc = newEnemyTowerLocs[i];
-					distX = towerLoc.x - absSourceX;
-					distY = towerLoc.y - absSourceY;
-					distSq = (distX*distX) + (distY*distY);
-					if (distSq <= enemyTowerRange) {
-						damageGrid[sourceX+1][sourceY+1] += enemyTowerDamage;
-					}
-				}
-			}
-		}
-		// populate grids with other units
-		newBytecodes = Clock.getBytecodeNum();
-		//System.out.println("populate with towers+hq: : " + (newBytecodes - bytecodes));
-		bytecodes = newBytecodes;
-		int counter = 0;
-		for (RobotInfo ri : nearbyEnemies) {
-			int targetX = ri.location.x - myLoc.x;
-			int targetY = ri.location.y - myLoc.y;
-			RobotType type = ri.type;
-			if (type == MISSILE) {
-				for (int sourceX = -1; sourceX <= 1; sourceX++) {
-					for (int sourceY = -1; sourceY <= 1; sourceY++) {
-						distX = targetX - sourceX;
-						distY = targetY - sourceY;
-						distSq = (distX*distX) + (distY*distY);
-						if (distSq <= 2) {
-							damageGrid[sourceX+1][sourceY+1] += 20;
-						} else if (distSq <= 8) {
-							damageGrid[sourceX+1][sourceY+1] += 4; // approx
-						}
-						if (sourceX*sourceX+sourceY*sourceY > 1) { // if non-cardinal direction
-							damageGrid[sourceX+1][sourceY+1] += 4; // approx
-						}
-					}
-				}
-			} else if (type == LAUNCHER) { 
-				int rangeSq = 8;
-				int damage = 20;
-				if (damage > 0 && rangeSq > 0) {
-					for (int sourceX = -1; sourceX <= 1; sourceX++) {
-						for (int sourceY = -1; sourceY <= 1; sourceY++) {
-							distX = targetX - sourceX;
-							distY = targetY - sourceY;
-							distSq = (distX*distX) + (distY*distY);
-							if (distSq <= rangeSq) {
-								damageGrid[sourceX+1][sourceY+1] += damage;
-							}
-							if (distSq <= 10) { // myRange
-								canAttackGrid[sourceX+1][sourceY+1] = true;
-							}
-						}
-					}
-				}
-			} else {
-				int rangeSq = type.attackRadiusSquared;
-				int damage = (int)type.attackPower;
-				if (damage > 0 && rangeSq > 0) {
-					for (int sourceX = -1; sourceX <= 1; sourceX++) {
-						for (int sourceY = -1; sourceY <= 1; sourceY++) {
-							distX = targetX - sourceX;
-							distY = targetY - sourceY;
-							distSq = (distX*distX) + (distY*distY);
-							if (distSq <= rangeSq) {
-								damageGrid[sourceX+1][sourceY+1] += damage;
-							}
-						}
-					}
-				}
-				if (type != COMMANDER && type != TANK && type != LAUNCHER) {
-					// can attack safely
-					for (int sourceX = -1; sourceX <= 1; sourceX++) {
-						for (int sourceY = -1; sourceY <= 1; sourceY++) {
-							distX = targetX - sourceX;
-							distY = targetY - sourceY;
-							distSq = (distX*distX) + (distY*distY);
-							if (distSq <= 10) { // myRange
-								canAttackGrid[sourceX+1][sourceY+1] = true;
-							}
-						}
-					}
-				}
-			}
-			counter++;
-			if (Clock.getBytecodesLeft() < 2500) {
-				System.out.println(counter);
-				break;
-			}
-		}
-		newBytecodes = Clock.getBytecodeNum();
-		//System.out.println("populate with " + counter + " other units: " + (newBytecodes - bytecodes));
-		bytecodes = newBytecodes;
-		// select possible moves
-		int[][] possibleCoords = new int[9][2];
-		possibleCoords[0][0] = 0;
-		possibleCoords[0][1] = 0;
-		int numPossibleCoords = 1;
-		for (int dirNum = 0; dirNum < 8; dirNum++) {
-			Direction dir = directions[dirNum];
-			if (rc.canMove(dir)) {
-				possibleCoords[numPossibleCoords][0] = dir.dx;
-				possibleCoords[numPossibleCoords][1] = dir.dy;
-				numPossibleCoords++;
-			}
-		}
-		/*
-		for (int i = 0; i < numPossibleCoords; i++) {
-			rc.setIndicatorDot(new MapLocation(myLoc.x + possibleCoords[i][0], myLoc.y + possibleCoords[i][1]), 255, 0, 0);
-		}
-		*/
-		newBytecodes = Clock.getBytecodeNum();
-		//System.out.println("select possible moves: " + (newBytecodes - bytecodes));
-		bytecodes = newBytecodes;
-		if (numPossibleCoords <= 1) {
-			return;
-		}
-		// select lowest damage moves
-		int[][] safestCoords = new int[9][2];
-		int numSafestCoords = 0;
-		int lowestDamage = Integer.MAX_VALUE;
-		for (int i = 0; i < numPossibleCoords; i++) {
-			int x = possibleCoords[i][0];
-			int y = possibleCoords[i][1];
-				int damage = damageGrid[x+1][y+1];
-				if (x == 1 && y == -1) {
-					rc.setIndicatorString(1,"x = " + x + " y = " + y + " damage = " + damage);
-				}
-				if (damage < lowestDamage) {
-					safestCoords[0][0] = x;
-					safestCoords[0][1] = y;
-					numSafestCoords = 1;
-					lowestDamage = damage;
-				} else if (damage <= lowestDamage) {
-					safestCoords[numSafestCoords][0] = x;
-					safestCoords[numSafestCoords][1] = y;
-					numSafestCoords++;
-				}
-		}
-		/*
-		for (int i = 0; i < numSafestCoords; i++) {
-			rc.setIndicatorDot(new MapLocation(myLoc.x + safestCoords[i][0], myLoc.y + safestCoords[i][1]), 0, 255, 0);
-		}
-		*/
-		newBytecodes = Clock.getBytecodeNum();
-		//System.out.println("select lowest damage moves: " + (newBytecodes - bytecodes));
-		bytecodes = newBytecodes;
-		// select non-border moves
-		int[][] betterCoords = new int[9][2];
-		int numBetterCoords = 0;
-		/*
-		int myBorderBuffer = HARASS_BORDER_BUFFER;
-		int myDistToBounds = locDistToBounds(myLoc);
-		if (myDistToBounds < HARASS_BORDER_BUFFER) {
-			myBorderBuffer = myDistToBounds + 1;
-		}
-		for (int i = 0; i < numSafestCoords; i++) {
-			MapLocation loc = new MapLocation(myLoc.x + safestCoords[i][0], myLoc.y + safestCoords[i][1]);
-			int distToBounds = locDistToBounds(loc);
-			if (distToBounds >= myBorderBuffer) {
-				betterCoords[numBetterCoords][0] = safestCoords[i][0];
-				betterCoords[numBetterCoords][1] = safestCoords[i][1];
-				numBetterCoords++;
-			}
-		}
-		*/
-		if (numBetterCoords <= 0) {
-			betterCoords = safestCoords;
-			numBetterCoords = numSafestCoords;
-		}
-		/*
-		for (int i = 0; i < numBetterCoords; i++) {
-			rc.setIndicatorDot(new MapLocation(myLoc.x + betterCoords[i][0], myLoc.y + betterCoords[i][1]), 0, 0, 255);
-		}
-		*/
-		newBytecodes = Clock.getBytecodeNum();
-		//System.out.println("select non-border moves: " + (newBytecodes - bytecodes));
-		bytecodes = newBytecodes;
-		// select attacking moves
-		int[][] bestCoords = new int[9][2];
-		int numBestCoords = 0;
-		for (int i = 0; i < numBetterCoords; i++) {
-			if (canAttackGrid[betterCoords[i][0]+1][betterCoords[i][1]+1]) {
-				bestCoords[numBestCoords][0] = betterCoords[i][0];
-				bestCoords[numBestCoords][1] = betterCoords[i][1];
-				numBestCoords++;
-			}
-		}
-		if (numBestCoords <= 0) {
-			bestCoords = betterCoords;
-			numBestCoords = numBetterCoords;
-		}
-		/*
-		for (int i = 0; i < numBestCoords; i++) {
-			rc.setIndicatorDot(new MapLocation(myLoc.x + bestCoords[i][0], myLoc.y + bestCoords[i][1]), 255, 255, 0);
-		}
-		*/
-		newBytecodes = Clock.getBytecodeNum();
-		//System.out.println("select attacking moves: " + (newBytecodes - bytecodes));
-		bytecodes = newBytecodes;
-		/*
-		int[][] bestestCoords = new int[9][2];
-		int numBestestCoords = 0;
-		int minEnemyHQDistSq = 9999999;
-		for (int i = 0; i < numBestCoords; i++) {
-			MapLocation loc = new MapLocation(myLoc.x + bestCoords[i][0], myLoc.y + bestCoords[i][1]);
-			int enemyHQDistSq = loc.distanceSquaredTo(enemyHQLoc);
-			if (enemyHQDistSq < minEnemyHQDistSq) {
-				bestestCoords[0][0] = bestCoords[i][0];
-				bestestCoords[0][1] = bestCoords[i][1];
-				numBestestCoords = 1;
-				minEnemyHQDistSq = enemyHQDistSq;
-			} else if (enemyHQDistSq <= minEnemyHQDistSq) {
-				bestestCoords[numBestestCoords][0] = bestCoords[i][0];
-				bestestCoords[numBestestCoords][1] = bestCoords[i][1];
-				numBestestCoords++;
-			}
-		}
-		rc.setIndicatorString(0, "here8");
-		for (int i = 0; i < numBestestCoords; i++) {
-			rc.setIndicatorDot(new MapLocation(myLoc.x + bestestCoords[i][0], myLoc.y + bestestCoords[i][1]), 255, 0, 255);
-		}
-		//rc.setIndicatorString(1, "numBestestCoords = " + numBestestCoords);
-		rc.setIndicatorString(2, "bestestCoords = " + bestestCoords[0][0] + " " + bestestCoords[0][1] + " " + bestestCoords[1][0] + " " + bestestCoords[1][1]);
-		// guarantee numBestestCoords > 0
-		int selection = rand.nextInt(numBestestCoords);
-		int x = bestestCoords[selection][0];
-		int y = bestestCoords[selection][1];
-		Direction dir;
-		if (x == -1) {
-			if (y == -1) {
-				dir = Direction.NORTH_WEST;
-			} else if (y == 0) {
-				dir = Direction.WEST;
-			} else if (y == 1) {
-				dir = Direction.SOUTH_WEST;
-			} else {
-				System.out.println("errormsg2"); return;
-			}
-		} else if (x == 0) {
-			if (y == -1) {
-				dir = Direction.NORTH;
-			} else if (y == 0) {
-				dir = Direction.NONE;
-			} else if (y == 1) {
-				dir = Direction.SOUTH;
-			} else {
-				System.out.println("errormsg3"); return;
-			}
-		} else if (x == 1) {
-			if (y == -1) {
-				dir = Direction.NORTH_EAST;
-			} else if (y == 0) {
-				dir = Direction.EAST;
-			} else if (y == 1) {
-				dir = Direction.SOUTH_EAST;
-			} else {
-				System.out.println("errormsg4"); return;
-			}
-		} else {
-			System.out.println("errormsg1"); return;
-		}
-		rc.setIndicatorString(0, "here9");
-		if (dir == Direction.NONE) {
-			return;
-		}
-		rc.move(dir);
-		*/
-		// select moves towards target
-		Direction dirToEnemyHQ = myLoc.directionTo(enemyHQLoc);
-		int[] leftOffsets = {0, -1, -2, -3, -4, 1, 2, 3};
-		int[] rightOffsets = {0, 1, 2, 3, 4, -1, -2, -3};
-		int[] myOffsets;
-		if (leftHanded) {
-			myOffsets = leftOffsets;
-		} else {
-			myOffsets = rightOffsets;
-		}
-		int dirNum = directionToInt(dirToEnemyHQ);
-		Direction testDir = dirToEnemyHQ;
-		int i;
-		for (i = 0; i < 8; i++) {
-			int testDirNum = (dirNum + myOffsets[i] + 8) % 8;
-			testDir = directions[testDirNum];
-			int x = testDir.dx;
-			int y = testDir.dy;
-			boolean found = false;
-			for (int j = 0; j < numBestCoords; j++) {
-				if (x == bestCoords[j][0] && y == bestCoords[j][1]) {
-					found = true;
-					break;
-				}
-			}
-			if (found) {
-				break;
-			}
-		}
-		newBytecodes = Clock.getBytecodeNum();
-		//System.out.println("select moves towards target moves: " + (newBytecodes - bytecodes));
-		bytecodes = newBytecodes;
-		if (i < 8) {
-			rc.move(testDir);;
-		}
-		if (i > 3) {
-			leftHanded = !leftHanded;
-		}
-		brandNew = false;
-		newBytecodes = Clock.getBytecodeNum();
-		//System.out.println("move and cleanup: " + (newBytecodes - bytecodes));
-		bytecodes = newBytecodes;
 	}
 	
 	// TODO: generalize inMyHQRange, inEnemyHQRange, and inEnemyBuildingRange to reduce duplicate code
