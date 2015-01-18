@@ -389,7 +389,6 @@ public class RobotPlayer {
 			// forget about rush safety for now, just go long term
 			double beaverEarlyOre = Simulator.simulateMaximumEarlyMiningOre(BEAVER, orePerSquare, turnToMaximize);
 			double minerEarlyOre = Simulator.simulateMaximumEarlyMiningOre(MINER, orePerSquare, turnToMaximize);
-			double minOre;
 			if (beaverEarlyOre > minerEarlyOre) {
 				mineWithBeavers = true;
 				//idealOreGenerationPerUnit = Simulator.beaverOreRateGivenNumMines(orePerSquare, Simulator.beaverOptimalNumMines(orePerSquare));

@@ -180,7 +180,6 @@ public class RobotPlayer {
 			// forget about rush safety for now, just go long term
 			double beaverEarlyOre = Simulator.simulateMaximumEarlyMiningOre(BEAVER, orePerSquare, turnToMaximize);
 			double minerEarlyOre = Simulator.simulateMaximumEarlyMiningOre(MINER, orePerSquare, turnToMaximize);
-			double minOre;
 			if (beaverEarlyOre > minerEarlyOre) {
 				mineWithBeavers = true;
 				//idealOreGenerationPerUnit = Simulator.beaverOreRateGivenNumMines(orePerSquare, Simulator.beaverOptimalNumMines(orePerSquare));
@@ -277,7 +276,8 @@ public class RobotPlayer {
 				// calculate build queue
 				int[][] buildQueue = new int[BUILD_QUEUE_NUM_ROWS][2];
 				int row = 0;
-				if (numBuilderBeavers < 1) {
+				if (numBuilderBeavers < 2) { // HACK, CALCULATE REAL NUMBER
+					System.out.println("flag1");
 					buildQueue[row][0] = BEAVER.ordinal();
 					buildQueue[row][1] = 1;
 					row++;
@@ -297,7 +297,7 @@ public class RobotPlayer {
 						}
 					}
 				} else {
-					if (numRobotsByType[MINERFACTORY.ordinal()] < 1) {
+					if (numRobotsByType[MINERFACTORY.ordinal()] + numInProgressByType[MINERFACTORY.ordinal()] < 1) {
 						buildQueue[row][0] = MINERFACTORY.ordinal();
 						buildQueue[row][1] = 1;
 						row++;
@@ -330,6 +330,7 @@ public class RobotPlayer {
 					buildQueue[row][1] = 1;
 					row++;
 				}
+				writeBuildQueue(buildQueue);
 				
 				// telling units what to do
 				if (selfSwarmTimer > 0) {
@@ -360,8 +361,10 @@ public class RobotPlayer {
 				if (rc.isCoreReady()) {
 					RobotType buildOrder = getMyBuildOrder();
 					if (buildOrder != null) {
+						System.out.println("flag2");
 						boolean success = trySpawn(directions[rand.nextInt(8)],buildOrder);
 						if (success) {
+							System.out.println("flag3");
 							markCompletedTable(buildOrder);
 						} else {
 							System.out.println("Failed spawn");
@@ -491,6 +494,7 @@ public class RobotPlayer {
 		}
 	}
 	
+	// TODO: escape crowding
 	// TODO: make builder beaver build in good locations: checkerboard, near hq
 	private static void runBeaver() {
 		// on first turn, determine if I am a builder beaver or a mining beaver
@@ -510,6 +514,11 @@ public class RobotPlayer {
 				// update locations
 				updateLocations();
 				
+				// mark builder beaver
+				if (builderBeaver) {
+					markBuilderBeaverCounter();
+				}
+				
 				// progress
 				if (rc.isBuildingSomething()) {
 					markProgressTable(thingIJustBuilt);
@@ -523,10 +532,20 @@ public class RobotPlayer {
 				if (rc.isCoreReady()) {
 					if (builderBeaver) {
 						// follow spawn orders
-						thingIJustBuilt = beaverFollowOrders();
+						Direction escapeDir = escapeCrowding(); // hack, better place to put this
+						if (escapeDir != null) {
+							tryMove(escapeDir);
+						} else {
+							thingIJustBuilt = beaverFollowOrders();
+						}
 					} else {
 						// TODO: beaver mining
-						mine();
+						Direction escapeDir = escapeCrowding();
+						if (escapeDir != null) {
+							tryMove(escapeDir);
+						} else {
+							mine();
+						}
 					}
 				}
 				
@@ -1123,6 +1142,7 @@ public class RobotPlayer {
 		for (int row = 0; row < BUILD_QUEUE_NUM_ROWS; row++) {
 			rc.broadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 0, buildQueue[row][0]);
 			rc.broadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 1, buildQueue[row][1]);
+			System.out.println("send row = " + row + " typeNum = " + buildQueue[row][0] + " number = " + buildQueue[row][1]);
 			if (buildQueue[row][0] == 0) { // must be at end to ensure 0 is written
 				break;
 			}
@@ -1156,6 +1176,7 @@ public class RobotPlayer {
 		for (int row = 0; row < BUILD_QUEUE_NUM_ROWS && cumOre <= teamOre; row++) {
 			int typeNum = rc.readBroadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 0);
 			int number = rc.readBroadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 1);
+			System.out.println("row = " + row + " typeNum = " + typeNum + " number = " + number);
 			if (typeNum == 0) {
 				break;
 			}
