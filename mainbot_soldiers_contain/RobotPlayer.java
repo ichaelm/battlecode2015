@@ -1,4 +1,4 @@
-package mainbot_soldiers;
+package mainbot_soldiers_contain;
 
 import battlecode.common.*;
 
@@ -998,30 +998,10 @@ public class RobotPlayer {
 				
 				// move according to orders
 				if (rc.isCoreReady()) {
-					int order = rc.readBroadcast(UNIT_ORDER_CHAN);
-					switch (order) {
-					case UNIT_ORDER_ATTACK_TOWERS:
+					if (Clock.getRoundNum() < 1500) {
+						harass();
+					} else {
 						tryMove(rc.getLocation().directionTo(closestLocation(mapCenter, enemyTowerLocs)));
-						break;
-						
-					case UNIT_ORDER_DEFEND:
-						// make some code to evenly distribute soldiers between towers,
-						MapLocation destination = getDefenseTower();
-												
-						// if already close to a tower, sit closer to the enemy so they attack soldiers before the tower
-						if (myLoc.distanceSquaredTo(destination) < 10) {
-							launcherTryMove(rc.getLocation().directionTo(enemyHQLoc));
-						} else {
-							launcherTryMove(rc.getLocation().directionTo(destination));
-						}
-						break;
-					case UNIT_ORDER_RALLY:
-						rally();
-						break;
-					case UNIT_ORDER_ATTACK_VULNERABLE_TOWER:
-						tryMove(rc.getLocation().directionTo(getEnemyVulnerableTower()));
-						break;
-					
 					}
 				}
 				
