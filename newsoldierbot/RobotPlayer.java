@@ -42,9 +42,13 @@ public class RobotPlayer {
 	private static final int BEAVER_ORE_COUNTER_CHAN = MINER_ORE_COUNTER_CHAN + 1;
 	private static final int BUILDER_BEAVER_COUNTER_CHAN = BEAVER_ORE_COUNTER_CHAN + 1;
 	private static final int BUILDER_BEAVER_REQUEST_CHAN = BUILDER_BEAVER_COUNTER_CHAN + 1;
+	private static final int UNIT_ORDER_CHAN = BUILDER_BEAVER_REQUEST_CHAN + 1;
 	
 	// Broadcast signaling constants
 	private static final int NO_BOUND = 99999;
+	private static final int UNIT_ORDER_ATTACK_TOWERS = 1;
+	private static final int UNIT_ORDER_DEFEND = 2;
+	private static final int UNIT_ORDER_RALLY = 3;
 	
 	// cached enums for brevity
 	private static final RobotType HQ = RobotType.HQ;
@@ -79,6 +83,7 @@ public class RobotPlayer {
 	private static Random rand;
 	private static MapLocation myHQLoc;
 	private static MapLocation enemyHQLoc;
+	private static MapLocation mapCenter;
 	private static int rushDistSq;
 	private static int rushDist;
 	private static MapLocation myLoc;
@@ -89,6 +94,7 @@ public class RobotPlayer {
 	private static boolean mineWithBeavers;
 	private static boolean mining;
 	private static int mineCounter;
+	private static RobotInfo[] enemyRobots;
 	
 	// should be final, but can't because set in run()
 	private static Direction[] directions;
@@ -122,6 +128,7 @@ public class RobotPlayer {
 		mySensorRangeSq = myType.sensorRadiusSquared;
 		rand = new Random(rc.getID());
 		myHQLoc = rc.senseHQLocation();
+		mapCenter = new MapLocation(myHQLoc.x + (enemyHQLoc.x - myHQLoc.x)/2, myHQLoc.y + (enemyHQLoc.y - myHQLoc.y)/2);
 		rushDistSq = myHQLoc.distanceSquaredTo(enemyHQLoc);
 		rushDist = (int)Math.sqrt(rushDistSq);
 		oreConsumptionByType = new double[]{5, 0, 0, 0.4, 4, 25/6, 1.25, 5, 2.5, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
@@ -154,231 +161,14 @@ public class RobotPlayer {
 		}
 	}
 	
-	// this method initializes the map bounds stored in the broadcast array to indicate none have been found yet
-	private static void initBounds() throws GameActionException {
-		rc.broadcast(NORTH_BOUND_CHAN, NO_BOUND);
-		rc.broadcast(EAST_BOUND_CHAN, NO_BOUND);
-		rc.broadcast(SOUTH_BOUND_CHAN, NO_BOUND);
-		rc.broadcast(WEST_BOUND_CHAN, NO_BOUND);
-	}
-	
-	private static int[] readCensus() throws GameActionException {
-		int[] census = new int[21];
-		for (int i = 0; i < 21; i++) {
-			census[i] = rc.readBroadcast(CENSUS_CHAN + i);
-			rc.broadcast(CENSUS_CHAN + i, 0);
-		}
-		return census;
-	}
-	
-	private static void markCensus() throws GameActionException {
-		int typeNum = myType.ordinal();
-		rc.broadcast(CENSUS_CHAN + typeNum, rc.readBroadcast(CENSUS_CHAN + typeNum) + 1);
-	}
-	
-	private static int[] readProgressTable() throws GameActionException {
-		int[] progress = new int[21];
-		for (int i = 0; i < 21; i++) {
-			progress[i] = rc.readBroadcast(PROGRESS_TABLE_CHAN + i);
-			rc.broadcast(PROGRESS_TABLE_CHAN + i, 0);
-		}
-		return progress;
-	}
-	
-	private static int readProgressTable(RobotType type) throws GameActionException {
-		int typeNum = type.ordinal();	
-		return rc.readBroadcast(PROGRESS_TABLE_CHAN + typeNum);
-	}
-	
-	private static void markProgressTable(RobotType type) throws GameActionException {
-		int typeNum = type.ordinal();
-		rc.broadcast(PROGRESS_TABLE_CHAN + typeNum, rc.readBroadcast(PROGRESS_TABLE_CHAN + typeNum) + 1);
-	}
-	
-	private static int[] readCompletedTable() throws GameActionException {
-		int[] completed = new int[21];
-		for (int i = 0; i < 21; i++) {
-			completed[i] = rc.readBroadcast(COMPLETED_TABLE_CHAN + i);
-			rc.broadcast(COMPLETED_TABLE_CHAN + i, 0);
-		}
-		return completed;
-	}
-	
-	private static int readCompletedTable(RobotType type) throws GameActionException {
-		int typeNum = type.ordinal();	
-		return rc.readBroadcast(COMPLETED_TABLE_CHAN + typeNum);
-	}
-	
-	private static void markCompletedTable(RobotType type) throws GameActionException {
-		int typeNum = type.ordinal();
-		rc.broadcast(COMPLETED_TABLE_CHAN + typeNum, rc.readBroadcast(COMPLETED_TABLE_CHAN + typeNum) + 1);
-	}
-	
-	private static double readMinerOreCounter() throws GameActionException {
-		double ore = Float.intBitsToFloat(rc.readBroadcast(MINER_ORE_COUNTER_CHAN));
-		rc.broadcast(MINER_ORE_COUNTER_CHAN, Float.floatToIntBits(0));
-		return ore;
-	}
-	
-	private static double readBeaverOreCounter() throws GameActionException {
-		double ore = Float.intBitsToFloat(rc.readBroadcast(BEAVER_ORE_COUNTER_CHAN));
-		rc.broadcast(BEAVER_ORE_COUNTER_CHAN, Float.floatToIntBits(0));
-		return ore;
-	}
-	
-	private static void markMinerOreCounter(double ore) throws GameActionException {
-		float oldOre = Float.intBitsToFloat(rc.readBroadcast(MINER_ORE_COUNTER_CHAN));
-		rc.broadcast(MINER_ORE_COUNTER_CHAN, Float.floatToIntBits(oldOre + (float)ore));
-	}
-	
-	private static void markBeaverOreCounter(double ore) throws GameActionException {
-		float oldOre = Float.intBitsToFloat(rc.readBroadcast(BEAVER_ORE_COUNTER_CHAN));
-		rc.broadcast(BEAVER_ORE_COUNTER_CHAN, Float.floatToIntBits(oldOre + (float)ore));
-	}
-	
-	private static int readBuilderBeaverCounter() throws GameActionException {
-		int numBuilderBeavers = rc.readBroadcast(BUILDER_BEAVER_COUNTER_CHAN);
-		rc.broadcast(BUILDER_BEAVER_COUNTER_CHAN, 0);
-		return numBuilderBeavers;
-	}
-	
-	private static void markBuilderBeaverCounter() throws GameActionException {
-		rc.broadcast(BUILDER_BEAVER_COUNTER_CHAN, rc.readBroadcast(BUILDER_BEAVER_COUNTER_CHAN) + 1);
-	}
-	
-	private static void requestBuilderBeaver() throws GameActionException {
-		rc.broadcast(BUILDER_BEAVER_REQUEST_CHAN, 1);
-	}
-	
-	private static boolean amIABuilderBeaver() throws GameActionException {
-		if (rc.readBroadcast(BUILDER_BEAVER_REQUEST_CHAN) > 0) {
-			rc.broadcast(BUILDER_BEAVER_REQUEST_CHAN, 0);
-			return true;
-		}
-		return false;
-	}
-	
-	// columns: typeNum to build, number to build, number filled
-	private static void writeBuildQueue(int[][] buildQueue) throws GameActionException {
-		for (int row = 0; row < BUILD_QUEUE_NUM_ROWS; row++) {
-			rc.broadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 0, buildQueue[row][0]);
-			rc.broadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 1, buildQueue[row][1]);
-			if (buildQueue[row][0] == 0) { // must be at end to ensure 0 is written
-				break;
-			}
-		}
-	}
-	
-	/*
-	private static int getPositionInBuildQueue(RobotType type) throws GameActionException {
-		int cumOre = 0;
-		for (int row = 0; row < BUILD_QUEUE_NUM_ROWS; row++) {
-			int typeNum = rc.readBroadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 0);
-			int number = rc.readBroadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 1);
-			if (typeNum == 0) {
-				break;
-			}
-			RobotType foundType = robotTypes[typeNum];
-			if (foundType == type && number > readCompletedTable(type) + readProgressTable(type)) {
-				return cumOre;
-			} else {
-				cumOre += foundType.oreCost * number;
-			}
-		}
-		return -1; // special value to indicate not found
-	}
-	*/
-	
-	private static RobotType getMyBuildOrder() throws GameActionException {
-		RobotType myType = rc.getType();
-		int teamOre = (int)rc.getTeamOre();
-		int cumOre = 0;
-		for (int row = 0; row < BUILD_QUEUE_NUM_ROWS && cumOre <= teamOre; row++) {
-			int typeNum = rc.readBroadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 0);
-			int number = rc.readBroadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 1);
-			if (typeNum == 0) {
-				break;
-			}
-			RobotType foundType = robotTypes[typeNum];
-			if (builtBy(foundType) == myType
-				&& number > readCompletedTable(foundType) + readProgressTable(foundType)
-				&& cumOre + foundType.oreCost <= teamOre)
-			{
-				return foundType;
-			} else {
-				cumOre += foundType.oreCost * number;
-			}
-		}
-		return null; // special value to indicate not found
-	}
-	
-	private static void buildingFollowOrders() throws GameActionException {
-		RobotType buildOrder = getMyBuildOrder();
-		if (buildOrder != null) {
-			boolean success = trySpawn(directions[rand.nextInt(8)],buildOrder);
-			if (success) {
-				markCompletedTable(buildOrder);
-			} else {
-				System.out.println("failed spawn");
-			}
-		}
-	}
-	
-	private static RobotType beaverFollowOrders() throws GameActionException {
-		RobotType buildOrder = getMyBuildOrder();
-		if (buildOrder != null) {
-			boolean success = tryBuild(directions[rand.nextInt(8)],buildOrder);
-			if (success) {
-				markProgressTable(buildOrder);
-			} else {
-				System.out.println("failed build");
-			}
-		}
-		return buildOrder;
-	}
-	
-	private static void writeMiningTable(int[][] miningTable) throws GameActionException {
-		for (int row = 0; row < MINING_TABLE_NUM_ROWS; row++) {
-			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 0, miningTable[row][0]);
-			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 1, miningTable[row][1]);
-			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 2, miningTable[row][2]);
-			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 3, miningTable[row][3]);
-			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 4, miningTable[row][4]);
-			if (miningTable[row][0] == 0) { // must be at end to ensure 0 is written
-				break;
-			}
-		}
-	}
-	
-	private static MapLocation getTopMiningTarget() throws GameActionException {
-		int x = rc.readBroadcast(MINING_TABLE_CHAN + 2);
-		int y = rc.readBroadcast(MINING_TABLE_CHAN + 3);
-		return new MapLocation(x,y);
-	}
-	
-	private static MapLocation getBetterMiningTarget(double ore) throws GameActionException {
-		double topOre = Float.intBitsToFloat(rc.readBroadcast(MINING_TABLE_CHAN + 0));
-		if (topOre > ore) {
-			int x = rc.readBroadcast(MINING_TABLE_CHAN + 2);
-			int y = rc.readBroadcast(MINING_TABLE_CHAN + 3);
-			return new MapLocation(x,y);
-		}
-		return null;
-	}
-	
-	private static void updateLocations() {
-		myLoc = rc.getLocation();
-		enemyTowerLocs = rc.senseEnemyTowerLocations();
-		myTowerLocs = rc.senseTowerLocations();
-	}
-
 	private static void runHQ() {
 		
 		// information stored across rounds
 		double[] oreMinedByTurn = new double[10];
 		double[] oreMinedByTurnByMiners = new double[10];
 		double[] oreMinedByTurnByBeavers = new double[10];
-		int[] oldNumRobotsByType = new int[21];;
+		int[] oldNumRobotsByType = new int[21];
+		int selfSwarmTimer = 0;
 		
 		// turn 1 code
 		try {
@@ -417,6 +207,9 @@ public class RobotPlayer {
 				int[] numRobotsByType = readCensus();
 				int[] numInProgressByType = readProgressTable();
 				int[] numCompletedByType = readCompletedTable();
+				
+				// sensing all enemy robots
+				enemyRobots = rc.senseNearbyRobots(999999, enemyTeam);
 				
 				// calculate destroyed robots
 				int[] numDestroyedByType = new int[21];
@@ -522,8 +315,44 @@ public class RobotPlayer {
 					buildQueue[row][1] = 1;
 					row++;
 				}
-				// what units to build
-				// what buildings to build
+				
+				//updating unit counts
+				int numSoldiers = numRobotsByType[SOLDIER.ordinal()] + numInProgressByType[SOLDIER.ordinal()];
+				
+				// what units and what buildings to build in what order
+				if (numSoldiers < 75) {
+					buildQueue[row][0] = SOLDIER.ordinal();
+					buildQueue[row][1] = 1;
+					row++;
+				}
+				if (numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()] < 4) {
+					buildQueue[row][0] = BARRACKS.ordinal();
+					buildQueue[row][1] = 1;
+					row++;
+				}
+				
+				// telling units what to do
+				if (selfSwarmTimer > 0) {
+					selfSwarmTimer--;
+				}
+				enemyTowerLocs = rc.senseEnemyTowerLocations(); //refreshing tower locations
+				
+				// check if good time to swarm myself
+				if (numEnemiesSwarmingBase() >= 10 || enemyTowerLocs.length < rc.senseTowerLocations().length) {
+					selfSwarmTimer = 75;
+					rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_DEFEND);
+					// check if good time to stop swarming myself
+				} else if (selfSwarmTimer <= 0 && numEnemiesSwarmingBase() < 3) {
+					// check if good time to attack
+					if (numSoldiers >= 50) {
+						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_ATTACK_TOWERS);
+					} else { //check if a good time to retreat
+						if (numSoldiers <= 30) {
+							rc.setIndicatorString(0,"4");
+							rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_RALLY);
+						}
+					}
+				}
 				
 				if (rc.isWeaponReady()) {
 					HQAttackSomething();
@@ -867,7 +696,7 @@ public class RobotPlayer {
 				// TODO: launcher movement code
 				if (rc.isCoreReady()) {
 					if (Clock.getRoundNum() < RUSH_TURN) {
-						launcherRally();
+//						launcherRally();
 					} else {
 						MapLocation enemyLoc = nearestSensedEnemy();
 						if (enemyLoc == null) {
@@ -990,30 +819,22 @@ public class RobotPlayer {
 				// update locations
 				updateLocations();
 				
-				// attack
 				if (rc.isWeaponReady()) {
-					attackSomething();
+					focusAttackEnemies();
 				}
 				
-				// move
-				// TODO: soldier movement code
 				if (rc.isCoreReady()) {
-					if (Clock.getRoundNum() < RUSH_TURN) {
+					int order = rc.readBroadcast(UNIT_ORDER_CHAN);
+					if (order == UNIT_ORDER_ATTACK_TOWERS) {
+						MapLocation[] targets = rc.senseEnemyTowerLocations();
+						tryMove(rc.getLocation().directionTo(closestLocation(mapCenter, targets)));
+					} else  if (order == UNIT_ORDER_DEFEND) {
+						launcherTryMove(rc.getLocation().directionTo(closestLocation(mapCenter, myTowerLocs)));
+					} else if (order == UNIT_ORDER_RALLY) {
 						rally();
-					} else {
-						MapLocation enemyLoc = nearestSensedEnemy();
-						if (enemyLoc == null) {
-							tryMove(rc.getLocation().directionTo(enemyHQLoc));
-						} else {
-							tryMove(rc.getLocation().directionTo(enemyLoc));
-						}
 					}
 				}
-				
-				// transfer supply
 				transferSupply();
-				
-				// end round
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("Soldier Exception");
@@ -1161,6 +982,255 @@ public class RobotPlayer {
 			}
 		}
 	}
+	
+	private static int numEnemiesSwarmingBase() {
+		int sum = 0;
+		for (RobotInfo ri : enemyRobots) {
+			if (ri.location.distanceSquaredTo(myHQLoc) <= Math.pow(Math.sqrt(RobotType.HQ.sensorRadiusSquared) + 5, 2)) {
+				sum++;
+			} else {
+				for (MapLocation towerLoc : myTowerLocs) {
+					if (ri.location.distanceSquaredTo(towerLoc) <= Math.pow(Math.sqrt(RobotType.TOWER.sensorRadiusSquared) + 5, 2)) {
+						sum++;
+						break;
+					}
+				}
+			}
+		}
+		return sum;
+	}
+	
+	private static MapLocation closestLocation(MapLocation center, MapLocation[] locations) {
+		MapLocation closestTower = null;
+		int closestDistance = 100000;
+		int testDistance;
+		for (MapLocation i: locations) {
+			testDistance = center.distanceSquaredTo(i);
+			if (testDistance < closestDistance) {
+				closestTower = i;
+				closestDistance = testDistance;
+			}
+		}
+		return closestTower;
+	}
+
+	// this method initializes the map bounds stored in the broadcast array to indicate none have been found yet
+	private static void initBounds() throws GameActionException {
+		rc.broadcast(NORTH_BOUND_CHAN, NO_BOUND);
+		rc.broadcast(EAST_BOUND_CHAN, NO_BOUND);
+		rc.broadcast(SOUTH_BOUND_CHAN, NO_BOUND);
+		rc.broadcast(WEST_BOUND_CHAN, NO_BOUND);
+	}
+
+	private static int[] readCensus() throws GameActionException {
+		int[] census = new int[21];
+		for (int i = 0; i < 21; i++) {
+			census[i] = rc.readBroadcast(CENSUS_CHAN + i);
+			rc.broadcast(CENSUS_CHAN + i, 0);
+		}
+		return census;
+	}
+
+	private static void markCensus() throws GameActionException {
+		int typeNum = myType.ordinal();
+		rc.broadcast(CENSUS_CHAN + typeNum, rc.readBroadcast(CENSUS_CHAN + typeNum) + 1);
+	}
+
+	private static int[] readProgressTable() throws GameActionException {
+		int[] progress = new int[21];
+		for (int i = 0; i < 21; i++) {
+			progress[i] = rc.readBroadcast(PROGRESS_TABLE_CHAN + i);
+			rc.broadcast(PROGRESS_TABLE_CHAN + i, 0);
+		}
+		return progress;
+	}
+
+	private static int readProgressTable(RobotType type) throws GameActionException {
+		int typeNum = type.ordinal();	
+		return rc.readBroadcast(PROGRESS_TABLE_CHAN + typeNum);
+	}
+
+	private static void markProgressTable(RobotType type) throws GameActionException {
+		int typeNum = type.ordinal();
+		rc.broadcast(PROGRESS_TABLE_CHAN + typeNum, rc.readBroadcast(PROGRESS_TABLE_CHAN + typeNum) + 1);
+	}
+
+	private static int[] readCompletedTable() throws GameActionException {
+		int[] completed = new int[21];
+		for (int i = 0; i < 21; i++) {
+			completed[i] = rc.readBroadcast(COMPLETED_TABLE_CHAN + i);
+			rc.broadcast(COMPLETED_TABLE_CHAN + i, 0);
+		}
+		return completed;
+	}
+
+	private static int readCompletedTable(RobotType type) throws GameActionException {
+		int typeNum = type.ordinal();	
+		return rc.readBroadcast(COMPLETED_TABLE_CHAN + typeNum);
+	}
+
+	private static void markCompletedTable(RobotType type) throws GameActionException {
+		int typeNum = type.ordinal();
+		rc.broadcast(COMPLETED_TABLE_CHAN + typeNum, rc.readBroadcast(COMPLETED_TABLE_CHAN + typeNum) + 1);
+	}
+
+	private static double readMinerOreCounter() throws GameActionException {
+		double ore = Float.intBitsToFloat(rc.readBroadcast(MINER_ORE_COUNTER_CHAN));
+		rc.broadcast(MINER_ORE_COUNTER_CHAN, Float.floatToIntBits(0));
+		return ore;
+	}
+
+	private static double readBeaverOreCounter() throws GameActionException {
+		double ore = Float.intBitsToFloat(rc.readBroadcast(BEAVER_ORE_COUNTER_CHAN));
+		rc.broadcast(BEAVER_ORE_COUNTER_CHAN, Float.floatToIntBits(0));
+		return ore;
+	}
+
+	private static void markMinerOreCounter(double ore) throws GameActionException {
+		float oldOre = Float.intBitsToFloat(rc.readBroadcast(MINER_ORE_COUNTER_CHAN));
+		rc.broadcast(MINER_ORE_COUNTER_CHAN, Float.floatToIntBits(oldOre + (float)ore));
+	}
+
+	private static void markBeaverOreCounter(double ore) throws GameActionException {
+		float oldOre = Float.intBitsToFloat(rc.readBroadcast(BEAVER_ORE_COUNTER_CHAN));
+		rc.broadcast(BEAVER_ORE_COUNTER_CHAN, Float.floatToIntBits(oldOre + (float)ore));
+	}
+
+	private static int readBuilderBeaverCounter() throws GameActionException {
+		int numBuilderBeavers = rc.readBroadcast(BUILDER_BEAVER_COUNTER_CHAN);
+		rc.broadcast(BUILDER_BEAVER_COUNTER_CHAN, 0);
+		return numBuilderBeavers;
+	}
+
+	private static void markBuilderBeaverCounter() throws GameActionException {
+		rc.broadcast(BUILDER_BEAVER_COUNTER_CHAN, rc.readBroadcast(BUILDER_BEAVER_COUNTER_CHAN) + 1);
+	}
+
+	private static void requestBuilderBeaver() throws GameActionException {
+		rc.broadcast(BUILDER_BEAVER_REQUEST_CHAN, 1);
+	}
+
+	private static boolean amIABuilderBeaver() throws GameActionException {
+		if (rc.readBroadcast(BUILDER_BEAVER_REQUEST_CHAN) > 0) {
+			rc.broadcast(BUILDER_BEAVER_REQUEST_CHAN, 0);
+			return true;
+		}
+		return false;
+	}
+
+	// columns: typeNum to build, number to build, number filled
+	private static void writeBuildQueue(int[][] buildQueue) throws GameActionException {
+		for (int row = 0; row < BUILD_QUEUE_NUM_ROWS; row++) {
+			rc.broadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 0, buildQueue[row][0]);
+			rc.broadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 1, buildQueue[row][1]);
+			if (buildQueue[row][0] == 0) { // must be at end to ensure 0 is written
+				break;
+			}
+		}
+	}
+
+	/*
+	private static int getPositionInBuildQueue(RobotType type) throws GameActionException {
+		int cumOre = 0;
+		for (int row = 0; row < BUILD_QUEUE_NUM_ROWS; row++) {
+			int typeNum = rc.readBroadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 0);
+			int number = rc.readBroadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 1);
+			if (typeNum == 0) {
+				break;
+			}
+			RobotType foundType = robotTypes[typeNum];
+			if (foundType == type && number > readCompletedTable(type) + readProgressTable(type)) {
+				return cumOre;
+			} else {
+				cumOre += foundType.oreCost * number;
+			}
+		}
+		return -1; // special value to indicate not found
+	}
+	*/
+	
+	private static RobotType getMyBuildOrder() throws GameActionException {
+		RobotType myType = rc.getType();
+		int teamOre = (int)rc.getTeamOre();
+		int cumOre = 0;
+		for (int row = 0; row < BUILD_QUEUE_NUM_ROWS && cumOre <= teamOre; row++) {
+			int typeNum = rc.readBroadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 0);
+			int number = rc.readBroadcast(BUILD_QUEUE_CHAN + row*BUILD_QUEUE_ROW_SIZE + 1);
+			if (typeNum == 0) {
+				break;
+			}
+			RobotType foundType = robotTypes[typeNum];
+			if (builtBy(foundType) == myType
+				&& number > readCompletedTable(foundType) + readProgressTable(foundType)
+				&& cumOre + foundType.oreCost <= teamOre)
+			{
+				return foundType;
+			} else {
+				cumOre += foundType.oreCost * number;
+			}
+		}
+		return null; // special value to indicate not found
+	}
+
+	private static void buildingFollowOrders() throws GameActionException {
+		RobotType buildOrder = getMyBuildOrder();
+		if (buildOrder != null) {
+			boolean success = trySpawn(directions[rand.nextInt(8)],buildOrder);
+			if (success) {
+				markCompletedTable(buildOrder);
+			} else {
+				System.out.println("failed spawn");
+			}
+		}
+	}
+
+	private static RobotType beaverFollowOrders() throws GameActionException {
+		RobotType buildOrder = getMyBuildOrder();
+		if (buildOrder != null) {
+			boolean success = tryBuild(directions[rand.nextInt(8)],buildOrder);
+			if (success) {
+				markProgressTable(buildOrder);
+			} else {
+				System.out.println("failed build");
+			}
+		}
+		return buildOrder;
+	}
+
+	private static void writeMiningTable(int[][] miningTable) throws GameActionException {
+		for (int row = 0; row < MINING_TABLE_NUM_ROWS; row++) {
+			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 0, miningTable[row][0]);
+			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 1, miningTable[row][1]);
+			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 2, miningTable[row][2]);
+			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 3, miningTable[row][3]);
+			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 4, miningTable[row][4]);
+			if (miningTable[row][0] == 0) { // must be at end to ensure 0 is written
+				break;
+			}
+		}
+	}
+
+	private static MapLocation getTopMiningTarget() throws GameActionException {
+		int x = rc.readBroadcast(MINING_TABLE_CHAN + 2);
+		int y = rc.readBroadcast(MINING_TABLE_CHAN + 3);
+		return new MapLocation(x,y);
+	}
+
+	private static MapLocation getBetterMiningTarget(double ore) throws GameActionException {
+		double topOre = Float.intBitsToFloat(rc.readBroadcast(MINING_TABLE_CHAN + 0));
+		if (topOre > ore) {
+			int x = rc.readBroadcast(MINING_TABLE_CHAN + 2);
+			int y = rc.readBroadcast(MINING_TABLE_CHAN + 3);
+			return new MapLocation(x,y);
+		}
+		return null;
+	}
+
+	private static void updateLocations() {
+		myLoc = rc.getLocation();
+		enemyTowerLocs = rc.senseEnemyTowerLocations();
+		myTowerLocs = rc.senseTowerLocations();
+	}
 
 	private static RobotType builtBy(RobotType target) {
 		switch (target) {
@@ -1304,98 +1374,19 @@ public class RobotPlayer {
 		}
 	}
 	
-	// TODO: replace rally and launcherRally with alec's rallying system
 	private static void rally() throws GameActionException {
+		MapLocation myLoc = rc.getLocation();
 		MapLocation invaderLoc = attackingEnemy();
-		MapLocation enemy = nearestSensedEnemy();
+		MapLocation enemy = nearestAttackableEnemyAll();
 		if (enemy != null) {
 			tryMove(myLoc.directionTo(enemy));
 		} else {
 			if (invaderLoc != null) {
 				tryMove(myLoc.directionTo(invaderLoc));
 			} else {
-				if (brandNew) {
-					// initial location finding
-					minerTarget = findNearestMarkedMiner();
-					if (minerTarget == null) {
-						tryMove(directions[rand.nextInt(8)]);
-					} else {
-						tryMove(myLoc.directionTo(minerTarget));
-					}
-				} else {
-					if (minerTarget != null) {
-						// continue initial location finding
-						if (myLoc.isAdjacentTo(minerTarget) || myLoc.equals(minerTarget)) {
-							// reached target, use secondary location finding
-							minerTarget = null;
-							tryMove(myLoc.directionTo(myHQLoc).opposite());
-						} else {
-							// not reached target, continue initial location finding
-							boolean success = tryMove(myLoc.directionTo(minerTarget));
-							if (!success) {
-								minerTarget = null;
-								tryMove(myLoc.directionTo(myHQLoc).opposite());
-							}
-						}
-					} else {
-						double myOre = rc.senseOre(myLoc);
-						if (myOre > 5) {
-							tryMove(myLoc.directionTo(myHQLoc));
-						} else {
-							tryMove(myLoc.directionTo(myHQLoc).opposite());
-						}
-					}
-				}
+				launcherTryMove(myLoc.directionTo(mapCenter));
 			}
 		}
-		brandNew = false;
-	}
-	
-	// TODO: replace rally and launcherRally with alec's rallying system
-	private static void launcherRally() throws GameActionException {
-		MapLocation invaderLoc = attackingEnemy();
-		MapLocation enemy = nearestSensedEnemy();
-		if (enemy != null) {
-			//launcherTryMove(myLoc.directionTo(enemy));
-		} else {
-			if (invaderLoc != null) {
-				launcherTryMove(myLoc.directionTo(invaderLoc));
-			} else {
-				if (brandNew) {
-					// initial location finding
-					minerTarget = findNearestMarkedMiner();
-					if (minerTarget == null) {
-						launcherTryMove(directions[rand.nextInt(8)]);
-					} else {
-						launcherTryMove(myLoc.directionTo(minerTarget));
-					}
-				} else {
-					if (minerTarget != null) {
-						// continue initial location finding
-						if (myLoc.isAdjacentTo(minerTarget) || myLoc.equals(minerTarget)) {
-							// reached target, use secondary location finding
-							minerTarget = null;
-							launcherTryMove(myLoc.directionTo(myHQLoc).opposite());
-						} else {
-							// not reached target, continue initial location finding
-							boolean success = launcherTryMove(myLoc.directionTo(minerTarget));
-							if (!success) {
-								minerTarget = null;
-								launcherTryMove(myLoc.directionTo(myHQLoc).opposite());
-							}
-						}
-					} else {
-						double myOre = rc.senseOre(myLoc);
-						if (myOre > 5) {
-							launcherTryMove(myLoc.directionTo(myHQLoc));
-						} else {
-							launcherTryMove(myLoc.directionTo(myHQLoc).opposite());
-						}
-					}
-				}
-			}
-		}
-		brandNew = false;
 	}
 	
 	// TODO: replace harass with alec or josh's drone micro
@@ -1423,9 +1414,9 @@ public class RobotPlayer {
 			enemyHQDamage = enemyHQDamage * 10;
 		}
 		int enemyTowerDamage = 8;
-		if (brandNew) {
-			leftHanded = rand.nextBoolean();
-		}
+//		if (brandNew) {
+//			leftHanded = rand.nextBoolean();
+//		}
 		int distX;
 		int distY;
 		int distSq;
@@ -1755,7 +1746,7 @@ public class RobotPlayer {
 		if (i > 3) {
 			leftHanded = !leftHanded;
 		}
-		brandNew = false;
+//		brandNew = false;
 		newBytecodes = Clock.getBytecodeNum();
 		//System.out.println("move and cleanup: " + (newBytecodes - bytecodes));
 		bytecodes = newBytecodes;
@@ -2087,7 +2078,25 @@ public class RobotPlayer {
 		}
 	}
 
-	// TODO: Alec: prioritize low health units, or use other heuristic, may depend on my unit type and enemy unit types
+	
+	//attacks a nearby enemy with the least health
+	private static void focusAttackEnemies() throws GameActionException {
+		// attack the unit with the least health
+		RobotInfo[] enemies = rc.senseNearbyRobots(rc.getType().attackRadiusSquared, enemyTeam);
+		if (enemies.length == 0) {
+			return;
+		}
+
+		RobotInfo targetEnemy = enemies[0];
+		for (RobotInfo i: enemies) {
+			if (i.type == RobotType.TOWER)
+				if (i.health < targetEnemy.health) {
+					targetEnemy = i;
+				}
+		}
+		rc.attackLocation(targetEnemy.location);
+	}
+		
 	private static void attackSomething() throws GameActionException {
 		MapLocation enemy = nearestAttackableEnemyAll();
 		if (enemy != null) {
