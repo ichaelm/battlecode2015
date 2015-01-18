@@ -44,6 +44,7 @@ public class RobotPlayer {
 	private static final int BUILDER_BEAVER_REQUEST_CHAN = BUILDER_BEAVER_COUNTER_CHAN + 1;
 	private static final int UNIT_ORDER_CHAN = BUILDER_BEAVER_REQUEST_CHAN + 1;
 	private static final int UNIT_TOWER_DEFENSE_CHAN = UNIT_ORDER_CHAN + 1;
+	private static final int LAUNCHER_TOWER_DEFENSE_CHAN = UNIT_TOWER_DEFENSE_CHAN + 1;
 	
 	// Broadcast signaling constants
 	private static final int NO_BOUND = 99999;
@@ -97,7 +98,12 @@ public class RobotPlayer {
 	private static boolean mining;
 	private static int mineCounter;
 	private static RobotInfo[] enemyRobots;
-	
+	private static int[] numRobotsByType;
+	private static int[] numInProgressByType;
+	private static int[] numCompletedByType;
+	private static int[][] buildQueue;
+	private static int row;
+
 	// should be final, but can't because set in run()
 	private static Direction[] directions;
 	private static RobotType[] robotTypes;
@@ -171,6 +177,7 @@ public class RobotPlayer {
 		double[] oreMinedByTurnByBeavers = new double[10];
 		int[] oldNumRobotsByType = new int[21];
 		int selfSwarmTimer = 0;
+		boolean defendPriority = false;
 		
 		// turn 1 code
 		try {
@@ -213,14 +220,15 @@ public class RobotPlayer {
 				bytecodes[2] = Clock.getBytecodeNum();
 				
 				// read unit census, progress table, and completed table
-				int[] numRobotsByType = readCensus();
-				int[] numInProgressByType = readProgressTable();
-				int[] numCompletedByType = readCompletedTable();
+				numRobotsByType = readCensus();
+				numInProgressByType = readProgressTable();
+				numCompletedByType = readCompletedTable();
 				
 				bytecodes[3] = Clock.getBytecodeNum();
 				
 				//resetting the defense channel
 				rc.broadcast(UNIT_TOWER_DEFENSE_CHAN, 0);
+				rc.broadcast(LAUNCHER_TOWER_DEFENSE_CHAN, 0);
 				
 				/*
 				rc.setIndicatorString(0, numRobotsByType[HQ.ordinal()] + " " + numRobotsByType[BEAVER.ordinal()] + " " + numRobotsByType[MINERFACTORY.ordinal()] + " " + numRobotsByType[MINER.ordinal()] + " " + numRobotsByType[BARRACKS.ordinal()] + " " + numRobotsByType[SOLDIER.ordinal()]);
@@ -304,6 +312,7 @@ public class RobotPlayer {
 					}
 					totalSupplyUpkeep += numRobots * supplyUpkeepPerRobot;
 				}
+
 				
 				bytecodes[11] = Clock.getBytecodeNum();
 				
@@ -313,8 +322,8 @@ public class RobotPlayer {
 				bytecodes[12] = Clock.getBytecodeNum();
 				
 				// calculate build queue
-				int[][] buildQueue = new int[BUILD_QUEUE_NUM_ROWS][2];
-				int row = 0;
+				buildQueue = new int[BUILD_QUEUE_NUM_ROWS][2];
+				row = 0;
 				if (numBuilderBeavers < 2) { // HACK, CALCULATE REAL NUMBER
 					buildQueue[row][0] = BEAVER.ordinal();
 					buildQueue[row][1] = 1;
@@ -353,11 +362,18 @@ public class RobotPlayer {
 				}
 				
 				bytecodes[14] = Clock.getBytecodeNum();
-				
-				if (totalSupplyUpkeep > totalSupplyGeneration) {
-					buildQueue[row][0] = SUPPLYDEPOT.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
+				if (!defendPriority) { // if defense is a huge priority, stop building supply depots, we need all the resources we can get
+					if (totalSupplyUpkeep > totalSupplyGeneration) {
+						buildQueue[row][0] = SUPPLYDEPOT.ordinal();
+						buildQueue[row][1] = 1;
+						row++;
+					}
+				} else {
+					if (totalSupplyUpkeep*.75 > totalSupplyGeneration) {
+						buildQueue[row][0] = SUPPLYDEPOT.ordinal();
+						buildQueue[row][1] = 1;
+						row++;
+					}
 				}
 				
 				bytecodes[15] = Clock.getBytecodeNum();
@@ -365,73 +381,55 @@ public class RobotPlayer {
 				//updating unit counts
 				int numSoldiers = numRobotsByType[SOLDIER.ordinal()] + numInProgressByType[SOLDIER.ordinal()];
 				int numTanks = numRobotsByType[TANK.ordinal()] + numInProgressByType[TANK.ordinal()];
+				int numDrones = numRobotsByType[DRONE.ordinal()] + numInProgressByType[DRONE.ordinal()];
+				int numLaunchers = numRobotsByType[LAUNCHER.ordinal()] + numInProgressByType[LAUNCHER.ordinal()];
 				
 				// what units and what buildings to build in what order
 				int maxSoldiers = 100;
 				int maxTanks = 30;
-				if (numSoldiers < maxSoldiers*.3) {
-					buildQueue[row][0] = SOLDIER.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
+				int maxLaunchers = 6;
+				
+				if (Clock.getRoundNum() < 500 && rc.senseNearbyRobots(9999, enemyTeam).length > 0) {
+					defendPriority = true;
 				}
 				
-				bytecodes[16] = Clock.getBytecodeNum();
-				
-				if (numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()] < maxSoldiers*.03) {
-					buildQueue[row][0] = BARRACKS.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
-				}
-				
-				if (numTanks < maxTanks*.3) {
-					buildQueue[row][0] = TANK.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
-				}
-				
-				if (numRobotsByType[TANKFACTORY.ordinal()] + numInProgressByType[TANKFACTORY.ordinal()] < maxTanks*.03) {
-					buildQueue[row][0] = TANKFACTORY.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
-				}
-				
-				if (numSoldiers < maxSoldiers*.7) {
-					buildQueue[row][0] = SOLDIER.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
-				}
-				
-				bytecodes[16] = Clock.getBytecodeNum();
-				
-				if (numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()] < maxSoldiers*.07) {
-					buildQueue[row][0] = BARRACKS.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
-				}
-				
-				if (numTanks < maxTanks) {
-					buildQueue[row][0] = TANK.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
-				}
-				
-				if (numRobotsByType[TANKFACTORY.ordinal()] + numInProgressByType[TANKFACTORY.ordinal()] < maxTanks*.1) {
-					buildQueue[row][0] = TANKFACTORY.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
-				}
-				
-				if (numSoldiers < maxSoldiers) {
-					buildQueue[row][0] = SOLDIER.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
+				if (defendPriority) {	
+					
+					addToBuildQueue(LAUNCHER, maxLaunchers, numLaunchers);
+					addToBuildQueue(HELIPAD, 1, numRobotsByType[HELIPAD.ordinal()] + numInProgressByType[HELIPAD.ordinal()]);			
+					addToBuildQueue(AEROSPACELAB, maxLaunchers*.2, numRobotsByType[AEROSPACELAB.ordinal()] + numInProgressByType[AEROSPACELAB.ordinal()]);			
+
+					addToBuildQueue(SOLDIER, maxSoldiers*.1, numSoldiers);
+					addToBuildQueue(BARRACKS, maxSoldiers*.01, numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()]);
+					
+					addToBuildQueue(TANK, maxTanks, numTanks);
+					addToBuildQueue(TANKFACTORY, maxTanks*.1, numRobotsByType[TANKFACTORY.ordinal()] + numInProgressByType[TANKFACTORY.ordinal()]);			
+					
+					addToBuildQueue(SOLDIER, maxSoldiers, numSoldiers);
+				} else {
+					//build a scout, send to center, then build soldiers
+					addToBuildQueue(DRONE, 1, numDrones);
+					addToBuildQueue(HELIPAD, 1, numRobotsByType[HELIPAD.ordinal()] + numInProgressByType[HELIPAD.ordinal()]);		
+					
+					addToBuildQueue(SOLDIER, maxSoldiers*.3, numSoldiers);
+					addToBuildQueue(BARRACKS, maxSoldiers*.03, numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()]);			
+					
+					addToBuildQueue(TANK, maxTanks*.3, numTanks);
+					addToBuildQueue(TANKFACTORY, maxTanks*.03, numRobotsByType[TANKFACTORY.ordinal()] + numInProgressByType[TANKFACTORY.ordinal()]);			
+					
+					addToBuildQueue(SOLDIER, maxSoldiers*.7, numSoldiers);
+					addToBuildQueue(BARRACKS, maxSoldiers*.07, numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()]);
+					
+					addToBuildQueue(TANK, maxTanks, numTanks);
+					addToBuildQueue(TANKFACTORY, maxTanks*.1, numRobotsByType[TANKFACTORY.ordinal()] + numInProgressByType[TANKFACTORY.ordinal()]);			
+					
+					addToBuildQueue(SOLDIER, maxSoldiers, numSoldiers);
 				}
 				
 				// if you get through everything else, just build tanks
-				buildQueue[row][0] = TANK.ordinal();
-				buildQueue[row][1] = 1;
-				row++;
+				addToBuildQueue(TANK, 99999, numTanks);
 				
+				bytecodes[16] = Clock.getBytecodeNum();
 				bytecodes[17] = Clock.getBytecodeNum();
 				
 				writeBuildQueue(buildQueue);
@@ -461,8 +459,16 @@ public class RobotPlayer {
 					if (numSoldiers >= 50) {
 						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_ATTACK_TOWERS);
 					} else { //check if a good time to retreat
+//						if (rc.senseNearbyRobots(9999, enemyTeam).length > 1) {
+//							selfSwarmTimer = 75;
+//							rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_DEFEND);
+//						} else {
+//							rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_RALLY);
+//						}
 						if (numSoldiers <= 30) {
 							rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_RALLY);
+						} else {
+							rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_DEFEND);
 						}
 					}
 				}
@@ -509,6 +515,14 @@ public class RobotPlayer {
 				System.out.println("HQ Exception");
 				e.printStackTrace();
 			}
+		}
+	}
+	
+	private static void addToBuildQueue(RobotType type, double desired, int exist) {
+		if (exist < desired) {
+			buildQueue[row][0] = type.ordinal();
+			buildQueue[row][1] = 1;
+			row++;
 		}
 	}
 	
@@ -785,7 +799,7 @@ public class RobotPlayer {
 				
 				// TODO: drone movement code
 				if (rc.isCoreReady()) {
-					harass();
+					launcherTryMove(myLoc.directionTo(mapCenter));
 				}
 				
 				// transfer supply
@@ -849,6 +863,8 @@ public class RobotPlayer {
 	
 	// TODO: make launcher able to shoot at enemies out of sensor range using memory of recent enemy positions, so they can't run away
 	private static void runLauncher() {
+		boolean retreated = false;
+		boolean fireBurst = false;
 		while (true) {
 			try {
 				// participate in census
@@ -858,24 +874,42 @@ public class RobotPlayer {
 				updateLocations();
 				
 				// attack
-				if (rc.getMissileCount() > 0) {
-					MapLocation target = nearestSensedEnemy();
-					if (target != null) {
-						tryLaunch(rc.getLocation().directionTo(target));
+				MapLocation target = nearestSensedEnemy();
+				
+				if (target != null ) {
+					if (myLoc.distanceSquaredTo(target) <= 25) {
+						if (rc.getMissileCount() > 4) {
+							fireBurst = true;
+						}
+						else {
+							if (rc.getMissileCount() <= 1) {
+								fireBurst = false;
+							}
+						}
+						if (fireBurst) {
+							tryLaunch(rc.getLocation().directionTo(target));
+						} 
+						continue;
 					}
 				}
-				
-				// TODO: launcher movement code
+
 				if (rc.isCoreReady()) {
-					if (Clock.getRoundNum() < RUSH_TURN) {
-//						launcherRally();
+					//have all units move to HQ before going to posts
+					if (!retreated) {
+						launcherTryMove(rc.getLocation().directionTo(myHQLoc));
 					} else {
-						MapLocation enemyLoc = nearestSensedEnemy();
-						if (enemyLoc == null) {
+						// make some code to evenly distribute soldiers between towers,
+						MapLocation destination = getDefenseTower();
+												
+						// if already close to a tower, sit closer to the enemy so they attack soldiers before the tower
+						if (myLoc.distanceSquaredTo(destination) < 3) {
 							launcherTryMove(rc.getLocation().directionTo(enemyHQLoc));
 						} else {
-							// stay put
+							launcherTryMove(rc.getLocation().directionTo(destination));
 						}
+					}
+					if (myLoc.distanceSquaredTo(myHQLoc) < 40) {
+						retreated = true;
 					}
 				}
 				
@@ -958,6 +992,9 @@ public class RobotPlayer {
 	private static void runMissile() {
 		try {
 			while (true) {
+				//update locations
+				updateLocations();
+				
 				// missile move and explode code
 				if (rc.isCoreReady()) {
 					MapLocation target = fastNearestEnemy();
@@ -983,6 +1020,7 @@ public class RobotPlayer {
 	}
 
 	private static void runSoldier() {
+		boolean retreated = false;
 		while (true) {
 			try {
 				// participate in census
@@ -1001,24 +1039,36 @@ public class RobotPlayer {
 					int order = rc.readBroadcast(UNIT_ORDER_CHAN);
 					switch (order) {
 					case UNIT_ORDER_ATTACK_TOWERS:
+						retreated = false;
 						tryMove(rc.getLocation().directionTo(closestLocation(mapCenter, enemyTowerLocs)));
 						break;
 						
 					case UNIT_ORDER_DEFEND:
-						// make some code to evenly distribute soldiers between towers,
-						MapLocation destination = getDefenseTower();
-												
-						// if already close to a tower, sit closer to the enemy so they attack soldiers before the tower
-						if (myLoc.distanceSquaredTo(destination) < 10) {
-							launcherTryMove(rc.getLocation().directionTo(enemyHQLoc));
+						//have all units move to HQ before going to posts
+						if (!retreated) {
+							launcherTryMove(rc.getLocation().directionTo(myHQLoc));
 						} else {
-							launcherTryMove(rc.getLocation().directionTo(destination));
+							// make some code to evenly distribute soldiers between towers,
+							MapLocation destination = getDefenseTower();
+													
+							// if already close to a tower, sit closer to the enemy so they attack soldiers before the tower
+							if (myLoc.distanceSquaredTo(destination) < 3) {
+								launcherTryMove(rc.getLocation().directionTo(enemyHQLoc));
+							} else {
+								launcherTryMove(rc.getLocation().directionTo(destination));
+							}
 						}
+						if (myLoc.distanceSquaredTo(myHQLoc) < 40) {
+							retreated = true;
+						}
+						
 						break;
 					case UNIT_ORDER_RALLY:
+						retreated = false;
 						rally();
 						break;
 					case UNIT_ORDER_ATTACK_VULNERABLE_TOWER:
+						retreated = false;
 						tryMove(rc.getLocation().directionTo(getEnemyVulnerableTower()));
 						break;
 					
@@ -1031,7 +1081,7 @@ public class RobotPlayer {
 				// end round
 				rc.yield();
 			} catch (Exception e) {
-				System.out.println("Soldier Exception");
+				//System.out.println("Soldier Exception");
 				e.printStackTrace();
 			}
 		}
@@ -1210,6 +1260,23 @@ public class RobotPlayer {
 	private static MapLocation getDefenseTower() throws GameActionException {
 		int currentTower = rc.readBroadcast(UNIT_TOWER_DEFENSE_CHAN);
 		rc.broadcast(UNIT_TOWER_DEFENSE_CHAN, currentTower + 1);
+		
+		if (myTowerLocs.length == 0) {
+			return myHQLoc;
+		}
+		
+		rc.setIndicatorString(0, "" + currentTower%myTowerLocs.length);
+		
+		return myTowerLocs[currentTower%myTowerLocs.length];
+	}
+	
+	private static MapLocation getLauncherDefenseTower() throws GameActionException {
+		int currentTower = rc.readBroadcast(LAUNCHER_TOWER_DEFENSE_CHAN);
+		rc.broadcast(LAUNCHER_TOWER_DEFENSE_CHAN, currentTower + 1);
+		
+		if (myTowerLocs.length == 0) {
+			return myHQLoc;
+		}
 		
 		rc.setIndicatorString(0, "" + currentTower%myTowerLocs.length);
 		

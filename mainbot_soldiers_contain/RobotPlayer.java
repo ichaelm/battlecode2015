@@ -1001,7 +1001,11 @@ public class RobotPlayer {
 					if (Clock.getRoundNum() < 1500) {
 						harass();
 					} else {
-						tryMove(rc.getLocation().directionTo(closestLocation(mapCenter, enemyTowerLocs)));
+						if (enemyTowerLocs.length == 0) {
+							tryMove(rc.getLocation().directionTo(enemyHQLoc));
+						} else {
+							tryMove(rc.getLocation().directionTo(closestLocation(mapCenter, enemyTowerLocs)));
+						}
 					}
 				}
 				
