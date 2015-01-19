@@ -197,38 +197,19 @@ public class RobotPlayer {
 
 		while (true) {
 			try {
-				int[] bytecodes = new int[50];
-				bytecodes[0] = Clock.getBytecodeNum();
-				
 				// participate in census
 				markCensus();
 				
-				bytecodes[1] = Clock.getBytecodeNum();
-				
 				// update locations
 				updateLocations();
-				
-				bytecodes[2] = Clock.getBytecodeNum();
 				
 				// read unit census, progress table, and completed table
 				int[] numRobotsByType = readCensus();
 				int[] numInProgressByType = readProgressTable();
 				int[] numCompletedByType = readCompletedTable();
 				
-				bytecodes[3] = Clock.getBytecodeNum();
-				
-				/*
-				rc.setIndicatorString(0, numRobotsByType[HQ.ordinal()] + " " + numRobotsByType[BEAVER.ordinal()] + " " + numRobotsByType[MINERFACTORY.ordinal()] + " " + numRobotsByType[MINER.ordinal()] + " " + numRobotsByType[BARRACKS.ordinal()] + " " + numRobotsByType[SOLDIER.ordinal()]);
-				rc.setIndicatorString(1, numInProgressByType[HQ.ordinal()] + " " + numInProgressByType[BEAVER.ordinal()] + " " + numInProgressByType[MINERFACTORY.ordinal()] + " " + numInProgressByType[MINER.ordinal()] + " " + numInProgressByType[BARRACKS.ordinal()] + " " + numInProgressByType[SOLDIER.ordinal()]);
-				rc.setIndicatorString(2, numCompletedByType[HQ.ordinal()] + " " + numCompletedByType[BEAVER.ordinal()] + " " + numCompletedByType[MINERFACTORY.ordinal()] + " " + numCompletedByType[MINER.ordinal()] + " " + numCompletedByType[BARRACKS.ordinal()] + " " + numCompletedByType[SOLDIER.ordinal()]);
-				*/
-				
-				bytecodes[4] = Clock.getBytecodeNum();
-				
 				// sensing all enemy robots
 				enemyRobots = rc.senseNearbyRobots(999999, enemyTeam);
-				
-				bytecodes[5] = Clock.getBytecodeNum();
 				
 				// calculate destroyed robots
 				int[] numDestroyedByType = new int[21];
@@ -242,24 +223,16 @@ public class RobotPlayer {
 					}
 				}
 				
-				bytecodes[6] = Clock.getBytecodeNum();
-				
 				// save round number to ensure I don't go over bytecode limit
 				int roundNum = Clock.getRoundNum();
-				
-				bytecodes[7] = Clock.getBytecodeNum();
 				
 				// read ore counters
 				double oreMinedLastTurnByMiners = readMinerOreCounter();
 				double oreMinedLastTurnByBeavers = readBeaverOreCounter();
 				double oreMinedLastTurn = oreMinedLastTurnByMiners + oreMinedLastTurnByBeavers;
 				
-				bytecodes[8] = Clock.getBytecodeNum();
-				
 				// read builder beaver counter
 				int numBuilderBeavers = readBuilderBeaverCounter();
-				
-				bytecodes[9] = Clock.getBytecodeNum();
 				
 				// calculate average mining rate and ore income rate for past 10 turns
 				oreMinedByTurn[roundNum%10] = oreMinedLastTurn;
@@ -286,8 +259,6 @@ public class RobotPlayer {
 				beaverMiningRate = beaverMiningRate / 10;
 				double oreMinedPerBeaver = beaverMiningRate / (numRobotsByType[BEAVER.ordinal()] - numBuilderBeavers); // ignores the fact that builder beavers can mine
 				
-				bytecodes[10] = Clock.getBytecodeNum();
-				
 				// calculate supply upkeep
 				int totalSupplyUpkeep = 0;
 				for (int i = 21; --i >= 0;) {
@@ -300,12 +271,8 @@ public class RobotPlayer {
 					totalSupplyUpkeep += numRobots * supplyUpkeepPerRobot;
 				}
 				
-				bytecodes[11] = Clock.getBytecodeNum();
-				
 				// calculate supply generation
 				int totalSupplyGeneration = (int)(100*(2+Math.pow(numRobotsByType[SUPPLYDEPOT.ordinal()],0.6)));
-				
-				bytecodes[12] = Clock.getBytecodeNum();
 				
 				// calculate build queue
 				int[][] buildQueue = new int[BUILD_QUEUE_NUM_ROWS][2];
@@ -316,8 +283,6 @@ public class RobotPlayer {
 					row++;
 					requestBuilderBeaver();
 				}
-				
-				bytecodes[13] = Clock.getBytecodeNum();
 				
 				if (mineWithBeavers) {
 					if (numRobotsByType[BEAVER.ordinal()] - numBuilderBeavers < 2) {
@@ -347,15 +312,11 @@ public class RobotPlayer {
 					}
 				}
 				
-				bytecodes[14] = Clock.getBytecodeNum();
-				
 				if (totalSupplyUpkeep > totalSupplyGeneration) {
 					buildQueue[row][0] = SUPPLYDEPOT.ordinal();
 					buildQueue[row][1] = 1;
 					row++;
 				}
-				
-				bytecodes[15] = Clock.getBytecodeNum();
 				
 				//updating unit counts
 				int numSoldiers = numRobotsByType[SOLDIER.ordinal()] + numInProgressByType[SOLDIER.ordinal()];
@@ -367,26 +328,18 @@ public class RobotPlayer {
 					row++;
 				}
 				
-				bytecodes[16] = Clock.getBytecodeNum();
-				
 				if (numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()] < 4) {
 					buildQueue[row][0] = BARRACKS.ordinal();
 					buildQueue[row][1] = 1;
 					row++;
 				}
 				
-				bytecodes[17] = Clock.getBytecodeNum();
-				
 				writeBuildQueue(buildQueue);
-				
-				bytecodes[18] = Clock.getBytecodeNum();
 				
 				// telling units what to do
 				if (selfSwarmTimer > 0) {
 					selfSwarmTimer--;
 				}
-				
-				bytecodes[19] = Clock.getBytecodeNum();
 				
 				// check if good time to swarm myself
 				if (/*numEnemiesSwarmingBase() >= 10*/ false || enemyTowerLocs.length < myTowerLocs.length) { // hack for bytecodes
@@ -404,41 +357,21 @@ public class RobotPlayer {
 					}
 				}
 				
-				bytecodes[20] = Clock.getBytecodeNum();
-				
 				// attack
 				if (rc.isWeaponReady()) {
 					HQAttackSomething();
 				}
-				
-				bytecodes[21] = Clock.getBytecodeNum();
 				
 				// spawn orders
 				if (rc.isCoreReady()) {
 					buildingFollowOrders();
 				}
 				
-				bytecodes[22] = Clock.getBytecodeNum();
-				
 				// transfer supply
 				transferSupply();
 				
-				bytecodes[23] = Clock.getBytecodeNum();
-				
 				// store old values
 				oldNumRobotsByType = numRobotsByType;
-				
-				bytecodes[24] = Clock.getBytecodeNum();
-				
-				/*
-				StringBuilder sb = new StringBuilder();
-				for (int i = 1; i < 25; i++) {
-					sb.append(i + ": ");
-					sb.append((bytecodes[i] - bytecodes[i-1]) + " ");
-				}
-				
-				rc.setIndicatorString(0, sb.toString());
-				*/
 				
 				// end round
 				rc.yield();
