@@ -370,38 +370,42 @@ public class RobotPlayer {
 				//updating unit counts
 				int numSoldiers = numRobotsByType[SOLDIER.ordinal()] + numInProgressByType[SOLDIER.ordinal()];
 				int numTanks = numRobotsByType[TANK.ordinal()] + numInProgressByType[TANK.ordinal()];
-				int numDrones = numRobotsByType[DRONE.ordinal()] + numInProgressByType[DRONE.ordinal()];
-				int numLaunchers = numRobotsByType[LAUNCHER.ordinal()] + numInProgressByType[LAUNCHER.ordinal()];
+				int numUnits = numSoldiers + numTanks;
 				
 				// what units and what buildings to build in what order
-				int maxSoldiers = 100;
-				int maxTanks = 30;
-				int maxLaunchers = 6;
 				
-				//build a scout, send to center, then build soldiers
-//				addToBuildQueue(DRONE, 1, numDrones);
-//				addToBuildQueue(HELIPAD, 1, numRobotsByType[HELIPAD.ordinal()] + numInProgressByType[HELIPAD.ordinal()]);		
-//				
-//				addToBuildQueue(SOLDIER, maxSoldiers*.3, numSoldiers);
-//				addToBuildQueue(BARRACKS, maxSoldiers*.03, numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()]);			
-//				
-//				addToBuildQueue(TANK, maxTanks*.3, numTanks);
-//				addToBuildQueue(TANKFACTORY, maxTanks*.03, numRobotsByType[TANKFACTORY.ordinal()] + numInProgressByType[TANKFACTORY.ordinal()]);			
-//				
-//				addToBuildQueue(SOLDIER, maxSoldiers*.7, numSoldiers);
-//				addToBuildQueue(BARRACKS, maxSoldiers*.07, numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()]);
+				if (numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()] < 1) {
+					buildQueue[row][0] = BARRACKS.ordinal();
+					buildQueue[row][1] = 1;
+					row++;
+				}
 				
-				addToBuildQueue(TANK, maxTanks, numTanks);
-				addToBuildQueue(BARRACKS, 1, numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()]);			
-				addToBuildQueue(TANKFACTORY, ((numTanks > maxTanks)? numTanks : maxTanks) *.25, numRobotsByType[TANKFACTORY.ordinal()] + numInProgressByType[TANKFACTORY.ordinal()]);			
+				if (numUnits < 0) {
+					buildQueue[row][0] = SOLDIER.ordinal();
+					buildQueue[row][1] = 1;
+					row++;
+
+					buildQueue[row][0] = BARRACKS.ordinal();
+					buildQueue[row][1] = 1;
+					row++;
+				} else {
+					if (numRobotsByType[TANKFACTORY.ordinal()] + numInProgressByType[TANKFACTORY.ordinal()] < 1) {
+						buildQueue[row][0] = TANKFACTORY.ordinal();
+						buildQueue[row][1] = 1;
+						row++;
+					}
+					
+					buildQueue[row][0] = TANK.ordinal();
+					buildQueue[row][1] = 1;
+					row++;
+					
+					buildQueue[row][0] = TANKFACTORY.ordinal();
+					buildQueue[row][1] = 1;
+					row++;
+				}
+					
 				
-//				addToBuildQueue(SOLDIER, maxSoldiers, numSoldiers);
-				
-				// if you get through everything else, just build tanks
-				buildQueue[row][0] = TANK.ordinal();
-				buildQueue[row][1] = 1;
-				row++;
-				
+				bytecodes[16] = Clock.getBytecodeNum();
 				bytecodes[17] = Clock.getBytecodeNum();
 				
 				writeBuildQueue(buildQueue);
