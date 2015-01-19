@@ -376,7 +376,7 @@ public class RobotPlayer {
 				int numUnits = numSoldiers + numTanks;
 				
 				// what units and what buildings to build in what order
-				
+				/* commented out because drones don't work
 				if (numUnits > 25) {
 					if (numRobotsByType[DRONE.ordinal()] + numInProgressByType[DRONE.ordinal()] < 1) {
 						addToBuildQueue(DRONE, 1, 0);
@@ -385,7 +385,7 @@ public class RobotPlayer {
 						addToBuildQueue(HELIPAD, 1, 0);
 					}
 				}
-				
+				*/
 				if (numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()] < 1) {
 					buildQueue[row][0] = BARRACKS.ordinal();
 					buildQueue[row][1] = 1;
@@ -1717,21 +1717,6 @@ public class RobotPlayer {
 			int targetY = ri.location.y - myLoc.y;
 			RobotType type = ri.type;
 			if (type == MISSILE) {
-				for (int sourceX = -1; sourceX <= 1; sourceX++) {
-					for (int sourceY = -1; sourceY <= 1; sourceY++) {
-						distX = targetX - sourceX;
-						distY = targetY - sourceY;
-						distSq = (distX*distX) + (distY*distY);
-						if (distSq <= 2) {
-							damageGrid[sourceX+1][sourceY+1] += 20;
-						} else if (distSq <= 8) {
-							damageGrid[sourceX+1][sourceY+1] += 4; // approx
-						}
-						if (sourceX*sourceX+sourceY*sourceY > 1) { // if non-cardinal direction
-							damageGrid[sourceX+1][sourceY+1] += 4; // approx
-						}
-					}
-				}
 			} else if (type == LAUNCHER) { 
 				int rangeSq = 8;
 				int damage = 20;
