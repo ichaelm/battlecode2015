@@ -44,6 +44,9 @@ public class RobotPlayer {
 	private static final int BUILDER_BEAVER_REQUEST_CHAN = BUILDER_BEAVER_COUNTER_CHAN + 1;
 	private static final int UNIT_ORDER_CHAN = BUILDER_BEAVER_REQUEST_CHAN + 1;
 	private static final int UNIT_TOWER_DEFENSE_CHAN = UNIT_ORDER_CHAN + 1;
+	private static final int UNIT_NEEDS_SUPPLY_X_CHAN = UNIT_TOWER_DEFENSE_CHAN + 1;
+	private static final int UNIT_NEEDS_SUPPLY_Y_CHAN = UNIT_NEEDS_SUPPLY_X_CHAN + 1;
+
 	
 	// Broadcast signaling constants
 	private static final int NO_BOUND = 99999;
@@ -373,6 +376,15 @@ public class RobotPlayer {
 				int numUnits = numSoldiers + numTanks;
 				
 				// what units and what buildings to build in what order
+				
+				if (numUnits > 25) {
+					if (numRobotsByType[DRONE.ordinal()] + numInProgressByType[DRONE.ordinal()] < 1) {
+						addToBuildQueue(DRONE, 1, 0);
+					}
+					if (numRobotsByType[HELIPAD.ordinal()] + numInProgressByType[HELIPAD.ordinal()] < 1) {
+						addToBuildQueue(HELIPAD, 1, 0);
+					}
+				}
 				
 				if (numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()] < 1) {
 					buildQueue[row][0] = BARRACKS.ordinal();
@@ -762,7 +774,7 @@ public class RobotPlayer {
 	}
 
 	private static void runDrone() {
-		RobotInfo allyUnit = null;
+		MapLocation allyUnitLoc = null;
 		while (true) {
 			try {
 				// participate in census
@@ -785,23 +797,27 @@ public class RobotPlayer {
 				// TODO: drone movement code
 				if (rc.isCoreReady()) {
 					// find units that need supply
-					for (RobotInfo i : rc.senseNearbyRobots(999, myTeam)) {
-						if (i.supplyLevel <= 200) {
-							allyUnit = i;
-						}
+					if (allyUnitLoc == null && rc.readBroadcast(UNIT_NEEDS_SUPPLY_X_CHAN) != 0) {
+						allyUnitLoc = new MapLocation(rc.readBroadcast(UNIT_NEEDS_SUPPLY_X_CHAN), rc.readBroadcast(UNIT_NEEDS_SUPPLY_Y_CHAN));
+						rc.setIndicatorString(0, allyUnitLoc.toString());
 					}
 					
 					// If I have supply, go to said unit
-					if (allyUnit != null && rc.getSupplyLevel() > 1000) {
-						launcherTryMove(myLoc.directionTo(allyUnit.location));
+					if (allyUnitLoc != null && rc.getSupplyLevel() > 1000) {
+						if (myLoc.distanceSquaredTo(allyUnitLoc) >= GameConstants.SUPPLY_TRANSFER_RADIUS_SQUARED) {
+							launcherTryMove(myLoc.directionTo(allyUnitLoc));
+						} else {
+							//transfer nearly all supplies to unit
+							rc.transferSupplies((int)(rc.getSupplyLevel() - 100), allyUnitLoc);
+							allyUnitLoc = null;
+							rc.broadcast(UNIT_NEEDS_SUPPLY_X_CHAN, 0);
+							rc.broadcast(UNIT_NEEDS_SUPPLY_Y_CHAN, 0);
+						}
 					} else { //if I don't have supply, go to HQ and wait for enough supply
 						launcherTryMove(myLoc.directionTo(myHQLoc));
 					}
 						
 				}
-				
-				// transfer supply
-				transferSupply();
 				
 				// end round
 				rc.yield();
@@ -811,7 +827,6 @@ public class RobotPlayer {
 			}
 		}
 	}
-
 	private static void runHandwashStation() {
 		while (true) {
 			try {
@@ -1077,6 +1092,11 @@ public class RobotPlayer {
 				// update locations
 				updateLocations();
 				
+				//communincate supply need
+				if (rc.getSupplyLevel() < 500) {
+					broadcastNeedSupplyLocation();
+				}
+				
 				// attack
 				if (rc.isWeaponReady()) {
 					focusAttackEnemies();
@@ -1193,6 +1213,11 @@ public class RobotPlayer {
 				e.printStackTrace();
 			}
 		}
+	}
+	
+	private static void broadcastNeedSupplyLocation() throws GameActionException {
+		rc.broadcast(UNIT_NEEDS_SUPPLY_X_CHAN, myLoc.x);
+		rc.broadcast(UNIT_NEEDS_SUPPLY_Y_CHAN, myLoc.y);
 	}
 	
 	private static int numEnemiesSwarmingBase() {
