@@ -762,6 +762,7 @@ public class RobotPlayer {
 	}
 
 	private static void runDrone() {
+		RobotInfo allyUnit = null;
 		while (true) {
 			try {
 				// participate in census
@@ -773,17 +774,30 @@ public class RobotPlayer {
 				// look for map boundaries
 				lookForBounds();
 				
-				// TODO: drone attack code
-				if (rc.isWeaponReady()) {
-					MapLocation attackLoc = droneAttackLocation();
-					if (attackLoc != null) {
-						rc.attackLocation(attackLoc);
-					}
-				}
+//				// TODO: drone attack code
+//				if (rc.isWeaponReady()) {
+//					MapLocation attackLoc = droneAttackLocation();
+//					if (attackLoc != null) {
+//						rc.attackLocation(attackLoc);
+//					}
+//				}
 				
 				// TODO: drone movement code
 				if (rc.isCoreReady()) {
-					harass();
+					// find units that need supply
+					for (RobotInfo i : rc.senseNearbyRobots(999, myTeam)) {
+						if (i.supplyLevel <= 200) {
+							allyUnit = i;
+						}
+					}
+					
+					// If I have supply, go to said unit
+					if (allyUnit != null && rc.getSupplyLevel() > 1000) {
+						launcherTryMove(myLoc.directionTo(allyUnit.location));
+					} else { //if I don't have supply, go to HQ and wait for enough supply
+						launcherTryMove(myLoc.directionTo(myHQLoc));
+					}
+						
 				}
 				
 				// transfer supply
