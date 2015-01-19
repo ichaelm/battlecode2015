@@ -1,4 +1,4 @@
-package mainbot_tanks_contain;
+package mainbot_tanks_contain_v0;
 
 import battlecode.common.*;
 
