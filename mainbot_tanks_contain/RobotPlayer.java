@@ -1089,7 +1089,12 @@ public class RobotPlayer {
 						if(isVulnerable(target) && rc.senseNearbyRobots(target, 36, myTeam).length >= 10 ) {
 							tryMove(myLoc.directionTo(target));
 						} else {
-							harass();
+							MapLocation invader = attackingEnemy();
+							if (invader != null) {
+								launcherTryMove(myLoc.directionTo(invader));
+							} else {
+								harass();
+							}
 						}
 					} else {
 						if (enemyTowerLocs.length == 0) {
@@ -2165,13 +2170,13 @@ public class RobotPlayer {
 	
 	// TODO: should sense all invading enemies and let units attack the closest
 	private static MapLocation attackingEnemy() throws GameActionException {
-		RobotInfo[] enemies = rc.senseNearbyRobots(myHQLoc, 9999999, enemyTeam);
+		RobotInfo[] enemies = rc.senseNearbyRobots(myHQLoc, rushDistSq / 4, enemyTeam);
 		int closestDist = 9999999;
 		RobotInfo closestRobot = null;
 		for (RobotInfo r : enemies) {
 			if (r.type != MISSILE && r.type != MINER && r.type != BEAVER) {
 				MapLocation enemyLoc = r.location;
-				int dist = myHQLoc.distanceSquaredTo(enemyLoc);
+				int dist = myLoc.distanceSquaredTo(enemyLoc);
 				if (dist < closestDist) {
 					closestDist = dist;
 					closestRobot = r;
