@@ -376,21 +376,19 @@ public class RobotPlayer {
 				int numUnits = numSoldiers + numTanks;
 				
 				// what units and what buildings to build in what order
-				/* commented out because drones don't work
-				if (numUnits > 25) {
-					if (numRobotsByType[DRONE.ordinal()] + numInProgressByType[DRONE.ordinal()] < 1) {
-						addToBuildQueue(DRONE, 1, 0);
-					}
-					if (numRobotsByType[HELIPAD.ordinal()] + numInProgressByType[HELIPAD.ordinal()] < 1) {
-						addToBuildQueue(HELIPAD, 1, 0);
-					}
-				}
-				*/
-				if (numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()] < 1) {
-					buildQueue[row][0] = BARRACKS.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
-				}
+//				if (numUnits > 15) {
+//					if (numRobotsByType[DRONE.ordinal()] + numInProgressByType[DRONE.ordinal()] < 1) {
+//						addToBuildQueue(DRONE, 1, 0);
+//					}
+//					if (numRobotsByType[HELIPAD.ordinal()] + numInProgressByType[HELIPAD.ordinal()] < 1) {
+//						addToBuildQueue(HELIPAD, 1, 0);
+//					}
+//				}
+//				if (numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()] < 1) {
+//					buildQueue[row][0] = BARRACKS.ordinal();
+//					buildQueue[row][1] = 1;
+//					row++;
+//				}
 				
 				if (numUnits < 0) {
 					buildQueue[row][0] = SOLDIER.ordinal();
@@ -808,7 +806,9 @@ public class RobotPlayer {
 							launcherTryMove(myLoc.directionTo(allyUnitLoc));
 						} else {
 							//transfer nearly all supplies to unit
-							rc.transferSupplies((int)(rc.getSupplyLevel() - 100), allyUnitLoc);
+							if (rc.senseRobotAtLocation(allyUnitLoc) != null) {
+								rc.transferSupplies((int)(rc.getSupplyLevel() - 100), allyUnitLoc);
+							}
 							allyUnitLoc = null;
 							rc.broadcast(UNIT_NEEDS_SUPPLY_X_CHAN, 0);
 							rc.broadcast(UNIT_NEEDS_SUPPLY_Y_CHAN, 0);
@@ -1551,12 +1551,15 @@ public class RobotPlayer {
 	}
 	
 	private static boolean needsSupply(RobotInfo r){
-		if(r.type == BEAVER || r.type == COMPUTER || 
-				r.type == COMMANDER || r.type == SOLDIER || 
-				r.type == BASHER || r.type == TANK || 
-				r.type == DRONE || r.type == LAUNCHER || 
-				r.type == MINER)
-			return true;
+		if (rc.getType() != HQ) {
+			if(r.type == BEAVER || r.type == COMPUTER || r.type == COMMANDER || r.type == SOLDIER ||
+					r.type == BASHER || r.type == TANK || r.type == LAUNCHER || r.type == MINER)
+				return true;
+		} else {
+			if(r.type == BEAVER || r.type == COMPUTER || r.type == COMMANDER || r.type == SOLDIER || 
+					r.type == BASHER || r.type == TANK || r.type == LAUNCHER || r.type == MINER || r.type == DRONE)
+				return true;
+		}
 		return false;
 	}
 	
