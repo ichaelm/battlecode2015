@@ -2387,23 +2387,23 @@ public class RobotPlayer {
 		return false;
 	}
 	
+	//TODO: rename launcherTryMove
+	//TODO: make more efficient
 	private static boolean launcherTryMove(Direction d) throws GameActionException {
 		int offsetIndex = 0;
 		int[] offsets = {0,1,-1,2,-2};
 		int dirint = directionToInt(d);
-		while (offsetIndex < 5 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
+		while (offsetIndex < 5 && (!rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8]) || inEnemyBuildingRange(rc.getLocation().add(directions[(dirint+offsets[offsetIndex]+8)%8])))) {
 			offsetIndex++;
 		}
 		if (offsetIndex < 5) {
 			Direction dir = directions[(dirint+offsets[offsetIndex]+8)%8];
-			if (!inEnemyBuildingRange(rc.getLocation().add(dir))) {
-				rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
-			}
+			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
 			return true;
 		}
 		return false;
 	}
-	
+
 	private static boolean limitedTryMove(Direction d) throws GameActionException {
 		int offsetIndex = 0;
 		int[] offsets = {0,1,-1};
