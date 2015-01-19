@@ -251,7 +251,7 @@ public class RobotPlayer {
 					numDestroyedByType[i] = expectedDiff - diff;
 					// error checking
 					if (diff > expectedDiff) {
-						System.out.println("error with counting destroyed robots");
+//						System.out.println("error with counting destroyed robots");
 					}
 				}
 				
@@ -1109,6 +1109,7 @@ public class RobotPlayer {
 	}
 
 	private static void runTank() {
+		MapLocation destination;
 		while (true) {
 			try {
 				// participate in census
@@ -1127,12 +1128,20 @@ public class RobotPlayer {
 					int order = rc.readBroadcast(UNIT_ORDER_CHAN);
 					switch (order) {
 					case UNIT_ORDER_ATTACK_TOWERS:
-						tryMove(rc.getLocation().directionTo(closestLocation(mapCenter, enemyTowerLocs)));
+						destination = closestLocation(mapCenter, enemyTowerLocs);
+						if (myLoc.distanceSquaredTo(destination) <= 30) {
+							if (rc.senseNearbyRobots(7, myTeam).length > 2) {
+								tryMove(rc.getLocation().directionTo(destination));
+							}
+							// if not enough of my team nearby, wait for them before moving in for the kill
+						} else {
+							tryMove(rc.getLocation().directionTo(destination));
+						}
 						break;
 						
 					case UNIT_ORDER_DEFEND:
 						// make some code to evenly distribute soldiers between towers,
-						MapLocation destination = getDefenseTower();
+						destination = getDefenseTower();
 												
 						// if already close to a tower, sit closer to the enemy so they attack soldiers before the tower
 						if (myLoc.distanceSquaredTo(destination) < 10) {
@@ -1141,9 +1150,11 @@ public class RobotPlayer {
 							launcherTryMove(rc.getLocation().directionTo(destination));
 						}
 						break;
+						
 					case UNIT_ORDER_RALLY:
 						rally();
 						break;
+						
 					case UNIT_ORDER_ATTACK_VULNERABLE_TOWER:
 						tryMove(rc.getLocation().directionTo(getEnemyVulnerableTower()));
 						break;

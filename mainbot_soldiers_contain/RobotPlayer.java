@@ -243,7 +243,7 @@ public class RobotPlayer {
 					numDestroyedByType[i] = expectedDiff - diff;
 					// error checking
 					if (diff > expectedDiff) {
-						System.out.println("error with counting destroyed robots");
+//						System.out.println("error with counting destroyed robots");
 					}
 				}
 				
@@ -512,12 +512,20 @@ public class RobotPlayer {
 		}
 	}
 	
-	//returns true if there exists a tower thathas less than 3 enemies around it
+	//returns true if there exists a tower that has less than 3 enemies around it
 	private static boolean areEnemyTowersVulnerable() {
 		for (MapLocation i: enemyTowerLocs) {
 			if (rc.senseNearbyRobots(i, 20, enemyTeam).length < 3) {
 				return true;
 			}
+		}
+		return false;
+	}
+
+	//returns true if there exists a tower that has less than 3 enemies around it
+	private static boolean isVulnerable(MapLocation loc) {
+		if (rc.senseNearbyRobots(loc, 20, enemyTeam).length < 3) {
+			return true;
 		}
 		return false;
 	}
@@ -683,21 +691,29 @@ public class RobotPlayer {
 				}
 				
 				if (rc.isCoreReady()) {
-					if (builderBeaver) {
-						// follow spawn orders
-						Direction escapeDir = escapeCrowding(); // hack, better place to put this
-						if (escapeDir != null) {
-							tryMove(escapeDir);
+					if (Clock.getRoundNum() > 1700) {
+						if (enemyTowerLocs.length == 0) {
+							tryMove(myLoc.directionTo(enemyHQLoc));
 						} else {
-							thingIJustBuilt = beaverFollowOrders();
+							tryMove(myLoc.directionTo(closestLocation(mapCenter, enemyTowerLocs)));
 						}
 					} else {
-						// TODO: beaver mining
-						Direction escapeDir = escapeCrowding();
-						if (escapeDir != null) {
-							tryMove(escapeDir);
+						if (builderBeaver) {
+							// follow spawn orders
+							Direction escapeDir = escapeCrowding(); // hack, better place to put this
+							if (escapeDir != null) {
+								tryMove(escapeDir);
+							} else {
+								thingIJustBuilt = beaverFollowOrders();
+							}
 						} else {
-							mine();
+							// TODO: beaver mining
+							Direction escapeDir = escapeCrowding();
+							if (escapeDir != null) {
+								tryMove(escapeDir);
+							} else {
+								mine();
+							}
 						}
 					}
 				}
@@ -909,11 +925,19 @@ public class RobotPlayer {
 				// TODO: miner code
 				// TODO: make miners avoid enemy towers
 				if (rc.isCoreReady()) {
-					Direction escapeDir = escapeCrowding();
-					if (escapeDir != null) {
-						tryMove(escapeDir);
+					if (Clock.getRoundNum() > 1700) {
+						if (enemyTowerLocs.length == 0) {
+							tryMove(myLoc.directionTo(enemyHQLoc));
+						} else {
+							tryMove(myLoc.directionTo(closestLocation(mapCenter, enemyTowerLocs)));
+						}
 					} else {
-						mine();
+						Direction escapeDir = escapeCrowding();
+						if (escapeDir != null) {
+							launcherTryMove(escapeDir);
+						} else {
+							mine();
+						}
 					}
 				}
 				
@@ -999,12 +1023,17 @@ public class RobotPlayer {
 				// move according to orders
 				if (rc.isCoreReady()) {
 					if (Clock.getRoundNum() < 1500) {
-						harass();
+						MapLocation target = closestLocation(myLoc, enemyTowerLocs);
+						if(isVulnerable(target) && rc.senseNearbyRobots(target, 36, myTeam).length >= 10 ) {
+							tryMove(myLoc.directionTo(target));
+						} else {
+							harass();
+						}
 					} else {
 						if (enemyTowerLocs.length == 0) {
-							tryMove(rc.getLocation().directionTo(enemyHQLoc));
+							tryMove(myLoc.directionTo(enemyHQLoc));
 						} else {
-							tryMove(rc.getLocation().directionTo(closestLocation(mapCenter, enemyTowerLocs)));
+							tryMove(myLoc.directionTo(closestLocation(mapCenter, enemyTowerLocs)));
 						}
 					}
 				}
@@ -1043,6 +1072,7 @@ public class RobotPlayer {
 	}
 
 	private static void runTank() {
+		MapLocation destination;
 		while (true) {
 			try {
 				// participate in census
@@ -1058,29 +1088,19 @@ public class RobotPlayer {
 				
 				// move according to orders
 				if (rc.isCoreReady()) {
-					int order = rc.readBroadcast(UNIT_ORDER_CHAN);
-					switch (order) {
-					case UNIT_ORDER_ATTACK_TOWERS:
-						tryMove(rc.getLocation().directionTo(closestLocation(mapCenter, enemyTowerLocs)));
-						break;
-						
-					case UNIT_ORDER_DEFEND:
-						// make some code to evenly distribute soldiers between towers,
-						MapLocation destination = getDefenseTower();
-												
-						// if already close to a tower, sit closer to the enemy so they attack soldiers before the tower
-						if (myLoc.distanceSquaredTo(destination) < 10) {
-							launcherTryMove(rc.getLocation().directionTo(enemyHQLoc));
+					if (Clock.getRoundNum() < 1500) {
+						MapLocation target = closestLocation(myLoc, enemyTowerLocs);
+						if(isVulnerable(target) && rc.senseNearbyRobots(target, 36, myTeam).length >= 10 ) {
+							tryMove(myLoc.directionTo(target));
 						} else {
-							launcherTryMove(rc.getLocation().directionTo(destination));
+							harass();
 						}
-						break;
-					case UNIT_ORDER_RALLY:
-						rally();
-						break;
-					case UNIT_ORDER_ATTACK_VULNERABLE_TOWER:
-						tryMove(rc.getLocation().directionTo(getEnemyVulnerableTower()));
-						break;
+					} else {
+						if (enemyTowerLocs.length == 0) {
+							tryMove(myLoc.directionTo(enemyHQLoc));
+						} else {
+							tryMove(myLoc.directionTo(closestLocation(mapCenter, enemyTowerLocs)));
+						}
 					}
 				}
 				
@@ -1090,12 +1110,12 @@ public class RobotPlayer {
 				// end round
 				rc.yield();
 			} catch (Exception e) {
-				System.out.println("Soldier Exception");
+				System.out.println("Tank Exception");
 				e.printStackTrace();
 			}
 		}
 	}
-
+	
 	private static void runTankFactory() {
 		while (true) {
 			try {
