@@ -4,7 +4,7 @@ import battlecode.common.*;
 
 import java.util.*;
 
-import testingbot.Simulator;
+import mainbot_mining.Simulator;
 
 public class RobotPlayer {
 
@@ -28,10 +28,17 @@ public class RobotPlayer {
 	private static final int BUILD_QUEUE_NUM_ROWS = 50;
 	private static final int BUILD_QUEUE_SIZE = BUILD_QUEUE_ROW_SIZE * BUILD_QUEUE_NUM_ROWS;
 	private static final int MINING_TABLE_CHAN = BUILD_QUEUE_CHAN + BUILD_QUEUE_SIZE;
-	private static final int MINING_TABLE_ROW_SIZE = 5;
+	private static final int MINING_TABLE_ROW_SIZE = 6;
 	private static final int MINING_TABLE_NUM_ROWS = 50;
 	private static final int MINING_TABLE_SIZE = MINING_TABLE_ROW_SIZE * MINING_TABLE_NUM_ROWS;
-	private static final int NAVMAP_CHAN = MINING_TABLE_CHAN + MINING_TABLE_SIZE;
+	private static final int MINING_TABLE_CURRENT_NUMROWS_CHAN = MINING_TABLE_CHAN + MINING_TABLE_SIZE;
+	private static final int MONTE_CARLO_RESULTS_TABLE_CHAN = MINING_TABLE_CURRENT_NUMROWS_CHAN + 1;
+	private static final int MONTE_CARLO_RESULTS_TABLE_ROW_SIZE = 3;
+	private static final int MONTE_CARLO_RESULTS_TABLE_NUM_ROWS = 50;
+	private static final int MONTE_CARLO_RESULTS_TABLE_SIZE = MONTE_CARLO_RESULTS_TABLE_ROW_SIZE * MONTE_CARLO_RESULTS_TABLE_NUM_ROWS;
+	private static final int MONTE_CARLO_NUM_RESULTS_CHAN = MONTE_CARLO_RESULTS_TABLE_CHAN + MONTE_CARLO_RESULTS_TABLE_SIZE;
+	private static final int MONTE_CARLO_MAX_FOUND_CHAN = MONTE_CARLO_NUM_RESULTS_CHAN + 1;
+	private static final int NAVMAP_CHAN = MONTE_CARLO_MAX_FOUND_CHAN + 1;
 	private static final int NAVMAP_SQUARE_SIZE = 3;
 	private static final int NAVMAP_WIDTH = MAX_MAP_WIDTH;
 	private static final int NAVMAP_HEIGHT = MAX_MAP_HEIGHT;
@@ -240,7 +247,7 @@ public class RobotPlayer {
 					numDestroyedByType[i] = expectedDiff - diff;
 					// error checking
 					if (diff > expectedDiff) {
-						System.out.println("error with counting destroyed robots");
+						//System.out.println("error with counting destroyed robots");
 					}
 				}
 				
@@ -432,15 +439,23 @@ public class RobotPlayer {
 				
 				bytecodes[24] = Clock.getBytecodeNum();
 				
-				/*
+				// run monte carlo ore finding system, storing results
+				runMonteCarloOreFinder(50);
+				
+				bytecodes[25] = Clock.getBytecodeNum();
+				
+				// update mining table with results from monte carlo
+				updateMiningTable();
+				
+				bytecodes[26] = Clock.getBytecodeNum();
+				
 				StringBuilder sb = new StringBuilder();
-				for (int i = 1; i < 25; i++) {
+				for (int i = 1; i < 27; i++) {
 					sb.append(i + ": ");
 					sb.append((bytecodes[i] - bytecodes[i-1]) + " ");
 				}
 				
 				rc.setIndicatorString(0, sb.toString());
-				*/
 				
 				// end round
 				rc.yield();
@@ -1117,6 +1132,22 @@ public class RobotPlayer {
 		rc.broadcast(SOUTH_BOUND_CHAN, NO_BOUND);
 		rc.broadcast(WEST_BOUND_CHAN, NO_BOUND);
 	}
+	
+	private static int northBound() throws GameActionException {
+		return rc.readBroadcast(NORTH_BOUND_CHAN);
+	}
+	
+	private static int eastBound() throws GameActionException {
+		return rc.readBroadcast(EAST_BOUND_CHAN);
+	}
+	
+	private static int southBound() throws GameActionException {
+		return rc.readBroadcast(SOUTH_BOUND_CHAN);
+	}
+	
+	private static int westBound() throws GameActionException {
+		return rc.readBroadcast(WEST_BOUND_CHAN);
+	}
 
 	private static int[] readCensus() throws GameActionException {
 		int[] census = new int[21];
@@ -1304,18 +1335,105 @@ public class RobotPlayer {
 		}
 		return buildOrder;
 	}
-
+	
+	// ore, size, x, y, numRobots, badness
 	private static void writeMiningTable(int[][] miningTable) throws GameActionException {
+		rc.broadcast(MINING_TABLE_CURRENT_NUMROWS_CHAN, miningTable.length);
 		for (int row = 0; row < miningTable.length; row++) {
 			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 0, miningTable[row][0]);
 			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 1, miningTable[row][1]);
 			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 2, miningTable[row][2]);
 			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 3, miningTable[row][3]);
 			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 4, miningTable[row][4]);
+			rc.broadcast(MINING_TABLE_CHAN + row*MINING_TABLE_ROW_SIZE + 5, 0);
 			if (miningTable[row][0] == 0) { // must be at end to ensure 0 is written
+				rc.broadcast(MINING_TABLE_CURRENT_NUMROWS_CHAN, row);
 				break;
 			}
 		}
+	}
+	
+	private static void markBadMiningTable(MapLocation myLoc) throws GameActionException {
+		int numLocs = rc.readBroadcast(MINING_TABLE_CURRENT_NUMROWS_CHAN);
+		int x;
+		int y;
+		MapLocation loc;
+		for (int i = 0; i < numLocs; i++) {
+			x = rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 2);
+			y = rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 3);
+			loc = new MapLocation(x, y);
+			if (myLoc.equals(loc)) {
+				rc.broadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 5, 1);
+				break;
+			}
+		}
+	}
+	
+	private static MapLocation[] getAllMiningTargets() throws GameActionException {
+		int numLocs = rc.readBroadcast(MINING_TABLE_CURRENT_NUMROWS_CHAN);
+		MapLocation[] locs = new MapLocation[numLocs];
+		int x;
+		int y;
+		for (int i = 0; i < numLocs; i++) {
+			x = rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 2);
+			y = rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 3);
+			locs[i] = new MapLocation(x, y);
+			//rc.setIndicatorDot(locs[i], 0, 255, 255);
+		}
+		return locs;
+	}
+	
+	private static MapLocation[] getAllMiningTargetsBetterThan(double ore) throws GameActionException {
+		// assumes entire table has same ore
+		MapLocation[] locs;
+		if (getBestOre() > ore) {
+			int numLocs = rc.readBroadcast(MINING_TABLE_CURRENT_NUMROWS_CHAN);
+			locs = new MapLocation[numLocs];
+			int x;
+			int y;
+			for (int i = 0; i < numLocs; i++) {
+				x = rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 2);
+				y = rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 3);
+				locs[i] = new MapLocation(x, y);
+			}
+		} else {
+			locs = new MapLocation[0];
+		}
+		return locs;
+	}
+	
+	private static MapLocation getClosestMiningTargetBetterThan(MapLocation myLoc, double ore) throws GameActionException {
+		// assumes entire table has same ore
+		MapLocation bestLoc = null;
+		if (getBestOre() > ore) {
+			int numLocs = rc.readBroadcast(MINING_TABLE_CURRENT_NUMROWS_CHAN);
+			int x;
+			int y;
+			int distSq;
+			MapLocation loc;
+			int bestDistSq = 999999;
+			for (int i = 0; i < numLocs; i++) {
+				x = rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 2);
+				y = rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 3);
+				loc = new MapLocation(x, y);
+				distSq = myLoc.distanceSquaredTo(loc);
+				if (distSq < bestDistSq) {
+					bestLoc = loc;
+					bestDistSq = distSq;
+				}
+			}
+		}
+		return bestLoc;
+	}
+	
+	private static double getBestOre() throws GameActionException {
+		int numRows = rc.readBroadcast(MINING_TABLE_CURRENT_NUMROWS_CHAN);
+		for (int i = 0; i < numRows; i++) {
+			if (rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 5) == 0) { // if good
+				return Float.intBitsToFloat(rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 0));
+			}
+		}
+		return 0;
 	}
 
 	private static MapLocation getTopMiningTarget() throws GameActionException {
@@ -1332,6 +1450,100 @@ public class RobotPlayer {
 			return new MapLocation(x,y);
 		}
 		return null;
+	}
+	
+	private static void updateMiningTable() throws GameActionException {
+		MapLocation[] monteCarloLocs = readMonteCarloResults();
+		
+		int indexInMonteCarlo = 0;
+		int numMiningTableRows = rc.readBroadcast(MINING_TABLE_CURRENT_NUMROWS_CHAN);
+		double minOre = Math.max(getBestOre(), Float.intBitsToFloat(rc.readBroadcast(MONTE_CARLO_MAX_FOUND_CHAN)));
+		int lastMiningTableRowWritten = numMiningTableRows-1;
+		// i = row in mining table
+		for (int i = 0; i < MINING_TABLE_NUM_ROWS; i++) {
+			if (i >= numMiningTableRows || rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 5) == 1) { // if row doesn't exist or is marked as bad
+				// get an entry from monte carlo
+				double newOre = 0;
+				MapLocation newLoc = null;
+				while (newOre < minOre && indexInMonteCarlo < monteCarloLocs.length) {
+					newLoc = monteCarloLocs[indexInMonteCarlo];
+					indexInMonteCarlo++;
+					newOre = rc.senseOre(newLoc);
+				}
+				if (newLoc != null && newOre >= minOre) {
+					rc.broadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 0, Float.floatToIntBits((float)newOre));
+					//rc.broadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 1, );
+					rc.broadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 2, newLoc.x);
+					rc.broadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 3, newLoc.y);
+					//rc.broadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 4, );
+					rc.broadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 5, 0);
+					if (i > lastMiningTableRowWritten) {
+						lastMiningTableRowWritten = i;
+					}
+					//rc.setIndicatorDot(newLoc, 0, 0, 255);
+				} else {
+					// end of monte carlo
+					break;
+				}
+			}
+		}
+		rc.broadcast(MINING_TABLE_CURRENT_NUMROWS_CHAN, lastMiningTableRowWritten + 1);
+	}
+	
+	private static void runMonteCarloOreFinder(int times) throws GameActionException {
+		int minx = myHQLoc.x-19;
+		int maxx = myHQLoc.x+19;
+		int miny = myHQLoc.y-19;
+		int maxy = myHQLoc.y+19;
+		int westBound = westBound();
+		int eastBound = eastBound();
+		int northBound = northBound();
+		int southBound = southBound();
+		if (westBound != NO_BOUND) minx = Math.max(minx, westBound);
+		if (eastBound != NO_BOUND) maxx = Math.min(maxx, eastBound);
+		if (northBound != NO_BOUND) miny = Math.max(miny, northBound);
+		if (southBound != NO_BOUND) maxy = Math.min(maxy, southBound);
+		double minOre = getBestOre();
+		int x;
+		int y;
+		MapLocation loc;
+		double ore;
+		double maxFound = 0;
+		int row = 0; //rc.readBroadcast(MONTE_CARLO_NUM_RESULTS_CHAN);
+		for (int i = times; --i >= 0;) {
+			x = rand.nextInt(maxx-minx+1) + minx;
+			y = rand.nextInt(maxy-miny+1) + miny;
+			loc = new MapLocation(x,y);
+			ore = rc.senseOre(loc);
+			if (ore >= minOre) {
+				rc.broadcast(MONTE_CARLO_RESULTS_TABLE_CHAN + row*MONTE_CARLO_RESULTS_TABLE_ROW_SIZE + 0, Float.floatToIntBits((float)ore));
+				rc.broadcast(MONTE_CARLO_RESULTS_TABLE_CHAN + row*MONTE_CARLO_RESULTS_TABLE_ROW_SIZE + 1, x);
+				rc.broadcast(MONTE_CARLO_RESULTS_TABLE_CHAN + row*MONTE_CARLO_RESULTS_TABLE_ROW_SIZE + 2, y);
+				row++;
+				if (ore > maxFound) {
+					maxFound = ore;
+				}
+				if (row >= MONTE_CARLO_RESULTS_TABLE_NUM_ROWS) {
+					break;
+				}
+			}
+		}
+		rc.broadcast(MONTE_CARLO_NUM_RESULTS_CHAN, row);
+		rc.broadcast(MONTE_CARLO_MAX_FOUND_CHAN, Float.floatToIntBits((float)maxFound));
+	}
+	
+	private static MapLocation[] readMonteCarloResults() throws GameActionException {
+		int numLocs = rc.readBroadcast(MONTE_CARLO_NUM_RESULTS_CHAN);
+		MapLocation[] results = new MapLocation[numLocs];
+		int x;
+		int y;
+		for (int i = numLocs; --i >= 0;) {
+			x = rc.readBroadcast(MONTE_CARLO_RESULTS_TABLE_CHAN + i*MONTE_CARLO_RESULTS_TABLE_ROW_SIZE + 1);
+			y = rc.readBroadcast(MONTE_CARLO_RESULTS_TABLE_CHAN + i*MONTE_CARLO_RESULTS_TABLE_ROW_SIZE + 2);
+			results[i] = new MapLocation(x, y);
+		}
+		rc.broadcast(MONTE_CARLO_NUM_RESULTS_CHAN, 0);
+		return results;
 	}
 
 	private static void updateLocations() {
@@ -1441,49 +1653,112 @@ public class RobotPlayer {
 
 	// TODO: mining code
 		private static void mine() throws GameActionException {
+			int[] bytecodes = new int[50];
+			bytecodes[0] = Clock.getBytecodeNum();
+			
 			double myOre = rc.senseOre(myLoc);
+			
+			bytecodes[1] = Clock.getBytecodeNum();
+			
 			if (mining && mineCounter > 0) {
 				mineCounter--;
 				double oreMined = Math.min(Math.max(Math.min(myOre/GameConstants.MINER_MINE_RATE,GameConstants.MINER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre);
+				
+				bytecodes[2] = Clock.getBytecodeNum();
+				
 				markMinerOreCounter(oreMined);
+				
+				bytecodes[3] = Clock.getBytecodeNum();
+				
 				rc.mine();
+				
+				bytecodes[4] = Clock.getBytecodeNum();
+				bytecodes[5] = Clock.getBytecodeNum();
+				bytecodes[6] = Clock.getBytecodeNum();
+				bytecodes[7] = Clock.getBytecodeNum();
+				bytecodes[8] = Clock.getBytecodeNum();
 			} else {
 				if (mining) {
 					mining = false;
 				}
+				
+				bytecodes[2] = Clock.getBytecodeNum();
+				
 				// if my location has tied for the most ore in sensor range, mine here
 				// else move towards that location without mining
 				// break ties by closeness to top of the table
-				MapLocation targetLoc = getTopMiningTarget();
+				
+				// TODO: make this take less time
+				MapLocation targetLoc = getClosestMiningTargetBetterThan(myLoc, myOre);
+				
+				bytecodes[3] = Clock.getBytecodeNum();
+				
+				if (targetLoc == null) {
+					targetLoc = myHQLoc;
+				} else {
+					if (myLoc.distanceSquaredTo(targetLoc) <= mySensorRangeSq) {
+						// TODO: make this take less time
+						if (rc.senseOre(targetLoc) < getBestOre()) {
+							markBadMiningTable(targetLoc);
+						}
+					}
+				}
+				
+				bytecodes[4] = Clock.getBytecodeNum();
+				
 				double bestOre = myOre;
 				int bestTargetDistSq = myLoc.distanceSquaredTo(targetLoc);
 				MapLocation bestLoc = null;
+				
+				bytecodes[5] = Clock.getBytecodeNum();
+				
 				MapLocation[] nearbyLocs = MapLocation.getAllMapLocationsWithinRadiusSq(myLoc, mySensorRangeSq);
+				
+				bytecodes[6] = Clock.getBytecodeNum();
+				
+				// TODO: make this take less time
 				for (int i = 0; i < nearbyLocs.length; i++) {
 					MapLocation loc = nearbyLocs[i];
 					double ore = rc.senseOre(loc);
-					int targetDistSq = myLoc.distanceSquaredTo(targetLoc);
+					int targetDistSq = loc.distanceSquaredTo(targetLoc);
 					if (!loc.equals(myLoc) && ore > myOre) {
 						if (ore > bestOre) {
 							bestLoc = loc;
 							bestOre = ore;
 							bestTargetDistSq = targetDistSq;
-						} else if (ore >= bestOre && targetDistSq > bestTargetDistSq) {
+						} else if (ore >= bestOre && targetDistSq < bestTargetDistSq) {
 							bestLoc = loc;
 							bestOre = ore;
 							bestTargetDistSq = targetDistSq;
 						}
 					}
 				}
+				
+				bytecodes[7] = Clock.getBytecodeNum();
+				
 				if (bestLoc == null) {
 					mineCounter = Simulator.minerOptimalNumMines(myOre);
 					double oreMined = Math.min(Math.max(Math.min(myOre/GameConstants.MINER_MINE_RATE,GameConstants.MINER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre);
 					markMinerOreCounter(oreMined);
 					rc.mine();
+					mining = true;
 				} else {
+					rc.setIndicatorDot(bestLoc, 0, 255, 0);
+					rc.setIndicatorDot(targetLoc, 0, 0, 255);
 					tryMove(myLoc.directionTo(bestLoc));
 				}
+				
+				bytecodes[8] = Clock.getBytecodeNum();
+				
 			}
+			
+			StringBuilder sb = new StringBuilder();
+			for (int i = 1; i < 9; i++) {
+				sb.append(i + ": ");
+				sb.append((((bytecodes[i] - bytecodes[i-1]) + 10000) % 10000) + " ");
+			}
+			
+			rc.setIndicatorString(0, sb.toString());
 		}
 		
 		// TODO: join duplicate miner and beaver mining code
@@ -1501,7 +1776,16 @@ public class RobotPlayer {
 				// if my location has tied for the most ore in sensor range, mine here
 				// else move towards that location without mining
 				// break ties by closeness to top of the table
-				MapLocation targetLoc = getTopMiningTarget();
+				MapLocation targetLoc = getClosestMiningTargetBetterThan(myLoc, myOre);
+				if (targetLoc == null) {
+					targetLoc = myHQLoc;
+				} else {
+					if (myLoc.distanceSquaredTo(targetLoc) <= mySensorRangeSq) {
+						if (rc.senseOre(targetLoc) < getBestOre()) {
+							markBadMiningTable(targetLoc);
+						}
+					}
+				}
 				double bestOre = myOre;
 				int bestTargetDistSq = myLoc.distanceSquaredTo(targetLoc);
 				MapLocation bestLoc = null;
