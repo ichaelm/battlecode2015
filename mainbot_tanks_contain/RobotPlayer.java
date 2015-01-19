@@ -384,11 +384,11 @@ public class RobotPlayer {
 //						addToBuildQueue(HELIPAD, 1, 0);
 //					}
 //				}
-//				if (numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()] < 1) {
-//					buildQueue[row][0] = BARRACKS.ordinal();
-//					buildQueue[row][1] = 1;
-//					row++;
-//				}
+				if (numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()] < 1) {
+					buildQueue[row][0] = BARRACKS.ordinal();
+					buildQueue[row][1] = 1;
+					row++;
+				}
 				
 				if (numUnits < 0) {
 					buildQueue[row][0] = SOLDIER.ordinal();
@@ -431,25 +431,25 @@ public class RobotPlayer {
 				
 				rc.setIndicatorString(0, "NumSoldiers: " + numSoldiers);
 				
-				// check if good time to swarm myself
-				if (enemyTowerLocs.length < myTowerLocs.length) {
-					if (areEnemyTowersVulnerable() && numSoldiers >= 50) {
-						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_ATTACK_VULNERABLE_TOWER);
-					} else {
-						selfSwarmTimer = 75;
-						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_DEFEND);
-					}
-					// check if good time to stop swarming myself
-				} else if (selfSwarmTimer <= 0) {
-					// check if good time to attack
-					if (numSoldiers >= 50) {
-						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_ATTACK_TOWERS);
-					} else { //check if a good time to retreat
-						if (numSoldiers <= 30) {
-							rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_RALLY);
-						}
-					}
-				}
+//				// check if good time to swarm myself
+//				if (enemyTowerLocs.length < myTowerLocs.length) {
+//					if (areEnemyTowersVulnerable() && numSoldiers >= 50) {
+//						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_ATTACK_VULNERABLE_TOWER);
+//					} else {
+//						selfSwarmTimer = 75;
+//						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_DEFEND);
+//					}
+//					// check if good time to stop swarming myself
+//				} else if (selfSwarmTimer <= 0) {
+//					// check if good time to attack
+//					if (numSoldiers >= 50) {
+//						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_ATTACK_TOWERS);
+//					} else { //check if a good time to retreat
+//						if (numSoldiers <= 30) {
+//							rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_RALLY);
+//						}
+//					}
+//				}
 				
 				bytecodes[20] = Clock.getBytecodeNum();
 				
@@ -2335,10 +2335,16 @@ public class RobotPlayer {
 
 		RobotInfo targetEnemy = enemies[0];
 		for (RobotInfo i: enemies) {
-			if (i.type == RobotType.TOWER)
+			if (i.type == TOWER || i.type == LAUNCHER) {
+				if (i.health < targetEnemy.health) {
+					targetEnemy = i;
+					break;
+				}
+			} else {
 				if (i.health < targetEnemy.health) {
 					targetEnemy = i;
 				}
+			}
 		}
 		rc.attackLocation(targetEnemy.location);
 	}
