@@ -512,6 +512,12 @@ public class RobotPlayer {
 		row++;
 	}
 	
+	private static void addToBuildQueue(RobotType type, int num) {
+		buildQueue[row][0] = type.ordinal();
+		buildQueue[row][1] = num;
+		row++;
+	}
+	
 	private static void addToBuildQueue(RobotType type, double desired, int exist) {
 		if (exist < desired) {
 			buildQueue[row][0] = type.ordinal();
