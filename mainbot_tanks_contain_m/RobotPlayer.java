@@ -229,6 +229,9 @@ public class RobotPlayer {
 				// update locations
 				updateLocations();
 				
+				// look for map boundaries
+				lookForBounds();
+				
 				bytecodes[2] = Clock.getBytecodeNum();
 				
 				// read unit census, progress table, and completed table
@@ -490,9 +493,6 @@ public class RobotPlayer {
 				
 				bytecodes[24] = Clock.getBytecodeNum();
 				
-				// run monte carlo ore finding system, storing results
-				runMonteCarloOreFinder(30);
-				
 				bytecodes[25] = Clock.getBytecodeNum();
 				
 				// update mining table with results from monte carlo
@@ -561,6 +561,9 @@ public class RobotPlayer {
 				// update locations
 				updateLocations();
 				
+				// look for map boundaries
+				lookForBounds();
+				
 				// attack
 				if (rc.isWeaponReady()) {
 					attackSomething();
@@ -586,6 +589,9 @@ public class RobotPlayer {
 				
 				// update locations
 				updateLocations();
+				
+				// look for map boundaries
+				lookForBounds();
 				
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -613,6 +619,9 @@ public class RobotPlayer {
 				// update locations
 				updateLocations();
 				
+				// look for map boundaries
+				lookForBounds();
+				
 				// follow spawn orders
 				if (rc.isCoreReady()) {
 					buildingFollowOrders();
@@ -638,6 +647,9 @@ public class RobotPlayer {
 				
 				// update locations
 				updateLocations();
+				
+				// look for map boundaries
+				lookForBounds();
 				
 				// TODO: basher movement and combat code
 				if (rc.isCoreReady()) {
@@ -684,6 +696,9 @@ public class RobotPlayer {
 				
 				// update locations
 				updateLocations();
+				
+				// look for map boundaries
+				lookForBounds();
 				
 				// mark builder beaver
 				if (builderBeaver) {
@@ -734,6 +749,9 @@ public class RobotPlayer {
 				// transfer supply
 				transferSupply();
 				
+				// run monte carlo ore finding system, storing results
+				runMonteCarloOreFinder(999); // limited by bytecodes
+				
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -751,6 +769,9 @@ public class RobotPlayer {
 				
 				// update locations
 				updateLocations();
+				
+				// look for map boundaries
+				lookForBounds();
 				
 				// attack
 				if (rc.isWeaponReady()) {
@@ -779,6 +800,9 @@ public class RobotPlayer {
 				
 				// update locations
 				updateLocations();
+				
+				// look for map boundaries
+				lookForBounds();
 				
 				// transfer supply
 				transferSupply();
@@ -855,6 +879,9 @@ public class RobotPlayer {
 				// update locations
 				updateLocations();
 				
+				// look for map boundaries
+				lookForBounds();
+				
 				// transfer supply
 				transferSupply();
 				
@@ -875,6 +902,9 @@ public class RobotPlayer {
 				
 				// update locations
 				updateLocations();
+				
+				// look for map boundaries
+				lookForBounds();
 				
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -902,6 +932,9 @@ public class RobotPlayer {
 				
 				// update locations
 				updateLocations();
+				
+				// look for map boundaries
+				lookForBounds();
 				
 				// attack
 				if (rc.getMissileCount() > 0) {
@@ -946,6 +979,9 @@ public class RobotPlayer {
 				// update locations
 				updateLocations();
 				
+				// look for map boundaries
+				lookForBounds();
+				
 				// attack
 				if (rc.isWeaponReady()) {
 					attackSomething();
@@ -986,6 +1022,9 @@ public class RobotPlayer {
 				
 				// update locations
 				updateLocations();
+				
+				// look for map boundaries
+				lookForBounds();
 				
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -1040,6 +1079,9 @@ public class RobotPlayer {
 				// update locations
 				updateLocations();
 				
+				// look for map boundaries
+				lookForBounds();
+				
 				// attack
 				if (rc.isWeaponReady()) {
 					focusAttackEnemies();
@@ -1084,6 +1126,9 @@ public class RobotPlayer {
 				// update locations
 				updateLocations();
 				
+				// look for map boundaries
+				lookForBounds();
+				
 				// transfer supply
 				transferSupply();
 				
@@ -1105,6 +1150,9 @@ public class RobotPlayer {
 				
 				// update locations
 				updateLocations();
+				
+				// look for map boundaries
+				lookForBounds();
 				
 				//communincate supply need
 				if (rc.getSupplyLevel() < 500) {
@@ -1137,10 +1185,10 @@ public class RobotPlayer {
 							tryMove(myLoc.directionTo(closestLocation(mapCenter, enemyTowerLocs)));
 						}
 					}
+				} else { // hack for bytecodes
+					// transfer supply
+					transferSupply();
 				}
-				
-				// transfer supply
-				transferSupply();
 				
 				// end round
 				rc.yield();
@@ -1159,6 +1207,9 @@ public class RobotPlayer {
 				
 				// update locations
 				updateLocations();
+				
+				// look for map boundaries
+				lookForBounds();
 				
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -1186,6 +1237,9 @@ public class RobotPlayer {
 				// update locations
 				updateLocations();
 				
+				// look for map boundaries
+				lookForBounds();
+				
 				// follow spawn orders
 				if (rc.isCoreReady()) {
 					buildingFollowOrders();
@@ -1211,6 +1265,9 @@ public class RobotPlayer {
 				
 				// update locations
 				updateLocations();
+				
+				// look for map boundaries
+				lookForBounds();
 				
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -1692,14 +1749,11 @@ public class RobotPlayer {
 		double maxFound = 0;
 		int row = 0; //rc.readBroadcast(MONTE_CARLO_NUM_RESULTS_CHAN);
 		for (int i = times; --i >= 0;) {
-			int bytecode = Clock.getBytecodeNum();
-			boolean flag = false;
 			x = rand.nextInt(maxx-minx+1) + minx;
 			y = rand.nextInt(maxy-miny+1) + miny;
 			loc = new MapLocation(x,y);
 			ore = rc.senseOre(loc);
-			if (ore >= minOre && !rc.isLocationOccupied(loc) && !inEnemyBuildingRange(loc)) {
-				flag = true;
+			if (ore >= minOre && (rc.canSenseLocation(loc) && !rc.isLocationOccupied(loc)) && !inEnemyBuildingRange(loc)) {
 				rc.broadcast(MONTE_CARLO_RESULTS_TABLE_CHAN + row*MONTE_CARLO_RESULTS_TABLE_ROW_SIZE + 0, Float.floatToIntBits((float)ore));
 				rc.broadcast(MONTE_CARLO_RESULTS_TABLE_CHAN + row*MONTE_CARLO_RESULTS_TABLE_ROW_SIZE + 1, x);
 				rc.broadcast(MONTE_CARLO_RESULTS_TABLE_CHAN + row*MONTE_CARLO_RESULTS_TABLE_ROW_SIZE + 2, y);
@@ -1711,7 +1765,9 @@ public class RobotPlayer {
 					break;
 				}
 			}
-			if (flag) System.out.println(Clock.getBytecodeNum()-bytecode);
+			if (Clock.getBytecodesLeft() < 1000) {
+				break;
+			}
 		}
 		rc.broadcast(MONTE_CARLO_NUM_RESULTS_CHAN, row);
 		rc.broadcast(MONTE_CARLO_MAX_FOUND_CHAN, Float.floatToIntBits((float)maxFound));
