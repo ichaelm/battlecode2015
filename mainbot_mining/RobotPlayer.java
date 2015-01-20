@@ -211,6 +211,8 @@ public class RobotPlayer {
 		while (true) {
 			try {
 				
+				int round = Clock.getRoundNum();
+				
 				rc.setIndicatorString(2, "best ore: " + getBestOre());
 				
 				int[] bytecodes = new int[50];
@@ -448,7 +450,7 @@ public class RobotPlayer {
 				bytecodes[24] = Clock.getBytecodeNum();
 				
 				// run monte carlo ore finding system, storing results
-				runMonteCarloOreFinder(50);
+				runMonteCarloOreFinder(70);
 				
 				bytecodes[25] = Clock.getBytecodeNum();
 				
@@ -456,8 +458,8 @@ public class RobotPlayer {
 				updateMiningTable();
 				
 				bytecodes[26] = Clock.getBytecodeNum();
-				getAllMiningTargets();
 				
+				/*
 				StringBuilder sb = new StringBuilder();
 				for (int i = 1; i < 27; i++) {
 					sb.append(i + ": ");
@@ -465,6 +467,11 @@ public class RobotPlayer {
 				}
 				
 				rc.setIndicatorString(0, sb.toString());
+				*/
+				
+				if (Clock.getRoundNum() > round+1 && round > 5) {
+					System.out.println("hq exceed bytecodes by more than 1 round!!");
+				}
 				
 				// end round
 				rc.yield();
@@ -1406,7 +1413,7 @@ public class RobotPlayer {
 				x = rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 2);
 				y = rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 3);
 				locs[i] = new MapLocation(x, y);
-				rc.setIndicatorDot(locs[i], 0, 255, 255);
+				//rc.setIndicatorDot(locs[i], 0, 255, 255);
 			}
 		}
 		return locs;
@@ -1438,7 +1445,6 @@ public class RobotPlayer {
 		MapLocation bestLoc = null;
 		if (getBestOre() > ore) {
 			int numLocs = rc.readBroadcast(MINING_TABLE_CURRENT_NUMROWS_CHAN);
-			System.out.println("numLocs = " + numLocs);
 			int x;
 			int y;
 			int distSq;
@@ -1555,7 +1561,7 @@ public class RobotPlayer {
 			y = rand.nextInt(maxy-miny+1) + miny;
 			loc = new MapLocation(x,y);
 			ore = rc.senseOre(loc);
-			if (ore >= minOre && !rc.isLocationOccupied(loc)) {
+			if (ore >= minOre && !rc.isLocationOccupied(loc) && !inEnemyBuildingRange(loc)) {
 				rc.broadcast(MONTE_CARLO_RESULTS_TABLE_CHAN + row*MONTE_CARLO_RESULTS_TABLE_ROW_SIZE + 0, Float.floatToIntBits((float)ore));
 				rc.broadcast(MONTE_CARLO_RESULTS_TABLE_CHAN + row*MONTE_CARLO_RESULTS_TABLE_ROW_SIZE + 1, x);
 				rc.broadcast(MONTE_CARLO_RESULTS_TABLE_CHAN + row*MONTE_CARLO_RESULTS_TABLE_ROW_SIZE + 2, y);
@@ -1694,6 +1700,8 @@ public class RobotPlayer {
 	// TODO: mining code
 		private static void mine() throws GameActionException {
 			
+			int round = Clock.getRoundNum();
+			
 			int[] bytecodes = new int[50];
 			bytecodes[0] = Clock.getBytecodeNum();
 			
@@ -1736,7 +1744,14 @@ public class RobotPlayer {
 				// TODO: make this take less time
 				MapLocation targetLoc = getClosestMiningTargetBetterThan(myLoc, myOre);
 				
+				bytecodes[3] = Clock.getBytecodeNum();
+				
 				if (myLoc.equals(targetLoc) && myOre > 0) {
+					bytecodes[4] = Clock.getBytecodeNum();
+					bytecodes[5] = Clock.getBytecodeNum();
+					bytecodes[6] = Clock.getBytecodeNum();
+					bytecodes[7] = Clock.getBytecodeNum();
+					bytecodes[8] = Clock.getBytecodeNum();
 					rc.setIndicatorString(1,"branch6");
 					mineCounter = Simulator.minerOptimalNumMines(myOre);
 					double oreMined = Math.min(Math.max(Math.min(myOre/GameConstants.MINER_MINE_RATE,GameConstants.MINER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre);
@@ -1745,7 +1760,7 @@ public class RobotPlayer {
 					markBadMiningTable(targetLoc);
 					rc.mine();
 				} else {
-					bytecodes[3] = Clock.getBytecodeNum();
+					
 					
 					if (targetLoc == null) {
 						targetLoc = myHQLoc;
@@ -1816,7 +1831,7 @@ public class RobotPlayer {
 						rc.setIndicatorString(1,"branch5");
 						rc.setIndicatorDot(bestLoc, 0, 255, 0);
 						//rc.setIndicatorDot(targetLoc, 0, 0, 255);
-						tryMove(myLoc.directionTo(bestLoc));
+						launcherTryMove(myLoc.directionTo(bestLoc));
 					}
 					
 					bytecodes[8] = Clock.getBytecodeNum();
@@ -1824,13 +1839,10 @@ public class RobotPlayer {
 				
 			}
 			
-			StringBuilder sb = new StringBuilder();
-			for (int i = 1; i < 9; i++) {
-				sb.append(i + ": ");
-				sb.append((((bytecodes[i] - bytecodes[i-1]) + 10000) % 10000) + " ");
+			if (Clock.getRoundNum() > round) {
+				System.out.println("miners exceed bytecodes!!");
 			}
 			
-			rc.setIndicatorString(0, sb.toString());
 		}
 		
 		// TODO: join duplicate miner and beaver mining code
@@ -2693,18 +2705,16 @@ public class RobotPlayer {
 		return false;
 	}
 	
+	// TODO: make more efficient
 	private static boolean launcherTryMove(Direction d) throws GameActionException {
 		int offsetIndex = 0;
 		int[] offsets = {0,1,-1,2,-2};
 		int dirint = directionToInt(d);
-		while (offsetIndex < 5 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
+		while (offsetIndex < 5 && ( !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8]) || inEnemyBuildingRange(rc.getLocation().add(directions[(dirint+offsets[offsetIndex]+8)%8])))) {
 			offsetIndex++;
 		}
 		if (offsetIndex < 5) {
-			Direction dir = directions[(dirint+offsets[offsetIndex]+8)%8];
-			if (!inEnemyBuildingRange(rc.getLocation().add(dir))) {
-				rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
-			}
+			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
 			return true;
 		}
 		return false;
