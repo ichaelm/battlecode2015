@@ -26,7 +26,7 @@ public class RobotPlayer {
 	private static final int BUILD_QUEUE_NUM_ROWS = 50;
 	private static final int BUILD_QUEUE_SIZE = BUILD_QUEUE_ROW_SIZE * BUILD_QUEUE_NUM_ROWS;
 	private static final int MINING_TABLE_CHAN = BUILD_QUEUE_CHAN + BUILD_QUEUE_SIZE;
-	private static final int MINING_TABLE_ROW_SIZE = 5;
+	private static final int MINING_TABLE_ROW_SIZE = 6;
 	private static final int MINING_TABLE_NUM_ROWS = 50;
 	private static final int MINING_TABLE_SIZE = MINING_TABLE_ROW_SIZE * MINING_TABLE_NUM_ROWS;
 	private static final int MINING_TABLE_CURRENT_NUMROWS_CHAN = MINING_TABLE_CHAN + MINING_TABLE_SIZE;
@@ -829,13 +829,15 @@ public class RobotPlayer {
 				// look for map boundaries
 				lookForBounds();
 				
-//				// TODO: drone attack code
-//				if (rc.isWeaponReady()) {
-//					MapLocation attackLoc = droneAttackLocation();
-//					if (attackLoc != null) {
-//						rc.attackLocation(attackLoc);
-//					}
-//				}
+				// TODO: drone attack code
+				/* removed for supply running
+				if (rc.isWeaponReady()) {
+					MapLocation attackLoc = droneAttackLocation();
+					if (attackLoc != null) {
+						rc.attackLocation(attackLoc);
+					}
+				}
+				*/
 				
 				// TODO: drone movement code
 				if (rc.isCoreReady()) {
@@ -2695,6 +2697,18 @@ public class RobotPlayer {
 				}
 			}
 		}
+		if (Math.max(myLoc.y - range, knownBounds[0]) < rc.readBroadcast(NORTH_FARTHEST_CHAN)) {
+			rc.broadcast(NORTH_FARTHEST_CHAN, myLoc.y - range);
+		}
+		if (Math.min(myLoc.y + range, knownBounds[2]) > rc.readBroadcast(SOUTH_FARTHEST_CHAN)) {
+			rc.broadcast(SOUTH_FARTHEST_CHAN, myLoc.y + range);
+		}
+		if (Math.max(myLoc.x - range, knownBounds[3]) < rc.readBroadcast(WEST_FARTHEST_CHAN)) {
+			rc.broadcast(WEST_FARTHEST_CHAN, myLoc.y - range);
+		}
+		if (Math.min(myLoc.x + range, knownBounds[1]) > rc.readBroadcast(EAST_FARTHEST_CHAN)) {
+			rc.broadcast(EAST_FARTHEST_CHAN, myLoc.y + range);
+		}
 	}
 	
 	private static void lookForBounds() throws GameActionException {
@@ -2730,6 +2744,18 @@ public class RobotPlayer {
 					}
 				}
 			}
+		}
+		if (Math.max(myLoc.y - range, knownBounds[0]) < rc.readBroadcast(NORTH_FARTHEST_CHAN)) {
+			rc.broadcast(NORTH_FARTHEST_CHAN, myLoc.y - range);
+		}
+		if (Math.min(myLoc.y + range, knownBounds[2]) > rc.readBroadcast(SOUTH_FARTHEST_CHAN)) {
+			rc.broadcast(SOUTH_FARTHEST_CHAN, myLoc.y + range);
+		}
+		if (Math.max(myLoc.x - range, knownBounds[3]) < rc.readBroadcast(WEST_FARTHEST_CHAN)) {
+			rc.broadcast(WEST_FARTHEST_CHAN, myLoc.y - range);
+		}
+		if (Math.min(myLoc.x + range, knownBounds[1]) > rc.readBroadcast(EAST_FARTHEST_CHAN)) {
+			rc.broadcast(EAST_FARTHEST_CHAN, myLoc.y + range);
 		}
 	}
 	
