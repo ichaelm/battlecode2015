@@ -913,7 +913,7 @@ public class RobotPlayer {
 	private static void runMiner() {
 		int locationChan = 0;
 		try {
-			locationChan = DEFEND_MINER_CHAN + rc.readBroadcast(DEFEND_MINER_CHAN) * 3 + 1;
+			locationChan = DEFEND_MINER_CHAN + (rc.readBroadcast(DEFEND_MINER_CHAN) - 1) * 3 + 1;
 			rc.broadcast(DEFEND_MINER_CHAN, rc.readBroadcast(DEFEND_MINER_CHAN) + 1);
 		} catch (Exception e) {
 			System.out.println("Miner Exception");
@@ -956,6 +956,7 @@ public class RobotPlayer {
 
 				//broadcast location
 				if(moved != null){
+					//System.out.println(rc.readBroadcast(DEFEND_MINER_CHAN) + " and " + DEFEND_MINER_CHAN + " and " + locationChan);
 					rc.broadcast(locationChan, rc.getLocation().x + moved.dx);
 					rc.broadcast(locationChan + 1, rc.getLocation().y + moved.dy);
 				}
@@ -1064,6 +1065,7 @@ public class RobotPlayer {
 				if(buddyMinerChan != 0){
 					//System.out.println(rc.getID());
 					buddyMinerLoc = new MapLocation(rc.readBroadcast(buddyMinerChan), rc.readBroadcast(buddyMinerChan + 1));
+					System.out.println(buddyMinerLoc.x + " and " + buddyMinerLoc.y);
 				}
 				
 				// move according to orders
@@ -1086,12 +1088,12 @@ public class RobotPlayer {
 					} else {
 						RobotInfo buddy = null;
 						if(rc.canSenseLocation(buddyMinerLoc)){
-							System.out.println(buddyMinerChan + " and " + DEFEND_MINER_CHAN);
+							//System.out.println(buddyMinerChan + " and " + DEFEND_MINER_CHAN);
 							buddy = rc.senseRobotAtLocation(buddyMinerLoc);
 						}
 						if(buddy == null || buddy.type != RobotType.MINER){
 							buddyIsAlive = false;
-							System.out.println(rc.getID());
+							//System.out.println(rc.getID());
 						}else{
 							System.out.println(rc.getID());
 							if (Clock.getRoundNum() < 1500) {
