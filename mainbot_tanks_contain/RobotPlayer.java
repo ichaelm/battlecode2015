@@ -2358,6 +2358,10 @@ public class RobotPlayer {
 	}
 	
 	private static void HQAttackSomething() throws GameActionException {
+		int HQRange = 24;
+		if (myTowerLocs.length >= 2) {
+			HQRange = 35;
+		}
 		RobotInfo[] enemies = rc.senseNearbyRobots(52, enemyTeam);
 		int closestDist = 9999;
 		RobotInfo closestRobot = null;
@@ -2370,7 +2374,7 @@ public class RobotPlayer {
 			}
 		}
 		if (closestRobot != null) {
-			if (closestDist <= 35) {
+			if (closestDist <= HQRange) {
 				rc.attackLocation(closestRobot.location);
 			} else if (inMyHQRange(closestRobot.location)) {
 				rc.attackLocation(closestRobot.location.add(closestRobot.location.directionTo(myLoc)));
