@@ -5,6 +5,8 @@ import battlecode.common.*;
 import java.util.*;
 
 public class RobotPlayer {
+	
+	private static final int ROUND_TO_BUILD_LAUNCHERS = 800;
 
 	// AI parameters
 	private static final int RUSH_TURN = 1200;
@@ -392,10 +394,13 @@ public class RobotPlayer {
 				bytecodes[15] = Clock.getBytecodeNum();
 
 				//updating unit counts
-				int numSoldiers = numRobotsByType[SOLDIER.ordinal()] + numInProgressByType[SOLDIER.ordinal()];
+				int numLaunchers = numRobotsByType[LAUNCHER.ordinal()] + numInProgressByType[LAUNCHER.ordinal()];
+				int numDrones = numRobotsByType[DRONE.ordinal()] + numInProgressByType[DRONE.ordinal()];
 				int numTanks = numRobotsByType[TANK.ordinal()] + numInProgressByType[TANK.ordinal()];
-				int numUnits = numSoldiers + numTanks;
-
+				int numUnits = numLaunchers + numTanks;
+				int numHelipad = numRobotsByType[HELIPAD.ordinal()] + numInProgressByType[HELIPAD.ordinal()];
+				int numAeroLab = numRobotsByType[AEROSPACELAB.ordinal()] + numInProgressByType[AEROSPACELAB.ordinal()];
+				
 				// what units and what buildings to build in what order
 				/* commented out because drones don't work
 				if (numUnits > 15) {
@@ -413,15 +418,7 @@ public class RobotPlayer {
 					row++;
 				}
 
-				if (numUnits < 0) {
-					buildQueue[row][0] = SOLDIER.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
-
-					buildQueue[row][0] = BARRACKS.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
-				} else {
+				if (roundNum < ROUND_TO_BUILD_LAUNCHERS) {
 					if (numRobotsByType[TANKFACTORY.ordinal()] + numInProgressByType[TANKFACTORY.ordinal()] < 1) {
 						buildQueue[row][0] = TANKFACTORY.ordinal();
 						buildQueue[row][1] = 1;
@@ -435,6 +432,16 @@ public class RobotPlayer {
 					buildQueue[row][0] = TANKFACTORY.ordinal();
 					buildQueue[row][1] = 1;
 					row++;
+				} else {
+					if (numHelipad < 1) {
+						addToBuildQueue(HELIPAD);
+					}
+					if ( numHelipad > 0 && numAeroLab < 1) {
+						addToBuildQueue(AEROSPACELAB);
+					}
+					addToBuildQueue(LAUNCHER);
+					addToBuildQueue(AEROSPACELAB);
+					addToBuildQueue(TANK);
 				}
 
 
@@ -451,8 +458,6 @@ public class RobotPlayer {
 				}
 
 				bytecodes[19] = Clock.getBytecodeNum();
-
-				rc.setIndicatorString(0, "NumSoldiers: " + numSoldiers);
 
 				//				// check if good time to swarm myself
 				//				if (enemyTowerLocs.length < myTowerLocs.length) {
@@ -526,6 +531,12 @@ public class RobotPlayer {
 				e.printStackTrace();
 			}
 		}
+	}
+	
+	private static void addToBuildQueue(RobotType type) {
+		buildQueue[row][0] = type.ordinal();
+		buildQueue[row][1] = 1;
+		row++;
 	}
 
 	private static void addToBuildQueue(RobotType type, double desired, int exist) {
@@ -945,13 +956,10 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-
+				
 				// update locations
 				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
-
+				
 				// attack
 				if (rc.getMissileCount() > 0) {
 					MapLocation target = nearestSensedEnemy();
@@ -959,11 +967,11 @@ public class RobotPlayer {
 						tryLaunch(rc.getLocation().directionTo(target));
 					}
 				}
-
+				
 				// TODO: launcher movement code
 				if (rc.isCoreReady()) {
 					if (Clock.getRoundNum() < RUSH_TURN) {
-						//						launcherRally();
+						harass();
 					} else {
 						MapLocation enemyLoc = nearestSensedEnemy();
 						if (enemyLoc == null) {
@@ -973,10 +981,10 @@ public class RobotPlayer {
 						}
 					}
 				}
-
+				
 				// transfer supply
 				transferSupply();
-
+				
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -1064,6 +1072,7 @@ public class RobotPlayer {
 			while (true) {
 				// missile move and explode code
 				if (rc.isCoreReady()) {
+					MapLocation myLoc = rc.getLocation();
 					MapLocation target = fastNearestEnemy();
 					if (target == null) {
 						quickTryMove(myLoc.directionTo(enemyHQLoc));
