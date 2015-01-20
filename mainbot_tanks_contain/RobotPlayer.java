@@ -8,16 +8,17 @@ public class RobotPlayer {
 
 	// AI parameters
 	private static final int RUSH_TURN = 1200;
-	
+
 	// Game parameters
 	private static final int MAX_MAP_WIDTH = 120;
 	private static final int MAX_MAP_HEIGHT = 120;
-	
+
 	// Broadcast channels
 	private static final int NUM_CHANNELS = 65536;
 	private static final int CENSUS_CHAN = 0;
 	private static final int CENSUS_SIZE = 21;
-	private static final int PROGRESS_TABLE_CHAN = CENSUS_CHAN + CENSUS_SIZE;
+	private static final int HQ_ROUNDNUM_CHAN = CENSUS_CHAN + CENSUS_SIZE;
+	private static final int PROGRESS_TABLE_CHAN = HQ_ROUNDNUM_CHAN + 1;
 	private static final int PROGRESS_TABLE_SIZE = 21;
 	private static final int COMPLETED_TABLE_CHAN = PROGRESS_TABLE_CHAN + PROGRESS_TABLE_SIZE;
 	private static final int COMPLETED_TABLE_SIZE = 21;
@@ -57,14 +58,14 @@ public class RobotPlayer {
 	private static final int UNIT_TOWER_DEFENSE_CHAN = UNIT_ORDER_CHAN + 1;
 	private static final int UNIT_NEEDS_SUPPLY_X_CHAN = UNIT_TOWER_DEFENSE_CHAN + 1;
 	private static final int UNIT_NEEDS_SUPPLY_Y_CHAN = UNIT_NEEDS_SUPPLY_X_CHAN + 1;
-	
+
 	// Broadcast signaling constants
 	private static final int NO_BOUND = 99999;
 	private static final int UNIT_ORDER_ATTACK_TOWERS = 1;
 	private static final int UNIT_ORDER_DEFEND = 2;
 	private static final int UNIT_ORDER_RALLY = 3;
 	private static final int UNIT_ORDER_ATTACK_VULNERABLE_TOWER = 4;
-	
+
 	// cached enums for brevity
 	private static final RobotType HQ = RobotType.HQ;
 	private static final RobotType TOWER = RobotType.TOWER;
@@ -87,7 +88,7 @@ public class RobotPlayer {
 	private static final RobotType COMMANDER = RobotType.COMMANDER;
 	private static final RobotType LAUNCHER = RobotType.LAUNCHER;
 	private static final RobotType MISSILE = RobotType.MISSILE;
-	
+
 	// Cached game information
 	private static RobotController rc;
 	private static Team myTeam;
@@ -115,13 +116,13 @@ public class RobotPlayer {
 	private static int[] numRobotsByType;
 	private static int[] numInProgressByType;
 	private static int[] numCompletedByType;
-	
+
 	// should be final, but can't because set in run()
 	private static Direction[] directions;
 	private static RobotType[] robotTypes;
 	private static int[] offsets;
 	private static double[] oreConsumptionByType;
-	
+
 	public static void run(RobotController myrc) {
 		// Initialize cached game information
 		rc = myrc;
@@ -180,21 +181,21 @@ public class RobotPlayer {
 		default: break;
 		}
 	}
-	
+
 	private static void runHQ() {
-		
+
 		// information stored across rounds
 		double[] oreMinedByTurn = new double[10];
 		double[] oreMinedByTurnByMiners = new double[10];
 		double[] oreMinedByTurnByBeavers = new double[10];
 		int[] oldNumRobotsByType = new int[21];
 		int selfSwarmTimer = 0;
-		
+
 		// turn 1 code
 		try {
 			// initialize bounds channels
 			initBounds();
-			
+
 			// TODO: better mining strategy picking
 			double orePerSquare = rc.senseOre(myHQLoc); // approximate
 			int turnToMaximize = 300 + 2*rushDist + 100*rc.senseTowerLocations().length;
@@ -219,43 +220,43 @@ public class RobotPlayer {
 			try {
 				int[] bytecodes = new int[50];
 				bytecodes[0] = Clock.getBytecodeNum();
-				
+
 				// participate in census
 				markCensus();
-				
+
 				bytecodes[1] = Clock.getBytecodeNum();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				bytecodes[2] = Clock.getBytecodeNum();
-				
+
 				// read unit census, progress table, and completed table
 				numRobotsByType = readCensus();
 				numInProgressByType = readProgressTable();
 				numCompletedByType = readCompletedTable();
-				
+
 				bytecodes[3] = Clock.getBytecodeNum();
-				
+
 				//resetting the defense channel
 				rc.broadcast(UNIT_TOWER_DEFENSE_CHAN, 0);
-				
+
 				/*
 				rc.setIndicatorString(0, numRobotsByType[HQ.ordinal()] + " " + numRobotsByType[BEAVER.ordinal()] + " " + numRobotsByType[MINERFACTORY.ordinal()] + " " + numRobotsByType[MINER.ordinal()] + " " + numRobotsByType[BARRACKS.ordinal()] + " " + numRobotsByType[SOLDIER.ordinal()]);
 				rc.setIndicatorString(1, numInProgressByType[HQ.ordinal()] + " " + numInProgressByType[BEAVER.ordinal()] + " " + numInProgressByType[MINERFACTORY.ordinal()] + " " + numInProgressByType[MINER.ordinal()] + " " + numInProgressByType[BARRACKS.ordinal()] + " " + numInProgressByType[SOLDIER.ordinal()]);
 				rc.setIndicatorString(2, numCompletedByType[HQ.ordinal()] + " " + numCompletedByType[BEAVER.ordinal()] + " " + numCompletedByType[MINERFACTORY.ordinal()] + " " + numCompletedByType[MINER.ordinal()] + " " + numCompletedByType[BARRACKS.ordinal()] + " " + numCompletedByType[SOLDIER.ordinal()]);
-				*/
-				
+				 */
+
 				bytecodes[4] = Clock.getBytecodeNum();
-				
+
 				// sensing all enemy robots
 				enemyRobots = rc.senseNearbyRobots(999999, enemyTeam);
-				
+
 				bytecodes[5] = Clock.getBytecodeNum();
-				
+
 				// calculate destroyed robots
 				int[] numDestroyedByType = new int[21];
 				for (int i = 21; --i >= 0;) {
@@ -264,29 +265,29 @@ public class RobotPlayer {
 					numDestroyedByType[i] = expectedDiff - diff;
 					// error checking
 					if (diff > expectedDiff) {
-//						System.out.println("error with counting destroyed robots");
+						//						System.out.println("error with counting destroyed robots");
 					}
 				}
-				
+
 				bytecodes[6] = Clock.getBytecodeNum();
-				
+
 				// save round number to ensure I don't go over bytecode limit
 				int roundNum = Clock.getRoundNum();
-				
+
 				bytecodes[7] = Clock.getBytecodeNum();
-				
+
 				// read ore counters
 				double oreMinedLastTurnByMiners = readMinerOreCounter();
 				double oreMinedLastTurnByBeavers = readBeaverOreCounter();
 				double oreMinedLastTurn = oreMinedLastTurnByMiners + oreMinedLastTurnByBeavers;
-				
+
 				bytecodes[8] = Clock.getBytecodeNum();
-				
+
 				// read builder beaver counter
 				int numBuilderBeavers = readBuilderBeaverCounter();
-				
+
 				bytecodes[9] = Clock.getBytecodeNum();
-				
+
 				// calculate average mining rate and ore income rate for past 10 turns
 				oreMinedByTurn[roundNum%10] = oreMinedLastTurn;
 				double miningRate = 0;
@@ -311,9 +312,9 @@ public class RobotPlayer {
 				}
 				beaverMiningRate = beaverMiningRate / 10;
 				double oreMinedPerBeaver = beaverMiningRate / (numRobotsByType[BEAVER.ordinal()] - numBuilderBeavers); // ignores the fact that builder beavers can mine
-				
+
 				bytecodes[10] = Clock.getBytecodeNum();
-				
+
 				// calculate supply upkeep
 				int totalSupplyUpkeep = 0;
 				for (int i = 21; --i >= 0;) {
@@ -325,14 +326,14 @@ public class RobotPlayer {
 					}
 					totalSupplyUpkeep += numRobots * supplyUpkeepPerRobot;
 				}
-				
+
 				bytecodes[11] = Clock.getBytecodeNum();
-				
+
 				// calculate supply generation
 				int totalSupplyGeneration = (int)(100*(2+Math.pow(numRobotsByType[SUPPLYDEPOT.ordinal()],0.6)));
-				
+
 				bytecodes[12] = Clock.getBytecodeNum();
-				
+
 				// calculate build queue
 				buildQueue = new int[BUILD_QUEUE_NUM_ROWS][2];
 				row = 0;
@@ -342,9 +343,9 @@ public class RobotPlayer {
 					row++;
 					requestBuilderBeaver();
 				}
-				
+
 				bytecodes[13] = Clock.getBytecodeNum();
-				
+
 				if (mineWithBeavers) {
 					if (numRobotsByType[BEAVER.ordinal()] - numBuilderBeavers < 2) {
 						buildQueue[row][0] = BEAVER.ordinal();
@@ -365,36 +366,36 @@ public class RobotPlayer {
 						row++;
 					} else {
 						int breakEvenRounds = (int)Math.ceil(MINER.oreCost / oreMinedPerMiner) + MINER.buildTurns;
-						if (roundNum + breakEvenRounds < 2000 - rushDist) {
+						if (numRobotsByType[MINER.ordinal()] < 30) {
 							buildQueue[row][0] = MINER.ordinal();
 							buildQueue[row][1] = 1;
 							row++;
 						}
 					}
 				}
-				
+
 				if (numBuilderBeavers < 2) { // HACK, CALCULATE REAL NUMBER
 					buildQueue[row][0] = BEAVER.ordinal();
 					buildQueue[row][1] = 1;
 					row++;
 					requestBuilderBeaver();
 				}
-				
+
 				bytecodes[14] = Clock.getBytecodeNum();
-				
+
 				if (totalSupplyUpkeep > totalSupplyGeneration) {
 					buildQueue[row][0] = SUPPLYDEPOT.ordinal();
 					buildQueue[row][1] = 1;
 					row++;
 				}
-				
+
 				bytecodes[15] = Clock.getBytecodeNum();
-				
+
 				//updating unit counts
 				int numSoldiers = numRobotsByType[SOLDIER.ordinal()] + numInProgressByType[SOLDIER.ordinal()];
 				int numTanks = numRobotsByType[TANK.ordinal()] + numInProgressByType[TANK.ordinal()];
 				int numUnits = numSoldiers + numTanks;
-				
+
 				// what units and what buildings to build in what order
 				/* commented out because drones don't work
 				if (numUnits > 15) {
@@ -405,13 +406,13 @@ public class RobotPlayer {
 						addToBuildQueue(HELIPAD, 1, 0);
 					}
 				}
-				*/
+				 */
 				if (numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()] < 1) {
 					buildQueue[row][0] = BARRACKS.ordinal();
 					buildQueue[row][1] = 1;
 					row++;
 				}
-				
+
 				if (numUnits < 0) {
 					buildQueue[row][0] = SOLDIER.ordinal();
 					buildQueue[row][1] = 1;
@@ -426,98 +427,98 @@ public class RobotPlayer {
 						buildQueue[row][1] = 1;
 						row++;
 					}
-					
+
 					buildQueue[row][0] = TANK.ordinal();
 					buildQueue[row][1] = 1;
 					row++;
-					
+
 					buildQueue[row][0] = TANKFACTORY.ordinal();
 					buildQueue[row][1] = 1;
 					row++;
 				}
-					
-				
+
+
 				bytecodes[16] = Clock.getBytecodeNum();
 				bytecodes[17] = Clock.getBytecodeNum();
-				
+
 				writeBuildQueue(buildQueue);
-				
+
 				bytecodes[18] = Clock.getBytecodeNum();
-				
+
 				// telling units what to do
 				if (selfSwarmTimer > 0) {
 					selfSwarmTimer--;
 				}
-				
+
 				bytecodes[19] = Clock.getBytecodeNum();
-				
+
 				rc.setIndicatorString(0, "NumSoldiers: " + numSoldiers);
-				
-//				// check if good time to swarm myself
-//				if (enemyTowerLocs.length < myTowerLocs.length) {
-//					if (areEnemyTowersVulnerable() && numSoldiers >= 50) {
-//						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_ATTACK_VULNERABLE_TOWER);
-//					} else {
-//						selfSwarmTimer = 75;
-//						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_DEFEND);
-//					}
-//					// check if good time to stop swarming myself
-//				} else if (selfSwarmTimer <= 0) {
-//					// check if good time to attack
-//					if (numSoldiers >= 50) {
-//						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_ATTACK_TOWERS);
-//					} else { //check if a good time to retreat
-//						if (numSoldiers <= 30) {
-//							rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_RALLY);
-//						}
-//					}
-//				}
-				
+
+				//				// check if good time to swarm myself
+				//				if (enemyTowerLocs.length < myTowerLocs.length) {
+				//					if (areEnemyTowersVulnerable() && numSoldiers >= 50) {
+				//						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_ATTACK_VULNERABLE_TOWER);
+				//					} else {
+				//						selfSwarmTimer = 75;
+				//						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_DEFEND);
+				//					}
+				//					// check if good time to stop swarming myself
+				//				} else if (selfSwarmTimer <= 0) {
+				//					// check if good time to attack
+				//					if (numSoldiers >= 50) {
+				//						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_ATTACK_TOWERS);
+				//					} else { //check if a good time to retreat
+				//						if (numSoldiers <= 30) {
+				//							rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_RALLY);
+				//						}
+				//					}
+				//				}
+
 				bytecodes[20] = Clock.getBytecodeNum();
-				
+
 				// attack
 				if (rc.isWeaponReady()) {
 					HQAttackSomething();
 				}
-				
+
 				bytecodes[21] = Clock.getBytecodeNum();
-				
+
 				// spawn orders
 				if (rc.isCoreReady()) {
 					buildingFollowOrders();
 				}
-				
+
 				bytecodes[22] = Clock.getBytecodeNum();
-				
+
 				// transfer supply
 				transferSupply();
-				
+
 				bytecodes[23] = Clock.getBytecodeNum();
-				
+
 				// store old values
 				oldNumRobotsByType = numRobotsByType;
-				
+
 				bytecodes[24] = Clock.getBytecodeNum();
-				
+
 				bytecodes[25] = Clock.getBytecodeNum();
-				
+
 				// update mining table with results from monte carlo
 				updateMiningTable();
-				
+
 				bytecodes[26] = Clock.getBytecodeNum();
-				
+
 				getAllMiningTargets();
-				
+
 				/*
 				StringBuilder sb = new StringBuilder();
 				for (int i = 1; i < 27; i++) {
 					sb.append(i + ": ");
 					sb.append((bytecodes[i] - bytecodes[i-1]) + " ");
 				}
-				
+
 				rc.setIndicatorString(0, sb.toString());
-				*/
-				
+				 */
+
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -526,7 +527,7 @@ public class RobotPlayer {
 			}
 		}
 	}
-	
+
 	private static void addToBuildQueue(RobotType type, double desired, int exist) {
 		if (exist < desired) {
 			buildQueue[row][0] = type.ordinal();
@@ -534,7 +535,7 @@ public class RobotPlayer {
 			row++;
 		}
 	}
-	
+
 	//returns true if there exists a tower that has less than 3 enemies around it
 	private static boolean areEnemyTowersVulnerable() {
 		for (MapLocation i: enemyTowerLocs) {
@@ -552,7 +553,7 @@ public class RobotPlayer {
 		}
 		return false;
 	}
-	
+
 	private static MapLocation getEnemyVulnerableTower() {
 		for (MapLocation i: enemyTowerLocs) {
 			if (rc.senseNearbyRobots(i, 20, enemyTeam).length < 3) {
@@ -567,21 +568,21 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				// attack
 				if (rc.isWeaponReady()) {
 					attackSomething();
 				}
-				
+
 				// transfer supply
 				transferSupply();
-				
+
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -596,21 +597,21 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				// follow spawn orders
 				if (rc.isCoreReady()) {
 					buildingFollowOrders();
 				}
-				
+
 				// transfer supply
 				transferSupply();
-				
+
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -625,21 +626,21 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				// follow spawn orders
 				if (rc.isCoreReady()) {
 					buildingFollowOrders();
 				}
-				
+
 				// transfer supply
 				transferSupply();
-				
+
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -654,13 +655,13 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				// TODO: basher movement and combat code
 				if (rc.isCoreReady()) {
 					if (Clock.getRoundNum() < RUSH_TURN) {
@@ -674,10 +675,10 @@ public class RobotPlayer {
 						}
 					}
 				}
-				
+
 				// transfer supply
 				transferSupply();
-				
+
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -686,7 +687,7 @@ public class RobotPlayer {
 			}
 		}
 	}
-	
+
 	// TODO: escape crowding
 	// TODO: make builder beaver build in good locations: checkerboard, near hq
 	private static void runBeaver() {
@@ -703,18 +704,18 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				// mark builder beaver
 				if (builderBeaver) {
 					markBuilderBeaverCounter();
 				}
-				
+
 				// progress
 				if (rc.isBuildingSomething()) {
 					markProgressTable(thingIJustBuilt);
@@ -722,12 +723,12 @@ public class RobotPlayer {
 					markCompletedTable(thingIJustBuilt);
 					thingIJustBuilt = null;
 				}
-				
+
 				// attack
 				if (rc.isWeaponReady()) {
 					attackSomething();
 				}
-				
+
 				if (rc.isCoreReady()) {
 					if (Clock.getRoundNum() > 1700) {
 						if (enemyTowerLocs.length == 0) {
@@ -756,13 +757,13 @@ public class RobotPlayer {
 						}
 					}
 				}
-				
+
 				// transfer supply
 				transferSupply();
-				
+
 				// run monte carlo ore finding system, storing results
 				runMonteCarloOreFinder(999); // limited by bytecodes
-				
+
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -777,23 +778,23 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				// attack
 				if (rc.isWeaponReady()) {
 					attackSomething();
 				}
-				
+
 				// TODO: commander movement code
-				
+
 				// transfer supply
 				transferSupply();
-				
+
 				// yield
 				rc.yield();
 			} catch (Exception e) {
@@ -808,16 +809,16 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				// transfer supply
 				transferSupply();
-				
+
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -833,13 +834,13 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				// TODO: drone attack code
 				/* removed for supply running
 				if (rc.isWeaponReady()) {
@@ -848,8 +849,8 @@ public class RobotPlayer {
 						rc.attackLocation(attackLoc);
 					}
 				}
-				*/
-				
+				 */
+
 				// TODO: drone movement code
 				if (rc.isCoreReady()) {
 					// find units that need supply
@@ -857,7 +858,7 @@ public class RobotPlayer {
 						allyUnitLoc = new MapLocation(rc.readBroadcast(UNIT_NEEDS_SUPPLY_X_CHAN), rc.readBroadcast(UNIT_NEEDS_SUPPLY_Y_CHAN));
 						rc.setIndicatorString(0, allyUnitLoc.toString());
 					}
-					
+
 					// If I have supply, go to said unit
 					if (allyUnitLoc != null && rc.getSupplyLevel() > 1000) {
 						if (myLoc.distanceSquaredTo(allyUnitLoc) >= GameConstants.SUPPLY_TRANSFER_RADIUS_SQUARED) {
@@ -874,9 +875,9 @@ public class RobotPlayer {
 					} else { //if I don't have supply, go to HQ and wait for enough supply
 						launcherTryMove(myLoc.directionTo(myHQLoc));
 					}
-						
+
 				}
-				
+
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -890,16 +891,16 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				// transfer supply
 				transferSupply();
-				
+
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -914,13 +915,13 @@ public class RobotPlayer {
 			try {
 				// participare in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				// follow spawn orders
 				if (rc.isCoreReady()) {
 					buildingFollowOrders();
@@ -928,7 +929,7 @@ public class RobotPlayer {
 
 				// transfer supply
 				transferSupply();
-				
+
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -937,20 +938,20 @@ public class RobotPlayer {
 			}
 		}
 	}
-	
+
 	// TODO: make launcher able to shoot at enemies out of sensor range using memory of recent enemy positions, so they can't run away
 	private static void runLauncher() {
 		while (true) {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				// attack
 				if (rc.getMissileCount() > 0) {
 					MapLocation target = nearestSensedEnemy();
@@ -958,11 +959,11 @@ public class RobotPlayer {
 						tryLaunch(rc.getLocation().directionTo(target));
 					}
 				}
-				
+
 				// TODO: launcher movement code
 				if (rc.isCoreReady()) {
 					if (Clock.getRoundNum() < RUSH_TURN) {
-//						launcherRally();
+						//						launcherRally();
 					} else {
 						MapLocation enemyLoc = nearestSensedEnemy();
 						if (enemyLoc == null) {
@@ -972,10 +973,10 @@ public class RobotPlayer {
 						}
 					}
 				}
-				
+
 				// transfer supply
 				transferSupply();
-				
+
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -990,18 +991,18 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				// attack
 				if (rc.isWeaponReady()) {
 					attackSomething();
 				}
-				
+
 				// mine
 				// TODO: miner code
 				// TODO: make miners avoid enemy towers
@@ -1016,10 +1017,10 @@ public class RobotPlayer {
 						mine();
 					}
 				}
-				
+
 				// transfer supply
 				transferSupply();
-				
+
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -1034,21 +1035,21 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				// follow spawn orders
 				if (rc.isCoreReady()) {
 					buildingFollowOrders();
 				}
-				
+
 				// transfer supply
 				transferSupply();
-				
+
 				// end turn
 				rc.yield();
 			} catch (Exception e) {
@@ -1090,18 +1091,18 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				// attack
 				if (rc.isWeaponReady()) {
 					focusAttackEnemies();
 				}
-				
+
 				// move according to orders
 				if (rc.isCoreReady()) {
 					if (Clock.getRoundNum() < 1500) {
@@ -1119,10 +1120,10 @@ public class RobotPlayer {
 						}
 					}
 				}
-				
+
 				// transfer supply
 				transferSupply();
-				
+
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -1137,16 +1138,16 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				// transfer supply
 				transferSupply();
-				
+
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -1162,23 +1163,23 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				//communincate supply need
 				if (rc.getSupplyLevel() < 500) {
 					broadcastNeedSupplyLocation();
 				}
-				
+
 				// attack
 				if (rc.isWeaponReady()) {
 					focusAttackEnemies();
 				}
-				
+
 				// move according to orders
 				if (rc.isCoreReady()) {
 					if (Clock.getRoundNum() < 1500) {
@@ -1204,7 +1205,7 @@ public class RobotPlayer {
 					// transfer supply
 					transferSupply();
 				}
-				
+
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -1213,27 +1214,27 @@ public class RobotPlayer {
 			}
 		}
 	}
-	
+
 	private static void runTankFactory() {
 		while (true) {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				// follow spawn orders
 				if (rc.isCoreReady()) {
 					buildingFollowOrders();
 				}
-				
+
 				// transfer supply
 				transferSupply();
-				
+
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -1248,21 +1249,21 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				// follow spawn orders
 				if (rc.isCoreReady()) {
 					buildingFollowOrders();
 				}
-				
+
 				// transfer supply
 				transferSupply();
-				
+
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -1277,21 +1278,21 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
-				
+
 				// look for map boundaries
 				lookForBounds();
-				
+
 				// follow spawn orders
 				if (rc.isCoreReady()) {
 					buildingFollowOrders();
 				}
-				
+
 				// transfer supply
 				transferSupply();
-				
+
 				// end round
 				rc.yield();
 			} catch (Exception e) {
@@ -1300,12 +1301,12 @@ public class RobotPlayer {
 			}
 		}
 	}
-	
+
 	private static void broadcastNeedSupplyLocation() throws GameActionException {
 		rc.broadcast(UNIT_NEEDS_SUPPLY_X_CHAN, myLoc.x);
 		rc.broadcast(UNIT_NEEDS_SUPPLY_Y_CHAN, myLoc.y);
 	}
-	
+
 	private static int numEnemiesSwarmingBase() {
 		int sum = 0;
 		for (RobotInfo ri : enemyRobots) {
@@ -1322,16 +1323,16 @@ public class RobotPlayer {
 		}
 		return sum;
 	}
-	
+
 	private static MapLocation getDefenseTower() throws GameActionException {
 		int currentTower = rc.readBroadcast(UNIT_TOWER_DEFENSE_CHAN);
 		rc.broadcast(UNIT_TOWER_DEFENSE_CHAN, currentTower + 1);
-		
+
 		rc.setIndicatorString(0, "" + currentTower%myTowerLocs.length);
-		
+
 		return myTowerLocs[currentTower%myTowerLocs.length];
 	}
-	
+
 	private static MapLocation closestLocation(MapLocation center, MapLocation[] locations) {
 		MapLocation closestTower = null;
 		int closestDistance = 100000;
@@ -1357,35 +1358,35 @@ public class RobotPlayer {
 		rc.broadcast(SOUTH_FARTHEST_CHAN, NO_BOUND);
 		rc.broadcast(WEST_FARTHEST_CHAN, NO_BOUND);
 	}
-	
+
 	private static int northBound() throws GameActionException {
 		return rc.readBroadcast(NORTH_BOUND_CHAN);
 	}
-	
+
 	private static int eastBound() throws GameActionException {
 		return rc.readBroadcast(EAST_BOUND_CHAN);
 	}
-	
+
 	private static int southBound() throws GameActionException {
 		return rc.readBroadcast(SOUTH_BOUND_CHAN);
 	}
-	
+
 	private static int westBound() throws GameActionException {
 		return rc.readBroadcast(WEST_BOUND_CHAN);
 	}
-	
+
 	private static int northFarthest() throws GameActionException {
 		return rc.readBroadcast(NORTH_FARTHEST_CHAN);
 	}
-	
+
 	private static int eastFarthest() throws GameActionException {
 		return rc.readBroadcast(EAST_FARTHEST_CHAN);
 	}
-	
+
 	private static int southFarthest() throws GameActionException {
 		return rc.readBroadcast(SOUTH_FARTHEST_CHAN);
 	}
-	
+
 	private static int westFarthest() throws GameActionException {
 		return rc.readBroadcast(WEST_FARTHEST_CHAN);
 	}
@@ -1400,12 +1401,15 @@ public class RobotPlayer {
 				rc.broadcast(channel, 0);
 			}
 		}
+		rc.broadcast(HQ_ROUNDNUM_CHAN, Clock.getRoundNum());
 		return census;
 	}
 
 	private static void markCensus() throws GameActionException {
-		int typeNum = myType.ordinal();
-		rc.broadcast(CENSUS_CHAN + typeNum, rc.readBroadcast(CENSUS_CHAN + typeNum) + 1);
+		if (rc.readBroadcast(HQ_ROUNDNUM_CHAN) == Clock.getRoundNum()) {
+			int typeNum = myType.ordinal();
+			rc.broadcast(CENSUS_CHAN + typeNum, rc.readBroadcast(CENSUS_CHAN + typeNum) + 1);
+		}
 	}
 
 	private static int[] readProgressTable() throws GameActionException {
@@ -1427,8 +1431,10 @@ public class RobotPlayer {
 	}
 
 	private static void markProgressTable(RobotType type) throws GameActionException {
-		int typeNum = type.ordinal();
-		rc.broadcast(PROGRESS_TABLE_CHAN + typeNum, rc.readBroadcast(PROGRESS_TABLE_CHAN + typeNum) + 1);
+		if (rc.readBroadcast(HQ_ROUNDNUM_CHAN) == Clock.getRoundNum()) {
+			int typeNum = type.ordinal();
+			rc.broadcast(PROGRESS_TABLE_CHAN + typeNum, rc.readBroadcast(PROGRESS_TABLE_CHAN + typeNum) + 1);
+		}
 	}
 
 	private static int[] readCompletedTable() throws GameActionException {
@@ -1450,8 +1456,10 @@ public class RobotPlayer {
 	}
 
 	private static void markCompletedTable(RobotType type) throws GameActionException {
-		int typeNum = type.ordinal();
-		rc.broadcast(COMPLETED_TABLE_CHAN + typeNum, rc.readBroadcast(COMPLETED_TABLE_CHAN + typeNum) + 1);
+		if (rc.readBroadcast(HQ_ROUNDNUM_CHAN) == Clock.getRoundNum()) {
+			int typeNum = type.ordinal();
+			rc.broadcast(COMPLETED_TABLE_CHAN + typeNum, rc.readBroadcast(COMPLETED_TABLE_CHAN + typeNum) + 1);
+		}
 	}
 
 	private static double readMinerOreCounter() throws GameActionException {
@@ -1467,13 +1475,17 @@ public class RobotPlayer {
 	}
 
 	private static void markMinerOreCounter(double ore) throws GameActionException {
-		float oldOre = Float.intBitsToFloat(rc.readBroadcast(MINER_ORE_COUNTER_CHAN));
-		rc.broadcast(MINER_ORE_COUNTER_CHAN, Float.floatToIntBits(oldOre + (float)ore));
+		if (rc.readBroadcast(HQ_ROUNDNUM_CHAN) == Clock.getRoundNum()) {
+			float oldOre = Float.intBitsToFloat(rc.readBroadcast(MINER_ORE_COUNTER_CHAN));
+			rc.broadcast(MINER_ORE_COUNTER_CHAN, Float.floatToIntBits(oldOre + (float)ore));
+		}
 	}
 
 	private static void markBeaverOreCounter(double ore) throws GameActionException {
-		float oldOre = Float.intBitsToFloat(rc.readBroadcast(BEAVER_ORE_COUNTER_CHAN));
-		rc.broadcast(BEAVER_ORE_COUNTER_CHAN, Float.floatToIntBits(oldOre + (float)ore));
+		if (rc.readBroadcast(HQ_ROUNDNUM_CHAN) == Clock.getRoundNum()) {
+			float oldOre = Float.intBitsToFloat(rc.readBroadcast(BEAVER_ORE_COUNTER_CHAN));
+			rc.broadcast(BEAVER_ORE_COUNTER_CHAN, Float.floatToIntBits(oldOre + (float)ore));
+		}
 	}
 
 	private static int readBuilderBeaverCounter() throws GameActionException {
@@ -1483,7 +1495,9 @@ public class RobotPlayer {
 	}
 
 	private static void markBuilderBeaverCounter() throws GameActionException {
-		rc.broadcast(BUILDER_BEAVER_COUNTER_CHAN, rc.readBroadcast(BUILDER_BEAVER_COUNTER_CHAN) + 1);
+		if (rc.readBroadcast(HQ_ROUNDNUM_CHAN) == Clock.getRoundNum()) {
+			rc.broadcast(BUILDER_BEAVER_COUNTER_CHAN, rc.readBroadcast(BUILDER_BEAVER_COUNTER_CHAN) + 1);
+		}
 	}
 
 	private static void requestBuilderBeaver() throws GameActionException {
@@ -1527,8 +1541,8 @@ public class RobotPlayer {
 		}
 		return -1; // special value to indicate not found
 	}
-	*/
-	
+	 */
+
 	private static RobotType getMyBuildOrder() throws GameActionException {
 		RobotType myType = rc.getType();
 		int teamOre = (int)rc.getTeamOre();
@@ -1541,8 +1555,8 @@ public class RobotPlayer {
 			}
 			RobotType foundType = robotTypes[typeNum];
 			if (builtBy(foundType) == myType
-				&& number > readCompletedTable(foundType) + readProgressTable(foundType)
-				&& cumOre + foundType.oreCost <= teamOre)
+					&& number > readCompletedTable(foundType) + readProgressTable(foundType)
+					&& cumOre + foundType.oreCost <= teamOre)
 			{
 				return foundType;
 			} else {
@@ -1594,7 +1608,7 @@ public class RobotPlayer {
 			}
 		}
 	}
-	
+
 	private static void markBadMiningTable(MapLocation myLoc) throws GameActionException {
 		int numLocs = rc.readBroadcast(MINING_TABLE_CURRENT_NUMROWS_CHAN);
 		int x;
@@ -1610,7 +1624,7 @@ public class RobotPlayer {
 			}
 		}
 	}
-	
+
 	private static MapLocation[] getAllMiningTargets() throws GameActionException {
 		int numLocs = rc.readBroadcast(MINING_TABLE_CURRENT_NUMROWS_CHAN);
 		MapLocation[] locs = new MapLocation[numLocs];
@@ -1626,7 +1640,7 @@ public class RobotPlayer {
 		}
 		return locs;
 	}
-	
+
 	private static MapLocation[] getAllMiningTargetsBetterThan(double ore) throws GameActionException {
 		// assumes entire table has same ore
 		MapLocation[] locs;
@@ -1647,7 +1661,7 @@ public class RobotPlayer {
 		}
 		return locs;
 	}
-	
+
 	private static MapLocation getClosestMiningTargetBetterThan(MapLocation myLoc, double ore) throws GameActionException {
 		// assumes entire table has same ore
 		MapLocation bestLoc = null;
@@ -1673,7 +1687,7 @@ public class RobotPlayer {
 		}
 		return bestLoc;
 	}
-	
+
 	private static double getBestOre() throws GameActionException {
 		int numRows = rc.readBroadcast(MINING_TABLE_CURRENT_NUMROWS_CHAN);
 		for (int i = 0; i < numRows; i++) {
@@ -1699,9 +1713,9 @@ public class RobotPlayer {
 		}
 		return null;
 	}
-	
+
 	private static void updateMiningTable() throws GameActionException {
-		
+
 		int indexInMonteCarlo = 0;
 		int monteCarloNumResults = rc.readBroadcast(MONTE_CARLO_NUM_RESULTS_CHAN);
 		int numMiningTableRows = rc.readBroadcast(MINING_TABLE_CURRENT_NUMROWS_CHAN);
@@ -1743,7 +1757,7 @@ public class RobotPlayer {
 		rc.broadcast(MINING_TABLE_CURRENT_NUMROWS_CHAN, lastMiningTableRowWritten + 1);
 		rc.broadcast(MONTE_CARLO_NUM_RESULTS_CHAN, 0);
 	}
-	
+
 	private static void runMonteCarloOreFinder(int times) throws GameActionException {
 		int minx = myHQLoc.x-119;
 		int maxx = myHQLoc.x+119;
@@ -1788,7 +1802,7 @@ public class RobotPlayer {
 		rc.broadcast(MONTE_CARLO_NUM_RESULTS_CHAN, row);
 		rc.broadcast(MONTE_CARLO_MAX_FOUND_CHAN, Float.floatToIntBits((float)maxFound));
 	}
-	
+
 	private static MapLocation[] readMonteCarloResults() throws GameActionException {
 		int numLocs = rc.readBroadcast(MONTE_CARLO_NUM_RESULTS_CHAN);
 		MapLocation[] results = new MapLocation[numLocs];
@@ -1835,7 +1849,7 @@ public class RobotPlayer {
 		default: return null;
 		}
 	}
-	
+
 	// TODO: better supply transfer code
 	// TODO: supply runners
 	private static void transferSupply() throws GameActionException {
@@ -1857,7 +1871,7 @@ public class RobotPlayer {
 			}
 		}
 	}
-	
+
 	// TODO: replace needsSupply with intelligent supply upkeep calculations
 	private static boolean needsSupply(){
 		if(rc.getType() == BEAVER || rc.getType() == COMPUTER || 
@@ -1868,7 +1882,7 @@ public class RobotPlayer {
 			return true;
 		return false;
 	}
-	
+
 	private static boolean needsSupply(RobotInfo r){
 		if (rc.getType() != HQ) {
 			if(r.type == BEAVER || r.type == COMPUTER || r.type == COMMANDER || r.type == SOLDIER ||
@@ -1881,7 +1895,7 @@ public class RobotPlayer {
 		}
 		return false;
 	}
-	
+
 	// TODO: replace with alec's code for beavers, may keep this for miners, two separate problems
 	private static Direction escapeCrowding() {
 		RobotInfo[] myRobots = rc.senseNearbyRobots(2);
@@ -1913,30 +1927,30 @@ public class RobotPlayer {
 
 	// TODO: mining code
 	private static void mine() throws GameActionException {
-		
+
 		int round = Clock.getRoundNum();
-		
+
 		int[] bytecodes = new int[50];
 		bytecodes[0] = Clock.getBytecodeNum();
-		
+
 		double myOre = rc.senseOre(myLoc);
 		rc.setIndicatorString(2, "myOre = " + myOre);
-		
+
 		bytecodes[1] = Clock.getBytecodeNum();
-		
+
 		if (mining && mineCounter > 0) {
 			rc.setIndicatorString(1,"branch1");
 			mineCounter--;
 			double oreMined = Math.min(Math.max(Math.min(myOre/GameConstants.MINER_MINE_RATE,GameConstants.MINER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre);
-			
+
 			bytecodes[2] = Clock.getBytecodeNum();
-			
+
 			markMinerOreCounter(oreMined);
-			
+
 			bytecodes[3] = Clock.getBytecodeNum();
-			
+
 			rc.mine();
-			
+
 			bytecodes[4] = Clock.getBytecodeNum();
 			bytecodes[5] = Clock.getBytecodeNum();
 			bytecodes[6] = Clock.getBytecodeNum();
@@ -1948,18 +1962,18 @@ public class RobotPlayer {
 				mining = false;
 			}
 			rc.setIndicatorString(1,"branch3");
-			
+
 			bytecodes[2] = Clock.getBytecodeNum();
-			
+
 			// if my location has tied for the most ore in sensor range, mine here
 			// else move towards that location without mining
 			// break ties by closeness to top of the table
-			
+
 			// TODO: make this take less time
 			MapLocation targetLoc = getClosestMiningTargetBetterThan(myLoc, myOre);
-			
+
 			bytecodes[3] = Clock.getBytecodeNum();
-			
+
 			if (myLoc.equals(targetLoc) && myOre > 0) {
 				bytecodes[4] = Clock.getBytecodeNum();
 				bytecodes[5] = Clock.getBytecodeNum();
@@ -1974,8 +1988,8 @@ public class RobotPlayer {
 				markBadMiningTable(targetLoc);
 				rc.mine();
 			} else {
-				
-				
+
+
 				if (targetLoc == null) {
 					targetLoc = myHQLoc;
 				} else {
@@ -1986,21 +2000,21 @@ public class RobotPlayer {
 						}
 					}
 				}
-				
+
 				if (getBestOre() <= myOre) {
 					targetLoc = myHQLoc;
 				}
-				
+
 				bytecodes[4] = Clock.getBytecodeNum();
-				
+
 				double bestOre = myOre;
 				int bestTargetDistSq = myLoc.distanceSquaredTo(targetLoc);
 				MapLocation bestLoc = null;
-				
+
 				bytecodes[5] = Clock.getBytecodeNum();
-				
+
 				//MapLocation[] nearbyLocs = MapLocation.getAllMapLocationsWithinRadiusSq(myLoc, mySensorRangeSq);
-				
+
 				MapLocation[] nearbyLocs = new MapLocation[]{
 						myLoc.add(Direction.NORTH),
 						myLoc.add(Direction.NORTH_EAST),
@@ -2011,9 +2025,9 @@ public class RobotPlayer {
 						myLoc.add(Direction.WEST),
 						myLoc.add(Direction.NORTH_WEST)
 				};
-				
+
 				bytecodes[6] = Clock.getBytecodeNum();
-				
+
 				// TODO: make this take less time
 				for (int i = 0; i < nearbyLocs.length; i++) {
 					MapLocation loc = nearbyLocs[i];
@@ -2031,9 +2045,9 @@ public class RobotPlayer {
 						}
 					}
 				}
-				
+
 				bytecodes[7] = Clock.getBytecodeNum();
-				
+
 				if (bestLoc == null) {
 					rc.setIndicatorString(1,"branch4");
 					mineCounter = Simulator.minerOptimalNumMines(myOre);
@@ -2048,18 +2062,18 @@ public class RobotPlayer {
 					//rc.setIndicatorDot(targetLoc, 0, 0, 255);
 					launcherTryMove(myLoc.directionTo(bestLoc));
 				}
-				
+
 				bytecodes[8] = Clock.getBytecodeNum();
 			}
-			
+
 		}
-		
+
 		if (Clock.getRoundNum() > round) {
 			System.out.println("miners exceed bytecodes!!");
 		}
-		
+
 	}
-	
+
 	// TODO: join duplicate miner and beaver mining code
 	private static void mineBeaver() throws GameActionException {
 		double myOre = rc.senseOre(myLoc);
@@ -2115,7 +2129,7 @@ public class RobotPlayer {
 			}
 		}
 	}
-	
+
 	private static void rally() throws GameActionException {
 		MapLocation myLoc = rc.getLocation();
 		MapLocation invaderLoc = attackingEnemy();
@@ -2130,7 +2144,7 @@ public class RobotPlayer {
 			}
 		}
 	}
-	
+
 	// TODO: replace harass with alec or josh's drone micro
 	private static void harass() throws GameActionException {
 		// setup
@@ -2153,9 +2167,9 @@ public class RobotPlayer {
 			enemyHQDamage = enemyHQDamage * 10;
 		}
 		int enemyTowerDamage = 8;
-//		if (brandNew) {
-//			leftHanded = rand.nextBoolean();
-//		}
+		//		if (brandNew) {
+		//			leftHanded = rand.nextBoolean();
+		//		}
 		int distX;
 		int distY;
 		int distSq;
@@ -2277,7 +2291,7 @@ public class RobotPlayer {
 		for (int i = 0; i < numPossibleCoords; i++) {
 			rc.setIndicatorDot(new MapLocation(myLoc.x + possibleCoords[i][0], myLoc.y + possibleCoords[i][1]), 255, 0, 0);
 		}
-		*/
+		 */
 		newBytecodes = Clock.getBytecodeNum();
 		//System.out.println("select possible moves: " + (newBytecodes - bytecodes));
 		bytecodes = newBytecodes;
@@ -2291,26 +2305,26 @@ public class RobotPlayer {
 		for (int i = 0; i < numPossibleCoords; i++) {
 			int x = possibleCoords[i][0];
 			int y = possibleCoords[i][1];
-				int damage = damageGrid[x+1][y+1];
-				if (x == 1 && y == -1) {
-					rc.setIndicatorString(1,"x = " + x + " y = " + y + " damage = " + damage);
-				}
-				if (damage < lowestDamage) {
-					safestCoords[0][0] = x;
-					safestCoords[0][1] = y;
-					numSafestCoords = 1;
-					lowestDamage = damage;
-				} else if (damage <= lowestDamage) {
-					safestCoords[numSafestCoords][0] = x;
-					safestCoords[numSafestCoords][1] = y;
-					numSafestCoords++;
-				}
+			int damage = damageGrid[x+1][y+1];
+			if (x == 1 && y == -1) {
+				rc.setIndicatorString(1,"x = " + x + " y = " + y + " damage = " + damage);
+			}
+			if (damage < lowestDamage) {
+				safestCoords[0][0] = x;
+				safestCoords[0][1] = y;
+				numSafestCoords = 1;
+				lowestDamage = damage;
+			} else if (damage <= lowestDamage) {
+				safestCoords[numSafestCoords][0] = x;
+				safestCoords[numSafestCoords][1] = y;
+				numSafestCoords++;
+			}
 		}
 		/*
 		for (int i = 0; i < numSafestCoords; i++) {
 			rc.setIndicatorDot(new MapLocation(myLoc.x + safestCoords[i][0], myLoc.y + safestCoords[i][1]), 0, 255, 0);
 		}
-		*/
+		 */
 		newBytecodes = Clock.getBytecodeNum();
 		//System.out.println("select lowest damage moves: " + (newBytecodes - bytecodes));
 		bytecodes = newBytecodes;
@@ -2332,7 +2346,7 @@ public class RobotPlayer {
 				numBetterCoords++;
 			}
 		}
-		*/
+		 */
 		if (numBetterCoords <= 0) {
 			betterCoords = safestCoords;
 			numBetterCoords = numSafestCoords;
@@ -2341,7 +2355,7 @@ public class RobotPlayer {
 		for (int i = 0; i < numBetterCoords; i++) {
 			rc.setIndicatorDot(new MapLocation(myLoc.x + betterCoords[i][0], myLoc.y + betterCoords[i][1]), 0, 0, 255);
 		}
-		*/
+		 */
 		newBytecodes = Clock.getBytecodeNum();
 		//System.out.println("select non-border moves: " + (newBytecodes - bytecodes));
 		bytecodes = newBytecodes;
@@ -2363,7 +2377,7 @@ public class RobotPlayer {
 		for (int i = 0; i < numBestCoords; i++) {
 			rc.setIndicatorDot(new MapLocation(myLoc.x + bestCoords[i][0], myLoc.y + bestCoords[i][1]), 255, 255, 0);
 		}
-		*/
+		 */
 		newBytecodes = Clock.getBytecodeNum();
 		//System.out.println("select attacking moves: " + (newBytecodes - bytecodes));
 		bytecodes = newBytecodes;
@@ -2434,7 +2448,7 @@ public class RobotPlayer {
 			return;
 		}
 		rc.move(dir);
-		*/
+		 */
 		// select moves towards target
 		Direction dirToEnemyHQ = myLoc.directionTo(enemyHQLoc);
 		int[] leftOffsets = {0, -1, -2, -3, -4, 1, 2, 3};
@@ -2473,12 +2487,12 @@ public class RobotPlayer {
 		if (i > 3) {
 			leftHanded = !leftHanded;
 		}
-//		brandNew = false;
+		//		brandNew = false;
 		newBytecodes = Clock.getBytecodeNum();
 		//System.out.println("move and cleanup: " + (newBytecodes - bytecodes));
 		bytecodes = newBytecodes;
 	}
-	
+
 	// TODO: generalize inMyHQRange, inEnemyHQRange, and inEnemyBuildingRange to reduce duplicate code
 	private static boolean inMyHQRange(MapLocation loc) {
 		MapLocation myHQ = myHQLoc;
@@ -2509,7 +2523,7 @@ public class RobotPlayer {
 		}
 		return false;
 	}
-	
+
 	private static boolean inEnemyHQRange(MapLocation loc) {
 		MapLocation enemyHQ = enemyHQLoc;
 		int numTowers = enemyTowerLocs.length;
@@ -2539,7 +2553,7 @@ public class RobotPlayer {
 		}
 		return false;
 	}
-	
+
 	private static boolean inEnemyBuildingRange(MapLocation loc) {
 		MapLocation[] enemyTowers = rc.senseEnemyTowerLocations();
 		MapLocation enemyHQ = enemyHQLoc;
@@ -2577,7 +2591,7 @@ public class RobotPlayer {
 		}
 		return false;
 	}
-	
+
 	// TODO: replace shouldIAttack with alec's stuff
 	private static boolean shouldIAttack(){
 		RobotInfo[] nearbyUnits = rc.senseNearbyRobots(myType.sensorRadiusSquared);
@@ -2614,7 +2628,7 @@ public class RobotPlayer {
 		}
 		return null;
 	}
-	
+
 	private static MapLocation nearestAttackableEnemyAll() throws GameActionException {
 		RobotInfo[] enemies = rc.senseNearbyRobots(myAttackRangeSq, enemyTeam);
 		int closestDist = 9999;
@@ -2632,7 +2646,7 @@ public class RobotPlayer {
 		}
 		return null;
 	}
-	
+
 	private static MapLocation fastNearestEnemy() throws GameActionException {
 		MapLocation myLoc = rc.getLocation();
 		RobotInfo[] enemies = rc.senseNearbyRobots(24, enemyTeam);
@@ -2658,7 +2672,7 @@ public class RobotPlayer {
 		}
 		return null;
 	}
-	
+
 	// TODO: should sense all invading enemies and let units attack the closest
 	private static MapLocation attackingEnemy() throws GameActionException {
 		RobotInfo[] enemies = rc.senseNearbyRobots(myHQLoc, rushDistSq*4/9, enemyTeam);
@@ -2679,16 +2693,16 @@ public class RobotPlayer {
 		}
 		return null;
 	}
-	
+
 	// combine both versions of lookForBounds to eliminate duplicated code
 	private static void lookForBounds(MapLocation myLoc, int rangeSq) throws GameActionException {
 		int range = (int)Math.sqrt(rangeSq);
 		Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
 		int[] knownBounds = {
-			rc.readBroadcast(NORTH_BOUND_CHAN),
-			rc.readBroadcast(EAST_BOUND_CHAN),
-			rc.readBroadcast(SOUTH_BOUND_CHAN),
-			rc.readBroadcast(WEST_BOUND_CHAN)
+				rc.readBroadcast(NORTH_BOUND_CHAN),
+				rc.readBroadcast(EAST_BOUND_CHAN),
+				rc.readBroadcast(SOUTH_BOUND_CHAN),
+				rc.readBroadcast(WEST_BOUND_CHAN)
 		};
 		for (int dirNum = 0; dirNum < 4; dirNum++) {
 			Direction dir = myDirections[dirNum];
@@ -2728,15 +2742,15 @@ public class RobotPlayer {
 			rc.broadcast(EAST_FARTHEST_CHAN, myLoc.y + range);
 		}
 	}
-	
+
 	private static void lookForBounds() throws GameActionException {
 		int range = (int)Math.sqrt(myType.sensorRadiusSquared);
 		Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
 		int[] knownBounds = {
-			rc.readBroadcast(NORTH_BOUND_CHAN),
-			rc.readBroadcast(EAST_BOUND_CHAN),
-			rc.readBroadcast(SOUTH_BOUND_CHAN),
-			rc.readBroadcast(WEST_BOUND_CHAN)
+				rc.readBroadcast(NORTH_BOUND_CHAN),
+				rc.readBroadcast(EAST_BOUND_CHAN),
+				rc.readBroadcast(SOUTH_BOUND_CHAN),
+				rc.readBroadcast(WEST_BOUND_CHAN)
 		};
 		for (int dirNum = 0; dirNum < 4; dirNum++) {
 			Direction dir = myDirections[dirNum];
@@ -2776,7 +2790,7 @@ public class RobotPlayer {
 			rc.broadcast(EAST_FARTHEST_CHAN, myLoc.x + range);
 		}
 	}
-	
+
 	// TODO: replace with josh's drone micro
 	private static MapLocation droneAttackLocation() {
 		RobotInfo[] myEnemies = rc.senseNearbyRobots(myAttackRangeSq, enemyTeam);
@@ -2829,7 +2843,7 @@ public class RobotPlayer {
 		}
 	}
 
-	
+
 	//attacks a nearby enemy with the least health
 	// TODO: fix this!
 	private static void focusAttackEnemies() throws GameActionException {
@@ -2854,15 +2868,15 @@ public class RobotPlayer {
 		}
 		rc.attackLocation(targetEnemy.location);
 	}
-		
+
 	private static void attackSomething() throws GameActionException {
 		MapLocation enemy = nearestAttackableEnemyAll();
 		if (enemy != null) {
 			rc.attackLocation(enemy);
 		}
-		
+
 	}
-	
+
 	private static void HQAttackSomething() throws GameActionException {
 		int HQRange = 24;
 		if (myTowerLocs.length >= 2) {
@@ -2885,11 +2899,11 @@ public class RobotPlayer {
 			} else if (inMyHQRange(closestRobot.location)) {
 				rc.attackLocation(closestRobot.location.add(closestRobot.location.directionTo(myLoc)));
 			}
-			
+
 		}
-		
+
 	}
-	
+
 	// TODO: rewrite tryMove, quickTryMove and LauncherTryMove to be faster, better names
 	private static void quickTryMove(Direction d) throws GameActionException {
 		int offsetIndex = 0;
@@ -2901,7 +2915,7 @@ public class RobotPlayer {
 			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
 		}
 	}
-	
+
 	private static boolean tryMove(Direction d) throws GameActionException {
 		int offsetIndex = 0;
 		int[] offsets = {0,1,-1,2,-2};
@@ -2915,7 +2929,7 @@ public class RobotPlayer {
 		}
 		return false;
 	}
-	
+
 	//TODO: rename launcherTryMove
 	//TODO: make more efficient
 	private static boolean launcherTryMove(Direction d) throws GameActionException {
@@ -2946,7 +2960,7 @@ public class RobotPlayer {
 		}
 		return false;
 	}
-	
+
 	private static boolean tryMoveLeft(Direction d) throws GameActionException {
 		int offsetIndex = 0;
 		int[] offsets = {0,-1,-2,-3};
@@ -2960,7 +2974,7 @@ public class RobotPlayer {
 		}
 		return false;
 	}
-	
+
 	private static boolean tryMoveRight(Direction d) throws GameActionException {
 		int offsetIndex = 0;
 		int[] offsets = {0,1,2,3};
@@ -2974,7 +2988,7 @@ public class RobotPlayer {
 		}
 		return false;
 	}
-	
+
 	private static boolean tryLaunch(Direction d) throws GameActionException {
 		int offsetIndex = 0;
 		int[] offsets = {0,1,-1,2,-2};
@@ -2988,7 +3002,7 @@ public class RobotPlayer {
 		}
 		return false;
 	}
-	
+
 	private static boolean trySpawn(Direction d, RobotType type) throws GameActionException {
 		int offsetIndex = 0;
 		int[] offsets = {0,1,-1,2,-2,3,-3,4};
@@ -3002,7 +3016,7 @@ public class RobotPlayer {
 		}
 		return false;
 	}
-	
+
 	private static boolean tryBuild(Direction d, RobotType type) throws GameActionException {
 		int offsetIndex = 0;
 		int[] offsets = {0,1,-1,2,-2,3,-3,4};
@@ -3016,7 +3030,7 @@ public class RobotPlayer {
 		}
 		return false;
 	}
-	
+
 	private static MapLocation[] findTowerChain() {
 		// does not consider hq
 		MapLocation[] startingFoundTowers = new MapLocation[myTowerLocs.length + 2];
@@ -3054,7 +3068,7 @@ public class RobotPlayer {
 		}
 		return null;
 	}
-	
+
 	private static MapLocation[] findTowerChainStartingAt(MapLocation[] foundTowers, int numFoundTowers) {
 		for (MapLocation tower : myTowerLocs) {
 			// ensure not already found
@@ -3081,7 +3095,7 @@ public class RobotPlayer {
 		}
 		return null;
 	}
-	
+
 	private static int HQEffectiveRangeSq() { // approximate for splash
 		int numTowers = rc.senseTowerLocations().length;
 		int HQRange = 24;
