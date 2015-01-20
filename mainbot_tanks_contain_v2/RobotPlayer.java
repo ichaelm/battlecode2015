@@ -1,4 +1,4 @@
-package mainbot_tanks_contain_m;
+package mainbot_tanks_contain_v2;
 
 import battlecode.common.*;
 
@@ -57,7 +57,6 @@ public class RobotPlayer {
 	private static final int UNIT_TOWER_DEFENSE_CHAN = UNIT_ORDER_CHAN + 1;
 	private static final int UNIT_NEEDS_SUPPLY_X_CHAN = UNIT_TOWER_DEFENSE_CHAN + 1;
 	private static final int UNIT_NEEDS_SUPPLY_Y_CHAN = UNIT_NEEDS_SUPPLY_X_CHAN + 1;
-
 	
 	// Broadcast signaling constants
 	private static final int NO_BOUND = 99999;
@@ -391,7 +390,7 @@ public class RobotPlayer {
 				
 				// what units and what buildings to build in what order
 				/* commented out because drones don't work
-				if (numUnits > 25) {
+				if (numUnits > 15) {
 					if (numRobotsByType[DRONE.ordinal()] + numInProgressByType[DRONE.ordinal()] < 1) {
 						addToBuildQueue(DRONE, 1, 0);
 					}
@@ -447,25 +446,25 @@ public class RobotPlayer {
 				
 				rc.setIndicatorString(0, "NumSoldiers: " + numSoldiers);
 				
-				// check if good time to swarm myself
-				if (enemyTowerLocs.length < myTowerLocs.length) {
-					if (areEnemyTowersVulnerable() && numSoldiers >= 50) {
-						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_ATTACK_VULNERABLE_TOWER);
-					} else {
-						selfSwarmTimer = 75;
-						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_DEFEND);
-					}
-					// check if good time to stop swarming myself
-				} else if (selfSwarmTimer <= 0) {
-					// check if good time to attack
-					if (numSoldiers >= 50) {
-						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_ATTACK_TOWERS);
-					} else { //check if a good time to retreat
-						if (numSoldiers <= 30) {
-							rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_RALLY);
-						}
-					}
-				}
+//				// check if good time to swarm myself
+//				if (enemyTowerLocs.length < myTowerLocs.length) {
+//					if (areEnemyTowersVulnerable() && numSoldiers >= 50) {
+//						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_ATTACK_VULNERABLE_TOWER);
+//					} else {
+//						selfSwarmTimer = 75;
+//						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_DEFEND);
+//					}
+//					// check if good time to stop swarming myself
+//				} else if (selfSwarmTimer <= 0) {
+//					// check if good time to attack
+//					if (numSoldiers >= 50) {
+//						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_ATTACK_TOWERS);
+//					} else { //check if a good time to retreat
+//						if (numSoldiers <= 30) {
+//							rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_RALLY);
+//						}
+//					}
+//				}
 				
 				bytecodes[20] = Clock.getBytecodeNum();
 				
@@ -500,6 +499,9 @@ public class RobotPlayer {
 				
 				bytecodes[26] = Clock.getBytecodeNum();
 				
+				getAllMiningTargets();
+				
+				/*
 				StringBuilder sb = new StringBuilder();
 				for (int i = 1; i < 27; i++) {
 					sb.append(i + ": ");
@@ -507,6 +509,7 @@ public class RobotPlayer {
 				}
 				
 				rc.setIndicatorString(0, sb.toString());
+				*/
 				
 				// end round
 				rc.yield();
@@ -740,6 +743,7 @@ public class RobotPlayer {
 							if (escapeDir != null) {
 								tryMove(escapeDir);
 							} else {
+								//TODO: generalize mine and minebeaver
 								mineBeaver();
 							}
 						}
@@ -853,7 +857,9 @@ public class RobotPlayer {
 							launcherTryMove(myLoc.directionTo(allyUnitLoc));
 						} else {
 							//transfer nearly all supplies to unit
-							rc.transferSupplies((int)(rc.getSupplyLevel() - 100), allyUnitLoc);
+							if (rc.senseRobotAtLocation(allyUnitLoc) != null) { // TODO: hack: fix the root of the problem
+								rc.transferSupplies((int)(rc.getSupplyLevel() - 100), allyUnitLoc);
+							}
 							allyUnitLoc = null;
 							rc.broadcast(UNIT_NEEDS_SUPPLY_X_CHAN, 0);
 							rc.broadcast(UNIT_NEEDS_SUPPLY_Y_CHAN, 0);
@@ -1559,6 +1565,7 @@ public class RobotPlayer {
 				markProgressTable(buildOrder);
 			} else {
 				System.out.println("failed build");
+				buildOrder = null;
 			}
 		}
 		return buildOrder;
@@ -1607,7 +1614,7 @@ public class RobotPlayer {
 				x = rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 2);
 				y = rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 3);
 				locs[i] = new MapLocation(x, y);
-				//rc.setIndicatorDot(locs[i], 0, 255, 255);
+				rc.setIndicatorDot(locs[i], 0, 255, 255);
 			}
 		}
 		return locs;
@@ -1788,7 +1795,7 @@ public class RobotPlayer {
 		rc.broadcast(MONTE_CARLO_NUM_RESULTS_CHAN, 0);
 		return results;
 	}
-	
+
 	private static void updateLocations() {
 		myLoc = rc.getLocation();
 		enemyTowerLocs = rc.senseEnemyTowerLocations();
@@ -1856,12 +1863,15 @@ public class RobotPlayer {
 	}
 	
 	private static boolean needsSupply(RobotInfo r){
-		if(r.type == BEAVER || r.type == COMPUTER || 
-				r.type == COMMANDER || r.type == SOLDIER || 
-				r.type == BASHER || r.type == TANK || 
-				r.type == DRONE || r.type == LAUNCHER || 
-				r.type == MINER)
-			return true;
+		if (rc.getType() != HQ) {
+			if(r.type == BEAVER || r.type == COMPUTER || r.type == COMMANDER || r.type == SOLDIER ||
+					r.type == BASHER || r.type == TANK || r.type == LAUNCHER || r.type == MINER)
+				return true;
+		} else {
+			if(r.type == BEAVER || r.type == COMPUTER || r.type == COMMANDER || r.type == SOLDIER || 
+					r.type == BASHER || r.type == TANK || r.type == LAUNCHER || r.type == MINER || r.type == DRONE)
+				return true;
+		}
 		return false;
 	}
 	
@@ -2752,10 +2762,10 @@ public class RobotPlayer {
 			rc.broadcast(SOUTH_FARTHEST_CHAN, myLoc.y + range);
 		}
 		if (Math.max(myLoc.x - range, knownBounds[3]) < rc.readBroadcast(WEST_FARTHEST_CHAN)) {
-			rc.broadcast(WEST_FARTHEST_CHAN, myLoc.y - range);
+			rc.broadcast(WEST_FARTHEST_CHAN, myLoc.x - range);
 		}
 		if (Math.min(myLoc.x + range, knownBounds[1]) > rc.readBroadcast(EAST_FARTHEST_CHAN)) {
-			rc.broadcast(EAST_FARTHEST_CHAN, myLoc.y + range);
+			rc.broadcast(EAST_FARTHEST_CHAN, myLoc.x + range);
 		}
 	}
 	
@@ -2813,6 +2823,7 @@ public class RobotPlayer {
 
 	
 	//attacks a nearby enemy with the least health
+	// TODO: fix this!
 	private static void focusAttackEnemies() throws GameActionException {
 		// attack the unit with the least health
 		RobotInfo[] enemies = rc.senseNearbyRobots(rc.getType().attackRadiusSquared, enemyTeam);
@@ -2822,10 +2833,16 @@ public class RobotPlayer {
 
 		RobotInfo targetEnemy = enemies[0];
 		for (RobotInfo i: enemies) {
-			if (i.type == RobotType.TOWER)
+			if (i.type == TOWER || i.type == LAUNCHER) {
+				if (i.health < targetEnemy.health) {
+					targetEnemy = i;
+					break;
+				}
+			} else {
 				if (i.health < targetEnemy.health) {
 					targetEnemy = i;
 				}
+			}
 		}
 		rc.attackLocation(targetEnemy.location);
 	}

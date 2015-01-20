@@ -1,4 +1,4 @@
-package mainbot_tanks_contain_m;
+package mainbot_tanks_contain_v2;
 
 import battlecode.common.GameConstants;
 import battlecode.common.RobotType;
