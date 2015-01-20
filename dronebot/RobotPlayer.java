@@ -28,6 +28,8 @@ public class RobotPlayer {
 	private static boolean launched;
 	private static final RobotType[] robotTypes = RobotType.values();
 	private static int[] offsets = {0,1,-1,2,-2};
+	private static MapLocation[] enemyTowerLocs;
+	private static MapLocation[] myTowerLocs;
 	
 
 	public static void run(RobotController myrc) {
@@ -485,15 +487,36 @@ public class RobotPlayer {
 		}
 	}
 
-	private static void runDrone() {
-		while (true) {
+	private static void runDrone() {}
+		/*while (true) {
 			try {
+				enemyTowerLocs = rc.senseEnemyTowerLocations();
+				myTowerLocs = rc.senseTowerLocations();
+				lookForBounds();
 				if (rc.isWeaponReady()) {
-					attackSomething();
+					MapLocation attackLoc = droneAttackLocation();
+					if (attackLoc != null) {
+						rc.attackLocation(attackLoc);
+					}
 				}
 				if (rc.isCoreReady()) {
-					if (Clock.getRoundNum() < RUSH_TURN) {
-						rally();
+					int order = rc.readBroadcast(DRONE_ORDER_CHAN);
+					if (order == DRONE_ORDER_NONE || order == DRONE_ORDER_SWARM_HARASS) {
+						harass();
+					} else if (order == DRONE_ORDER_SWARM_ATTACK_UNIT) {
+						int numCoords = rc.readBroadcast(DRONE_ORDER_NUM_COORDS_CHAN);
+						MapLocation[] targets = new MapLocation[numCoords];
+						for (int i = 0; i < numCoords; i++) {
+							targets[i] = new MapLocation(rc.readBroadcast(DRONE_ORDER_COORDS_CHANS[i][0]), rc.readBroadcast(DRONE_ORDER_COORDS_CHANS[i][1]));
+						}
+						droneSwarmUnits(targets);
+					} else if (order == DRONE_ORDER_SWARM_ATTACK_BASE) {
+						int numCoords = rc.readBroadcast(DRONE_ORDER_NUM_COORDS_CHAN);
+						MapLocation[] targets = new MapLocation[numCoords];
+						for (int i = 0; i < numCoords; i++) {
+							targets[i] = new MapLocation(rc.readBroadcast(DRONE_ORDER_COORDS_CHANS[i][0]), rc.readBroadcast(DRONE_ORDER_COORDS_CHANS[i][1]));
+						}
+						droneSwarmBase(targets);
 					} else {
 						MapLocation enemyLoc = nearestEnemy();
 						if (enemyLoc == null) {
@@ -503,7 +526,9 @@ public class RobotPlayer {
 						}
 					}
 				}
-				transferSupply();
+				if (Clock.getBytecodesLeft() > 700) {
+					transferSupply();
+				}
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("Drone Exception");
@@ -511,6 +536,109 @@ public class RobotPlayer {
 			}
 		}
 	}
+	
+	private static void lookForBounds() throws GameActionException {
+		MapLocation myLoc = rc.getLocation();
+		int range = (int)Math.sqrt(myRange);
+		Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
+		int[] knownBounds = {
+			rc.readBroadcast(NORTH_BOUND_CHAN),
+			rc.readBroadcast(EAST_BOUND_CHAN),
+			rc.readBroadcast(SOUTH_BOUND_CHAN),
+			rc.readBroadcast(WEST_BOUND_CHAN)
+		};
+		for (int dirNum = 0; dirNum < 4; dirNum++) {
+			Direction dir = myDirections[dirNum];
+			int bound = knownBounds[dirNum];
+			if (bound == NO_BOUND) {
+				MapLocation testLoc = myLoc.add(dir, range);
+				if (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP) {
+					do {
+						testLoc = testLoc.add(dir.opposite());
+					} while (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP && !testLoc.equals(myLoc));
+					if (dirNum == 0) {
+						// y direction
+						rc.broadcast(NORTH_BOUND_CHAN, testLoc.y);
+					} else if (dirNum == 1) {
+						// x direction
+						rc.broadcast(EAST_BOUND_CHAN, testLoc.x);
+					} else if (dirNum == 2) {
+						// y direction
+						rc.broadcast(SOUTH_BOUND_CHAN, testLoc.y);
+					} else if (dirNum == 3) {
+						// x direction
+						rc.broadcast(WEST_BOUND_CHAN, testLoc.x);
+					}
+				}
+			}
+		}
+	}
+	
+	private static boolean isMoveTooCloseToBounds(Direction moveDir, int depth) throws GameActionException {
+		MapLocation myLoc = rc.getLocation();
+		MapLocation moveLoc = myLoc.add(moveDir);
+		Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
+		int[] knownBounds = {
+			rc.readBroadcast(NORTH_BOUND_CHAN),
+			rc.readBroadcast(EAST_BOUND_CHAN),
+			rc.readBroadcast(SOUTH_BOUND_CHAN),
+			rc.readBroadcast(WEST_BOUND_CHAN)
+		};
+		for (int dirNum = 0; dirNum < 4; dirNum++) {
+			Direction dir = myDirections[dirNum];
+			int bound = knownBounds[dirNum];
+			int myDistToBounds = locDistToBounds(myLoc);
+			int moveDistToBounds = locDistToBounds(moveLoc);
+			if (bound != NO_BOUND) {
+				if (myDistToBounds < depth) {
+					if (moveDistToBounds < myDistToBounds) {
+						return true;
+					}
+				} else {
+					if (moveDistToBounds < depth) {
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+	
+	private static int locDistToBounds(MapLocation loc) throws GameActionException {
+		Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
+		int[] knownBounds = {
+			rc.readBroadcast(NORTH_BOUND_CHAN),
+			rc.readBroadcast(EAST_BOUND_CHAN),
+			rc.readBroadcast(SOUTH_BOUND_CHAN),
+			rc.readBroadcast(WEST_BOUND_CHAN)
+		};
+		int leastDist = Integer.MAX_VALUE;
+		for (int dirNum = 0; dirNum < 4; dirNum++) {
+			int bound = knownBounds[dirNum];
+			if (bound != NO_BOUND) {
+				int dist = Integer.MAX_VALUE; // value will never be used, just suppresses warning
+				switch (dirNum) {
+				case 0:
+					dist = loc.y - knownBounds[dirNum];
+					break;
+				case 1:
+					dist = knownBounds[dirNum] - loc.x;
+					break;
+				case 2:
+					dist = knownBounds[dirNum] - loc.y;
+					break;
+				case 3:
+					dist = loc.x - knownBounds[dirNum];
+					break;
+				}
+				if (dist < leastDist) {
+					leastDist = dist;
+				}
+			}
+		}
+		return leastDist;
+	}*/
+
 
 	private static void runHandwashStation() {
 		while (true) {
