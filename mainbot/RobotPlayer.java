@@ -1014,16 +1014,16 @@ public class RobotPlayer {
 		try {
 			while (true) {
 				// missile move and explode code
-				rc.setIndicatorString(1,"missile running!");
+				System.out.println("missile running!");
 				if (rc.isCoreReady()) {
 					MapLocation target = fastNearestEnemy();
 					if (target == null) {
-						rc.setIndicatorString(2,"No target!");
+						System.out.println("No target!");
 						quickTryMove(myLoc.directionTo(enemyHQLoc));
 					} else {
-						rc.setIndicatorString(2,"target acquired!");
+						System.out.println("target acquired!");
 						if (myLoc.distanceSquaredTo(target) <= 2) { // if adjacent
-							rc.setIndicatorString(2,"too close");
+							System.out.println("too close");
 							quickTryMove(myLoc.directionTo(target));
 							rc.explode();
 						} else {

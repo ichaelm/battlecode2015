@@ -992,12 +992,17 @@ public class RobotPlayer {
 		try {
 			while (true) {
 				// missile move and explode code
+				System.out.println("missile running!");
 				if (rc.isCoreReady()) {
+					MapLocation myLoc = rc.getLocation();
 					MapLocation target = fastNearestEnemy();
 					if (target == null) {
+						System.out.println("No target!");
 						quickTryMove(myLoc.directionTo(enemyHQLoc));
 					} else {
+						System.out.println("target acquired!");
 						if (myLoc.distanceSquaredTo(target) <= 2) { // if adjacent
+							System.out.println("too close");
 							quickTryMove(myLoc.directionTo(target));
 							rc.explode();
 						} else {
