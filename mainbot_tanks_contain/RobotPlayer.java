@@ -336,7 +336,7 @@ public class RobotPlayer {
 				// calculate build queue
 				buildQueue = new int[BUILD_QUEUE_NUM_ROWS][2];
 				row = 0;
-				if (numBuilderBeavers < 2) { // HACK, CALCULATE REAL NUMBER
+				if (numBuilderBeavers < 1) { // HACK, CALCULATE REAL NUMBER
 					buildQueue[row][0] = BEAVER.ordinal();
 					buildQueue[row][1] = 1;
 					row++;
@@ -371,6 +371,13 @@ public class RobotPlayer {
 							row++;
 						}
 					}
+				}
+				
+				if (numBuilderBeavers < 2) { // HACK, CALCULATE REAL NUMBER
+					buildQueue[row][0] = BEAVER.ordinal();
+					buildQueue[row][1] = 1;
+					row++;
+					requestBuilderBeaver();
 				}
 				
 				bytecodes[14] = Clock.getBytecodeNum();
@@ -1993,6 +2000,7 @@ public class RobotPlayer {
 				bytecodes[5] = Clock.getBytecodeNum();
 				
 				//MapLocation[] nearbyLocs = MapLocation.getAllMapLocationsWithinRadiusSq(myLoc, mySensorRangeSq);
+				
 				MapLocation[] nearbyLocs = new MapLocation[]{
 						myLoc.add(Direction.NORTH),
 						myLoc.add(Direction.NORTH_EAST),
