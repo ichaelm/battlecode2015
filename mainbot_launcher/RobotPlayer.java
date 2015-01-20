@@ -111,6 +111,7 @@ public class RobotPlayer {
 	private static RobotType[] robotTypes;
 	private static int[] offsets;
 	private static double[] oreConsumptionByType;
+
 	
 	public static void run(RobotController myrc) {
 		// Initialize cached game information
@@ -380,7 +381,7 @@ public class RobotPlayer {
 				int numUnits = numLauncher + numDrone;
 				int numHelipad = numRobotsByType[HELIPAD.ordinal()] + numInProgressByType[HELIPAD.ordinal()];
 				int numAeroLab = numRobotsByType[AEROSPACELAB.ordinal()] + numInProgressByType[AEROSPACELAB.ordinal()];
-						
+				int maxLaunchers = 100;		
 				// what units and what buildings to build in what order
 				/* commented out because drones don't work
 				if (numUnits > 25) {
@@ -392,17 +393,11 @@ public class RobotPlayer {
 					}
 				}
 				*/
-				if (numHelipad < 1) {
-					addToBuildQueue(HELIPAD);
-				}
-				if ( numRobotsByType[HELIPAD.ordinal()] > 0 && numAeroLab < 1) {
-					addToBuildQueue(AEROSPACELAB);
-				}
-				if (numRobotsByType[AEROSPACELAB.ordinal()] > 0) {
-					addToBuildQueue(LAUNCHER);
-				}
-							
-				
+				addToBuildQueue(LAUNCHER, maxLaunchers, numLauncher);
+				addToBuildQueue(HELIPAD, 1, numRobotsByType[HELIPAD.ordinal()] + numInProgressByType[HELIPAD.ordinal()]);			
+				addToBuildQueue(AEROSPACELAB, maxLaunchers*.2, numRobotsByType[AEROSPACELAB.ordinal()] + numInProgressByType[AEROSPACELAB.ordinal()]);			
+
+
 							
 				/*
 				 * END BUILD QUEUE
@@ -893,7 +888,7 @@ public class RobotPlayer {
 				// TODO: launcher movement code
 				if (rc.isCoreReady()) {
 					if (Clock.getRoundNum() < RUSH_TURN) {
-						harass();
+						rally();
 					} else {
 						MapLocation enemyLoc = nearestSensedEnemy();
 						if (enemyLoc == null) {
@@ -1217,6 +1212,53 @@ public class RobotPlayer {
 			}
 		}
 	}
+	
+	/*private static void launcherRally() throws GameActionException {
+		MapLocation myLoc = rc.getLocation();
+		MapLocation invaderLoc = attackingEnemy();
+		MapLocation enemy = fastNearestEnemy();
+		if (enemy != null) {
+			//launcherTryMove(myLoc.directionTo(enemy));
+		} else {
+			if (invaderLoc != null) {
+				launcherTryMove(myLoc.directionTo(invaderLoc));
+			} else {
+				if (brandNew) {
+					// initial location finding
+					minerTarget = findNearestMarkedMiner();
+					if (minerTarget == null) {
+						launcherTryMove(directions[rand.nextInt(8)]);
+					} else {
+						launcherTryMove(myLoc.directionTo(minerTarget));
+					}
+				} else {
+					if (minerTarget != null) {
+						// continue initial location finding
+						if (myLoc.isAdjacentTo(minerTarget) || myLoc.equals(minerTarget)) {
+							// reached target, use secondary location finding
+							minerTarget = null;
+							launcherTryMove(myLoc.directionTo(myHQLoc).opposite());
+						} else {
+							// not reached target, continue initial location finding
+							boolean success = launcherTryMove(myLoc.directionTo(minerTarget));
+							if (!success) {
+								minerTarget = null;
+								launcherTryMove(myLoc.directionTo(myHQLoc).opposite());
+							}
+						}
+					} else {
+						double myOre = rc.senseOre(myLoc);
+						if (myOre > 5) {
+							launcherTryMove(myLoc.directionTo(myHQLoc));
+						} else {
+							launcherTryMove(myLoc.directionTo(myHQLoc).opposite());
+						}
+					}
+				}
+			}
+		}
+		brandNew = false;
+	}*/
 	
 	private static void broadcastNeedSupplyLocation() throws GameActionException {
 		rc.broadcast(UNIT_NEEDS_SUPPLY_X_CHAN, myLoc.x);
