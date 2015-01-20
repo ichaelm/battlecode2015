@@ -1,4 +1,4 @@
-package mainbot;
+package mainbot_launcher;
 
 import battlecode.common.*;
 
@@ -375,10 +375,12 @@ public class RobotPlayer {
 				 */
 				
 				//updating unit counts
-				int numSoldiers = numRobotsByType[SOLDIER.ordinal()] + numInProgressByType[SOLDIER.ordinal()];
-				int numTanks = numRobotsByType[TANK.ordinal()] + numInProgressByType[TANK.ordinal()];
-				int numUnits = numSoldiers + numTanks;
-				
+				int numLauncher = numRobotsByType[LAUNCHER.ordinal()] + numInProgressByType[LAUNCHER.ordinal()];
+				int numDrone = numRobotsByType[DRONE.ordinal()] + numInProgressByType[DRONE.ordinal()];
+				int numUnits = numLauncher + numDrone;
+				int numHelipad = numRobotsByType[HELIPAD.ordinal()] + numInProgressByType[HELIPAD.ordinal()];
+				int numAeroLab = numRobotsByType[AEROSPACELAB.ordinal()] + numInProgressByType[AEROSPACELAB.ordinal()];
+						
 				// what units and what buildings to build in what order
 				/* commented out because drones don't work
 				if (numUnits > 25) {
@@ -390,36 +392,18 @@ public class RobotPlayer {
 					}
 				}
 				*/
-				if (numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()] < 1) {
-					buildQueue[row][0] = BARRACKS.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
+				if (numHelipad < 1) {
+					addToBuildQueue(HELIPAD);
 				}
-				
-				if (numUnits < 0) {
-					buildQueue[row][0] = SOLDIER.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
-
-					buildQueue[row][0] = BARRACKS.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
-				} else {
-					if (numRobotsByType[TANKFACTORY.ordinal()] + numInProgressByType[TANKFACTORY.ordinal()] < 1) {
-						buildQueue[row][0] = TANKFACTORY.ordinal();
-						buildQueue[row][1] = 1;
-						row++;
-					}
-					
-					buildQueue[row][0] = TANK.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
-					
-					buildQueue[row][0] = TANKFACTORY.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
+				if ( numRobotsByType[HELIPAD.ordinal()] > 0 && numAeroLab < 1) {
+					addToBuildQueue(AEROSPACELAB);
 				}
+				if (numRobotsByType[AEROSPACELAB.ordinal()] > 0) {
+					addToBuildQueue(LAUNCHER);
+				}
+							
 				
+							
 				/*
 				 * END BUILD QUEUE
 				 */
@@ -439,11 +423,11 @@ public class RobotPlayer {
 				
 				bytecodes[19] = Clock.getBytecodeNum();
 				
-				rc.setIndicatorString(0, "NumSoldiers: " + numSoldiers);
+				rc.setIndicatorString(0, "NumLauncher: " + numLauncher);
 				
 				// check if good time to swarm myself
-				if (enemyTowerLocs.length < myTowerLocs.length) {
-					if (areEnemyTowersVulnerable() && numSoldiers >= 50) {
+				/*if (enemyTowerLocs.length < myTowerLocs.length) {
+					if (areEnemyTowersVulnerable() && numLauncher >= 50) {
 						rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_ATTACK_VULNERABLE_TOWER);
 					} else {
 						selfSwarmTimer = 75;
@@ -459,7 +443,7 @@ public class RobotPlayer {
 							rc.broadcast(UNIT_ORDER_CHAN, UNIT_ORDER_RALLY);
 						}
 					}
-				}
+				}*/
 				
 				bytecodes[20] = Clock.getBytecodeNum();
 				
@@ -509,12 +493,6 @@ public class RobotPlayer {
 	private static void addToBuildQueue(RobotType type) {
 		buildQueue[row][0] = type.ordinal();
 		buildQueue[row][1] = 1;
-		row++;
-	}
-	
-	private static void addToBuildQueue(RobotType type, int num) {
-		buildQueue[row][0] = type.ordinal();
-		buildQueue[row][1] = num;
 		row++;
 	}
 	
@@ -915,7 +893,7 @@ public class RobotPlayer {
 				// TODO: launcher movement code
 				if (rc.isCoreReady()) {
 					if (Clock.getRoundNum() < RUSH_TURN) {
-//						launcherRally();
+						harass();
 					} else {
 						MapLocation enemyLoc = nearestSensedEnemy();
 						if (enemyLoc == null) {
@@ -1016,6 +994,7 @@ public class RobotPlayer {
 				// missile move and explode code
 				System.out.println("missile running!");
 				if (rc.isCoreReady()) {
+					MapLocation myLoc = rc.getLocation();
 					MapLocation target = fastNearestEnemy();
 					if (target == null) {
 						System.out.println("No target!");
@@ -2373,10 +2352,6 @@ public class RobotPlayer {
 	}
 	
 	private static void HQAttackSomething() throws GameActionException {
-		int HQRange = 24;
-		if (myTowerLocs.length >= 2) {
-			HQRange = 35;
-		}
 		RobotInfo[] enemies = rc.senseNearbyRobots(52, enemyTeam);
 		int closestDist = 9999;
 		RobotInfo closestRobot = null;
@@ -2389,7 +2364,7 @@ public class RobotPlayer {
 			}
 		}
 		if (closestRobot != null) {
-			if (closestDist <= HQRange) {
+			if (closestDist <= 35) {
 				rc.attackLocation(closestRobot.location);
 			} else if (inMyHQRange(closestRobot.location)) {
 				rc.attackLocation(closestRobot.location.add(closestRobot.location.directionTo(myLoc)));
