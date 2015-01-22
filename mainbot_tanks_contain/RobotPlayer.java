@@ -6,7 +6,7 @@ import java.util.*;
 
 public class RobotPlayer {
 	
-	private static final int ROUND_TO_BUILD_LAUNCHERS = 800;
+	private static final int ROUND_TO_BUILD_LAUNCHERS = 100;
 
 	// AI parameters
 	private static final int RUSH_TURN = 1200;
@@ -419,29 +419,20 @@ public class RobotPlayer {
 				}
 
 				if (roundNum < ROUND_TO_BUILD_LAUNCHERS) {
-					if (numRobotsByType[TANKFACTORY.ordinal()] + numInProgressByType[TANKFACTORY.ordinal()] < 1) {
-						buildQueue[row][0] = TANKFACTORY.ordinal();
-						buildQueue[row][1] = 1;
-						row++;
-					}
-
-					buildQueue[row][0] = TANK.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
-
-					buildQueue[row][0] = TANKFACTORY.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
+					addToBuildQueue(SOLDIER);
+					addToBuildQueue(BARRACKS);
 				} else {
 					if (numHelipad < 1) {
 						addToBuildQueue(HELIPAD);
-					}
-					if ( numHelipad > 0 && numAeroLab < 1) {
+						addToBuildQueue(SOLDIER);
+					} else if (numAeroLab < 1) {
 						addToBuildQueue(AEROSPACELAB);
+						addToBuildQueue(SOLDIER);
 					}
 					addToBuildQueue(LAUNCHER);
 					addToBuildQueue(AEROSPACELAB);
-					addToBuildQueue(TANK);
+					addToBuildQueue(SOLDIER);
+					
 				}
 
 
@@ -956,9 +947,12 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
+
+				// look for map boundaries
+				lookForBounds();
 				
 				// attack
 				if (rc.getMissileCount() > 0) {
@@ -969,21 +963,31 @@ public class RobotPlayer {
 				}
 				
 				// TODO: launcher movement code
+				// move according to orders
 				if (rc.isCoreReady()) {
-					if (Clock.getRoundNum() < RUSH_TURN) {
-						harass();
-					} else {
-						MapLocation enemyLoc = nearestSensedEnemy();
-						if (enemyLoc == null) {
-							launcherTryMove(rc.getLocation().directionTo(enemyHQLoc));
+					if (Clock.getRoundNum() < 1500) {
+						MapLocation target = closestLocation(myLoc, enemyTowerLocs);
+						if(isVulnerable(target) && rc.senseNearbyRobots(target, 36, myTeam).length >= 10 ) {
+							realLauncherTryMove(myLoc.directionTo(target));
 						} else {
-							// stay put
+							MapLocation invader = attackingEnemy();
+							if (invader != null) {
+								realLauncherTryMove(myLoc.directionTo(invader));
+							} else {
+								rally();
+							}
+						}
+					} else {
+						if (enemyTowerLocs.length == 0) {
+							realLauncherTryMove(myLoc.directionTo(enemyHQLoc));
+						} else {
+							realLauncherTryMove(myLoc.directionTo(closestLocation(mapCenter, enemyTowerLocs)));
 						}
 					}
+				} else { // hack for bytecodes
+					// transfer supply
+					transferSupply();
 				}
-				
-				// transfer supply
-				transferSupply();
 				
 				// end round
 				rc.yield();
@@ -1107,6 +1111,11 @@ public class RobotPlayer {
 				// look for map boundaries
 				lookForBounds();
 
+				//communincate supply need
+				if (rc.getSupplyLevel() < 500) {
+					broadcastNeedSupplyLocation();
+				}
+
 				// attack
 				if (rc.isWeaponReady()) {
 					focusAttackEnemies();
@@ -1119,7 +1128,12 @@ public class RobotPlayer {
 						if(isVulnerable(target) && rc.senseNearbyRobots(target, 36, myTeam).length >= 10 ) {
 							tryMove(myLoc.directionTo(target));
 						} else {
-							harass();
+							MapLocation invader = attackingEnemy();
+							if (invader != null) {
+								launcherTryMove(myLoc.directionTo(invader));
+							} else {
+								harass();
+							}
 						}
 					} else {
 						if (enemyTowerLocs.length == 0) {
@@ -1128,10 +1142,10 @@ public class RobotPlayer {
 							tryMove(myLoc.directionTo(closestLocation(mapCenter, enemyTowerLocs)));
 						}
 					}
+				} else { // hack for bytecodes
+					// transfer supply
+					transferSupply();
 				}
-
-				// transfer supply
-				transferSupply();
 
 				// end round
 				rc.yield();
@@ -2149,7 +2163,7 @@ public class RobotPlayer {
 			if (invaderLoc != null) {
 				tryMove(myLoc.directionTo(invaderLoc));
 			} else {
-				launcherTryMove(myLoc.directionTo(mapCenter));
+				realLauncherTryMove(myLoc.directionTo(mapCenter));
 			}
 		}
 	}
@@ -2233,10 +2247,7 @@ public class RobotPlayer {
 							distX = targetX - sourceX;
 							distY = targetY - sourceY;
 							distSq = (distX*distX) + (distY*distY);
-							if (distSq <= rangeSq) {
-								damageGrid[sourceX+1][sourceY+1] += damage;
-							}
-							if (distSq <= 10) { // myRange
+							if (distSq <= myAttackRangeSq) { // myRange
 								canAttackGrid[sourceX+1][sourceY+1] = true;
 							}
 						}
@@ -2254,20 +2265,17 @@ public class RobotPlayer {
 							distX = targetX - sourceX;
 							distY = targetY - sourceY;
 							distSq = (distX*distX) + (distY*distY);
-							if (distSq <= rangeSq) {
-								damageGrid[sourceX+1][sourceY+1] += damage;
-							}
 						}
 					}
 				}
-				if (type != COMMANDER && type != TANK && type != LAUNCHER) {
+				if (type != COMMANDER && type != TANK) {
 					// can attack safely
 					for (int sourceX = -1; sourceX <= 1; sourceX++) {
 						for (int sourceY = -1; sourceY <= 1; sourceY++) {
 							distX = targetX - sourceX;
 							distY = targetY - sourceY;
 							distSq = (distX*distX) + (distY*distY);
-							if (distSq <= 10) { // myRange
+							if (distSq <= myAttackRangeSq) { // myRange
 								canAttackGrid[sourceX+1][sourceY+1] = true;
 							}
 						}
@@ -2951,6 +2959,25 @@ public class RobotPlayer {
 		if (offsetIndex < 5) {
 			Direction dir = directions[(dirint+offsets[offsetIndex]+8)%8];
 			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+			return true;
+		}
+		return false;
+	}
+	
+	private static boolean realLauncherTryMove(Direction d) throws GameActionException {
+		MapLocation myLoc = rc.getLocation();
+		MapLocation enemy = nearestSensedEnemy();
+		int offsetIndex = 0;
+		int[] offsets = {0,1,-1,2,-2};
+		int dirint = directionToInt(d);
+		while (offsetIndex < 5 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
+			offsetIndex++;
+		}
+		if (offsetIndex < 5) {
+			Direction dir = directions[(dirint+offsets[offsetIndex]+8)%8];
+			if  ((enemy == null || myLoc.add(dir).distanceSquaredTo(enemy) > 15) && !inEnemyBuildingRange(rc.getLocation().add(directions[(dirint+offsets[offsetIndex]+8)%8]))) {
+				rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+			}
 			return true;
 		}
 		return false;
