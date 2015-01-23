@@ -60,7 +60,7 @@ public class RobotPlayer {
 	private static final int UNIT_TOWER_DEFENSE_CHAN = UNIT_ORDER_CHAN + 1;
 	private static final int UNIT_NEEDS_SUPPLY_X_CHAN = UNIT_TOWER_DEFENSE_CHAN + 1;
 	private static final int UNIT_NEEDS_SUPPLY_Y_CHAN = UNIT_NEEDS_SUPPLY_X_CHAN + 1;
-
+	
 	// Broadcast signaling constants
 	private static final int NO_BOUND = 99999;
 	private static final int UNIT_ORDER_ATTACK_TOWERS = 1;
@@ -69,27 +69,27 @@ public class RobotPlayer {
 	private static final int UNIT_ORDER_ATTACK_VULNERABLE_TOWER = 4;
 
 	// cached enums for brevity
-	private static final RobotType HQ = RobotType.HQ;
-	private static final RobotType TOWER = RobotType.TOWER;
-	private static final RobotType SUPPLYDEPOT = RobotType.SUPPLYDEPOT;
-	private static final RobotType TECHNOLOGYINSTITUTE = RobotType.TECHNOLOGYINSTITUTE;
-	private static final RobotType BARRACKS = RobotType.BARRACKS;
-	private static final RobotType HELIPAD = RobotType.HELIPAD;
-	private static final RobotType TRAININGFIELD = RobotType.TRAININGFIELD;
-	private static final RobotType TANKFACTORY = RobotType.TANKFACTORY;
-	private static final RobotType MINERFACTORY = RobotType.MINERFACTORY;
-	private static final RobotType HANDWASHSTATION = RobotType.HANDWASHSTATION;
-	private static final RobotType AEROSPACELAB = RobotType.AEROSPACELAB;
-	private static final RobotType BEAVER = RobotType.BEAVER;
-	private static final RobotType COMPUTER = RobotType.COMPUTER;
-	private static final RobotType SOLDIER = RobotType.SOLDIER;
-	private static final RobotType BASHER = RobotType.BASHER;
-	private static final RobotType MINER = RobotType.MINER;
-	private static final RobotType DRONE = RobotType.DRONE;
-	private static final RobotType TANK = RobotType.TANK;
-	private static final RobotType COMMANDER = RobotType.COMMANDER;
-	private static final RobotType LAUNCHER = RobotType.LAUNCHER;
-	private static final RobotType MISSILE = RobotType.MISSILE;
+	private static RobotType HQ;
+	private static RobotType TOWER;
+	private static RobotType SUPPLYDEPOT;
+	private static RobotType TECHNOLOGYINSTITUTE;
+	private static RobotType BARRACKS;
+	private static RobotType HELIPAD;
+	private static RobotType TRAININGFIELD;
+	private static RobotType TANKFACTORY;
+	private static RobotType MINERFACTORY;
+	private static RobotType HANDWASHSTATION;
+	private static RobotType AEROSPACELAB;
+	private static RobotType BEAVER;
+	private static RobotType COMPUTER;
+	private static RobotType SOLDIER;
+	private static RobotType BASHER;
+	private static RobotType MINER;
+	private static RobotType DRONE;
+	private static RobotType TANK;
+	private static RobotType COMMANDER;
+	private static RobotType LAUNCHER;
+	private static RobotType MISSILE;
 
 	// Cached game information
 	private static RobotController rc;
@@ -122,7 +122,6 @@ public class RobotPlayer {
 	// should be final, but can't because set in run()
 	private static Direction[] directions;
 	private static RobotType[] robotTypes;
-	private static int[] offsets;
 	private static double[] oreConsumptionByType;
 
 	public static void run(RobotController myrc) {
@@ -130,22 +129,34 @@ public class RobotPlayer {
 		rc = myrc;
 		myTeam = rc.getTeam();
 		enemyTeam = myTeam.opponent();
-		robotTypes = RobotType.values();
-		offsets = new int[] {0,1,-1,2,-2};
 		enemyHQLoc = rc.senseEnemyHQLocation();
-		directions = new Direction[]{
-				Direction.NORTH,
-				Direction.NORTH_EAST,
-				Direction.EAST,
-				Direction.SOUTH_EAST,
-				Direction.SOUTH,
-				Direction.SOUTH_WEST,
-				Direction.WEST,
-				Direction.NORTH_WEST};
-		if (myrc.getType() == MISSILE) { //hack for missiles to run faster
-			rc.setIndicatorString(1, "Bytecodes Used: " + Clock.getBytecodeNum() + " Left: " + Clock.getBytecodesLeft());
+		if (myrc.getType() == RobotType.MISSILE) { //hack for missiles to run faster
 			runMissile();
 		}
+		robotTypes = RobotType.values();
+		directions = Direction.values(); // happens to be {NORTH, NORTH_EAST, EAST, SOUTH_EAST, SOUTH, SOUTH_WEST, WEST, NORTH_WEST, NONE, OMNI}
+		HQ = RobotType.HQ;
+		TOWER = RobotType.TOWER;
+		SUPPLYDEPOT = RobotType.SUPPLYDEPOT;
+		TECHNOLOGYINSTITUTE = RobotType.TECHNOLOGYINSTITUTE;
+		BARRACKS = RobotType.BARRACKS;
+		HELIPAD = RobotType.HELIPAD;
+		TRAININGFIELD = RobotType.TRAININGFIELD;
+		TANKFACTORY = RobotType.TANKFACTORY;
+		MINERFACTORY = RobotType.MINERFACTORY;
+		HANDWASHSTATION = RobotType.HANDWASHSTATION;
+		AEROSPACELAB = RobotType.AEROSPACELAB;
+		BEAVER = RobotType.BEAVER;
+		COMPUTER = RobotType.COMPUTER;
+		SOLDIER = RobotType.SOLDIER;
+		BASHER = RobotType.BASHER;
+		MINER = RobotType.MINER;
+		DRONE = RobotType.DRONE;
+		TANK = RobotType.TANK;
+		COMMANDER = RobotType.COMMANDER;
+		LAUNCHER = RobotType.LAUNCHER;
+		MISSILE = RobotType.MISSILE;
+		
 		myType = rc.getType();
 		myAttackRangeSq = myType.attackRadiusSquared;
 		mySensorRangeSq = myType.sensorRadiusSquared;
@@ -1058,13 +1069,13 @@ public class RobotPlayer {
 			while (true) {
 				// missile move and explode code
 				if (rc.isCoreReady()) {
-					MapLocation myLoc = rc.getLocation();
+					myLoc = rc.getLocation();
 					MapLocation target = fastNearestEnemy();
 					if (target == null) {
 						quickTryMove(myLoc.directionTo(enemyHQLoc));
 					} else {
 						if (myLoc.distanceSquaredTo(target) <= 2) { // if adjacent
-							quickTryMove(myLoc.directionTo(target));
+							quickTryMove(myLoc.directionTo(target)); // not sure if this should be done
 							rc.explode();
 						} else {
 							quickTryMove(myLoc.directionTo(target));
@@ -2726,13 +2737,12 @@ public class RobotPlayer {
 	}
 
 	private static MapLocation fastNearestEnemy() throws GameActionException {
-		MapLocation myLoc = rc.getLocation();
 		RobotInfo[] enemies = rc.senseNearbyRobots(24, enemyTeam);
 		int closestDist = 9999;
 		RobotInfo closestRobot = null;
 		int i = 0;
 		for (RobotInfo r : enemies) {
-			if (r.type != MISSILE) {
+			if (r.type != RobotType.MISSILE) {
 				MapLocation enemyLoc = r.location;
 				int dist = myLoc.distanceSquaredTo(enemyLoc);
 				if (dist < closestDist) {
@@ -2741,7 +2751,7 @@ public class RobotPlayer {
 				}
 			}
 			i++;
-			if (i >= 1) {
+			if (i >= 7) {
 				break;
 			}
 		}
@@ -2983,14 +2993,14 @@ public class RobotPlayer {
 	}
 
 	// TODO: rewrite tryMove, quickTryMove and LauncherTryMove to be faster, better names
+	// this method is optimized to take about 53 bytecodes. rotateLeft and rotateRight appear to be free.
 	private static void quickTryMove(Direction d) throws GameActionException {
-		int offsetIndex = 0;
-		int dirint = directionToInt(d);
-		while (offsetIndex < 3 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
-			offsetIndex++;
-		}
-		if (offsetIndex < 3) {
-			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+		if (rc.canMove(d)) {
+			rc.move(d);
+		} else if (rc.canMove(d.rotateLeft())) {
+			rc.move(d.rotateLeft());
+		} else if (rc.canMove(d.rotateRight())) {
+			rc.move(d.rotateRight());
 		}
 	}
 
