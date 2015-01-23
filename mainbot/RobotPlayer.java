@@ -411,8 +411,16 @@ public class RobotPlayer {
 					if (numHelipad < 1) {
 						addToBuildQueue(HELIPAD);
 						addToBuildQueue(SOLDIER);
+						addToBuildQueue(SOLDIER);
+					} else if (numRobotsByType[HELIPAD.ordinal()] < 1) {
+						addToBuildQueue(SOLDIER);
+						addToBuildQueue(SOLDIER);
 					} else if (numAeroLab < 1) {
 						addToBuildQueue(AEROSPACELAB);
+						addToBuildQueue(SOLDIER);
+						addToBuildQueue(SOLDIER);
+					} else if (numRobotsByType[AEROSPACELAB.ordinal()] < 1) {
+						addToBuildQueue(SOLDIER);
 						addToBuildQueue(SOLDIER);
 					} else {
 						addToBuildQueue(LAUNCHER);
