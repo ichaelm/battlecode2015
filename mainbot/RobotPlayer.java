@@ -109,7 +109,6 @@ public class RobotPlayer {
 	private static boolean leftHanded;
 	private static MapLocation[] enemyTowerLocs;
 	private static MapLocation[] myTowerLocs;
-	private static boolean mineWithBeavers;
 	private static boolean mining;
 	private static int mineCounter;
 	private static RobotInfo[] enemyRobots;
@@ -202,17 +201,6 @@ public class RobotPlayer {
 			double orePerSquare = rc.senseOre(myHQLoc); // approximate
 			int turnToMaximize = 300 + 2*rushDist + 100*rc.senseTowerLocations().length;
 			// forget about rush safety for now, just go long term
-			double beaverEarlyOre = Simulator.simulateMaximumEarlyMiningOre(BEAVER, orePerSquare, turnToMaximize);
-			double minerEarlyOre = Simulator.simulateMaximumEarlyMiningOre(MINER, orePerSquare, turnToMaximize);
-			if (beaverEarlyOre > minerEarlyOre) {
-				mineWithBeavers = true;
-				//idealOreGenerationPerUnit = Simulator.beaverOreRateGivenNumMines(orePerSquare, Simulator.beaverOptimalNumMines(orePerSquare));
-				//minOre = Simulator.beaverOreLeftAfterMining(orePerSquare, Simulator.beaverOptimalNumMines(orePerSquare)) + 0.1;
-			} else {
-				mineWithBeavers = false;
-				//idealOreGenerationPerUnit = Simulator.minerOreRateGivenNumMines(orePerSquare, Simulator.minerOptimalNumMines(orePerSquare));
-				//minOre = Simulator.beaverOreLeftAfterMining(orePerSquare, Simulator.beaverOptimalNumMines(orePerSquare)) + 0.1;
-			}
 		} catch (Exception e) {
 			System.out.println("HQ Exception");
 			e.printStackTrace();
@@ -348,31 +336,16 @@ public class RobotPlayer {
 
 				bytecodes[13] = Clock.getBytecodeNum();
 
-				if (mineWithBeavers) {
-					if (numRobotsByType[BEAVER.ordinal()] - numBuilderBeavers < 2) {
-						buildQueue[row][0] = BEAVER.ordinal();
-						buildQueue[row][1] = 1;
-						row++;
-					} else {
-						int breakEvenRounds = (int)Math.ceil(BEAVER.oreCost / oreMinedPerBeaver) + BEAVER.buildTurns;
-						if (roundNum + breakEvenRounds < 2000 - rushDist) {
-							buildQueue[row][0] = BEAVER.ordinal();
-							buildQueue[row][1] = 1;
-							row++;
-						}
-					}
+				if (numRobotsByType[MINERFACTORY.ordinal()] + numInProgressByType[MINERFACTORY.ordinal()] < 1) {
+					buildQueue[row][0] = MINERFACTORY.ordinal();
+					buildQueue[row][1] = 1;
+					row++;
 				} else {
-					if (numRobotsByType[MINERFACTORY.ordinal()] + numInProgressByType[MINERFACTORY.ordinal()] < 1) {
-						buildQueue[row][0] = MINERFACTORY.ordinal();
+					int breakEvenRounds = (int)Math.ceil(MINER.oreCost / oreMinedPerMiner) + MINER.buildTurns;
+					if (numRobotsByType[MINER.ordinal()] < 30) {
+						buildQueue[row][0] = MINER.ordinal();
 						buildQueue[row][1] = 1;
 						row++;
-					} else {
-						int breakEvenRounds = (int)Math.ceil(MINER.oreCost / oreMinedPerMiner) + MINER.buildTurns;
-						if (numRobotsByType[MINER.ordinal()] < 30) {
-							buildQueue[row][0] = MINER.ordinal();
-							buildQueue[row][1] = 1;
-							row++;
-						}
 					}
 				}
 
