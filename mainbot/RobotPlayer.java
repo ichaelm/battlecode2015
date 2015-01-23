@@ -117,6 +117,7 @@ public class RobotPlayer {
 	private static int[] numRobotsByType;
 	private static int[] numInProgressByType;
 	private static int[] numCompletedByType;
+	private static int buildingParity;
 
 	// should be final, but can't because set in run()
 	private static Direction[] directions;
@@ -156,6 +157,7 @@ public class RobotPlayer {
 		oreConsumptionByType = new double[]{5, 0, 0, 0.4, 4, 25/6, 1.25, 5, 2.5, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 		mining = false;
 		mineCounter = 0;
+		buildingParity = (((myHQLoc.x + myHQLoc.y) % 2) + 2) % 2;
 
 		switch (myType) {
 		case HQ: runHQ(); break;
@@ -198,8 +200,8 @@ public class RobotPlayer {
 			initBounds();
 
 			// TODO: better mining strategy picking
-			double orePerSquare = rc.senseOre(myHQLoc); // approximate
-			int turnToMaximize = 300 + 2*rushDist + 100*rc.senseTowerLocations().length;
+			//double orePerSquare = rc.senseOre(myHQLoc); // approximate
+			//int turnToMaximize = 300 + 2*rushDist + 100*rc.senseTowerLocations().length;
 			// forget about rush safety for now, just go long term
 		} catch (Exception e) {
 			System.out.println("HQ Exception");
@@ -404,7 +406,9 @@ public class RobotPlayer {
 					} else {
 						addToBuildQueue(LAUNCHER);
 						addToBuildQueue(AEROSPACELAB);
-						addToBuildQueue(SOLDIER);
+						addToBuildQueue(AEROSPACELAB);
+						addToBuildQueue(AEROSPACELAB);
+						addToBuildQueue(AEROSPACELAB);
 					}
 				}
 
@@ -714,11 +718,12 @@ public class RobotPlayer {
 					} else {
 						if (builderBeaver) {
 							// follow spawn orders
-							Direction escapeDir = escapeCrowding(); // hack, better place to put this
-							if (escapeDir != null) {
-								tryMove(escapeDir);
-							} else {
-								thingIJustBuilt = beaverFollowOrders();
+							boolean moved = beaverMove();
+							if (!moved) {
+								Direction buildDir = bestBuildDir();
+								if (buildDir != null) {
+									thingIJustBuilt = beaverFollowOrders(buildDir);
+								}
 							}
 						} else {
 							// TODO: beaver mining
@@ -1579,9 +1584,13 @@ public class RobotPlayer {
 	}
 
 	private static RobotType beaverFollowOrders() throws GameActionException {
+		return beaverFollowOrders(directions[rand.nextInt(8)]);
+	}
+	
+	private static RobotType beaverFollowOrders(Direction dir) throws GameActionException {
 		RobotType buildOrder = getMyBuildOrder();
 		if (buildOrder != null) {
-			boolean success = tryBuild(directions[rand.nextInt(8)],buildOrder);
+			boolean success = tryBuild(dir,buildOrder);
 			if (success) {
 				markProgressTable(buildOrder);
 			} else {
@@ -1970,7 +1979,7 @@ public class RobotPlayer {
 			// break ties by closeness to top of the table
 
 			// TODO: make this take less time
-			MapLocation targetLoc = getClosestMiningTargetBetterThan(myLoc, myOre);
+			MapLocation targetLoc = getClosestMiningTargetBetterThan(myLoc, 0);
 
 			bytecodes[3] = Clock.getBytecodeNum();
 
@@ -1988,20 +1997,22 @@ public class RobotPlayer {
 				markBadMiningTable(targetLoc);
 				rc.mine();
 			} else {
-
-
+				
+				boolean noTarget = false;
 				if (targetLoc == null) {
+					noTarget = true;
 					targetLoc = myHQLoc;
 				} else {
 					if (myLoc.distanceSquaredTo(targetLoc) <= mySensorRangeSq) {
 						// TODO: make this take less time
-						if (rc.senseOre(targetLoc) < getBestOre()) {
+						if (rc.senseOre(targetLoc) < getBestOre() || !rc.isPathable(MINER, targetLoc)) {
 							markBadMiningTable(targetLoc);
 						}
 					}
 				}
-
+				rc.setIndicatorString(2,"bestore:" + getBestOre());
 				if (getBestOre() <= myOre) {
+					noTarget = true;
 					targetLoc = myHQLoc;
 				}
 
@@ -2049,13 +2060,23 @@ public class RobotPlayer {
 				bytecodes[7] = Clock.getBytecodeNum();
 
 				if (bestLoc == null) {
-					rc.setIndicatorString(1,"branch4");
-					mineCounter = Simulator.minerOptimalNumMines(myOre);
-					double oreMined = Math.min(Math.max(Math.min(myOre/GameConstants.MINER_MINE_RATE,GameConstants.MINER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre);
-					markMinerOreCounter(oreMined);
-					mining = true;
-					markBadMiningTable(myLoc); // hack
-					rc.mine();
+					if (myOre > 0) {
+						rc.setIndicatorString(1,"branch4");
+						mineCounter = Simulator.minerOptimalNumMines(myOre);
+						double oreMined = Math.min(Math.max(Math.min(myOre/GameConstants.MINER_MINE_RATE,GameConstants.MINER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre);
+						markMinerOreCounter(oreMined);
+						mining = true;
+						markBadMiningTable(myLoc); // hack
+						rc.mine();
+					} else if (noTarget) {
+						rc.setIndicatorString(1,"branch8");
+						launcherTryMove(directions[rand.nextInt(8)]);
+					} else {
+						rc.setIndicatorString(1,"branch7 " + targetLoc.x + " " + targetLoc.y);
+						rc.setIndicatorDot(targetLoc, 0, 255, 0);
+						//rc.setIndicatorDot(targetLoc, 0, 0, 255);
+						launcherTryMove(myLoc.directionTo(targetLoc));
+					}
 				} else {
 					rc.setIndicatorString(1,"branch5");
 					rc.setIndicatorDot(bestLoc, 0, 255, 0);
@@ -2484,6 +2505,70 @@ public class RobotPlayer {
 		newBytecodes = Clock.getBytecodeNum();
 		//System.out.println("move and cleanup: " + (newBytecodes - bytecodes));
 		bytecodes = newBytecodes;
+	}
+	
+	private static boolean fitsCheckerboard (MapLocation loc) {
+		return ((((loc.x + loc.y) % 2) + 2) % 2 == buildingParity);
+	}
+	
+	private static boolean goodBuildLoc (MapLocation loc) {
+		return fitsCheckerboard(loc) && rc.isPathable(BEAVER, loc);
+	}
+	
+	private static boolean goodPlaceForBeaver (MapLocation loc) {
+		if (loc.equals(myLoc) || rc.isPathable(BEAVER, loc)) {
+			if (fitsCheckerboard(loc)) {
+				if (goodBuildLoc(loc.add(Direction.NORTH_EAST))
+						|| goodBuildLoc(loc.add(Direction.SOUTH_EAST))
+						|| goodBuildLoc(loc.add(Direction.SOUTH_WEST))
+						|| goodBuildLoc(loc.add(Direction.NORTH_WEST))) {
+					return true;
+				}
+			} else {
+				if (goodBuildLoc(loc.add(Direction.NORTH))
+						|| goodBuildLoc(loc.add(Direction.EAST))
+						|| goodBuildLoc(loc.add(Direction.SOUTH))
+						|| goodBuildLoc(loc.add(Direction.WEST))) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+	
+	private static Direction bestBuildDir() {
+		Direction dir = myLoc.directionTo(myHQLoc);
+		if (!fitsCheckerboard(myLoc.add(dir))) {
+			dir = dir.rotateLeft();
+		}
+		int i = 0;
+		while (i < 4 && !rc.canMove(dir)) {
+			dir = dir.rotateLeft().rotateLeft();
+			i++;
+		}
+		if (i < 4) {
+			return dir;
+		}
+		return null;
+	}
+	
+	private static boolean beaverMove() throws GameActionException {
+		if (goodPlaceForBeaver(myLoc)) {
+			return false;
+		}
+		Direction dir = myLoc.directionTo(myHQLoc);
+		int offsetIndex = 0;
+		int[] offsets = {0,1,-1,2,-2,3,-3};
+		int dirint = directionToInt(dir);
+		while (offsetIndex < 7 && !(rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8]) && goodPlaceForBeaver(myLoc.add(directions[(dirint+offsets[offsetIndex]+8)%8])))) {
+			offsetIndex++;
+		}
+		if (offsetIndex < 7) {
+			dir = directions[(dirint+offsets[offsetIndex]+8)%8];
+			rc.move(dir);
+			return true;
+		}
+		return tryMove(myHQLoc.directionTo(myLoc));
 	}
 
 	// TODO: generalize inMyHQRange, inEnemyHQRange, and inEnemyBuildingRange to reduce duplicate code
