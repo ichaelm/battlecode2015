@@ -120,8 +120,8 @@ public class RobotPlayer {
 	private static int buildingParity;
 	private static int bugNavWinding;
 	private static MapLocation navTargetLoc;
-	private static int navTargetDistSq;
 	private static int navType;
+	private static int navClosestDistSq;
 	private static final int NAVTYPE_SIMPLE = 1;
 	private static final int NAVTYPE_BUG = 2;
 	private static final int NAVTYPE_PRECOMP = 3;
@@ -178,6 +178,7 @@ public class RobotPlayer {
 		buildingParity = (((myHQLoc.x + myHQLoc.y) % 2) + 2) % 2;
 		bugNavWinding = 0;
 		leftHanded = rand.nextBoolean();
+		navClosestDistSq = 0;
 
 		switch (myType) {
 		case HQ: runHQ(); break;
@@ -954,13 +955,13 @@ public class RobotPlayer {
 				// look for map boundaries
 				lookForBounds();
 				
-				MapLocation target = nearestSensedEnemy();
+				MapLocation nearestEnemy = nearestSensedEnemy();
 				MapLocation baseTarget = closestLocation(myLoc, enemyTowerLocs);
 				
 				// attack
 				if (rc.getMissileCount() > 0) {
-					if (target != null) {
-						tryLaunch(rc.getLocation().directionTo(target));
+					if (nearestEnemy != null) {
+						tryLaunch(rc.getLocation().directionTo(nearestEnemy));
 					} else if (baseTarget != null && myLoc.distanceSquaredTo(baseTarget) <= 36) {
 						tryLaunch(rc.getLocation().directionTo(baseTarget));
 					} else if (myLoc.distanceSquaredTo(enemyHQLoc) <= 36) {
@@ -971,22 +972,28 @@ public class RobotPlayer {
 				// TODO: launcher movement code
 				// move according to orders
 				if (rc.isCoreReady()) {
-					if (Clock.getRoundNum() < 500) {
-						if(isVulnerable(baseTarget) && rc.senseNearbyRobots(baseTarget, 36, myTeam).length >= 10 ) {
-							launcherTryMoveTo(baseTarget);
-						} else {
-							MapLocation invader = attackingEnemy();
-							if (invader != null) {
-								launcherTryMoveTo(invader);
-							} else {
-								rally();
-							}
-						}
+					if (nearestEnemy != null && myLoc.distanceSquaredTo(nearestEnemy) <= 15) { // if i am too close
+						safeTryMove(nearestEnemy.directionTo(myLoc));
+					} else if (nearestEnemy != null && myLoc.add(myLoc.directionTo(nearestEnemy)).distanceSquaredTo(nearestEnemy) <= 15) { // if i would move too close {
+						// don't move
 					} else {
-						if (enemyTowerLocs.length == 0) {
-							launcherTryMoveTo(enemyHQLoc);
+						if (Clock.getRoundNum() < 500) {
+							if(isVulnerable(baseTarget) && rc.senseNearbyRobots(baseTarget, 36, myTeam).length >= 10 ) {
+								moveToSafely(baseTarget);
+							} else {
+								MapLocation invader = attackingEnemy();
+								if (invader != null) {
+									moveToSafely(invader);
+								} else {
+									rally();
+								}
+							}
 						} else {
-							launcherTryMoveTo(closestLocation(mapCenter, enemyTowerLocs));
+							if (enemyTowerLocs.length == 0) {
+								moveToSafely(enemyHQLoc);
+							} else {
+								moveToSafely(closestLocation(mapCenter, enemyTowerLocs));
+							}
 						}
 					}
 				} else { // hack for bytecodes
@@ -2102,13 +2109,13 @@ public class RobotPlayer {
 						rc.setIndicatorString(1,"branch7 " + targetLoc.x + " " + targetLoc.y);
 						rc.setIndicatorDot(targetLoc, 0, 255, 0);
 						//rc.setIndicatorDot(targetLoc, 0, 0, 255);
-						safeTryMove(myLoc.directionTo(targetLoc));
+						moveToSafely(targetLoc);
 					}
 				} else {
 					rc.setIndicatorString(1,"branch5");
 					rc.setIndicatorDot(bestLoc, 0, 255, 0);
 					//rc.setIndicatorDot(targetLoc, 0, 0, 255);
-					safeTryMove(myLoc.directionTo(bestLoc));
+					moveToSafely(bestLoc);
 				}
 
 				bytecodes[8] = Clock.getBytecodeNum();
@@ -3238,11 +3245,46 @@ public class RobotPlayer {
 		}
 	}
 	
+	private static boolean moveTo(MapLocation targetLoc) throws GameActionException {
+		Direction dir = bugNavDirection(targetLoc);
+		if (dir == null)
+			return false;
+		rc.move(dir);
+		return true;
+	}
+	
+	private static boolean moveToSafely(MapLocation targetLoc) throws GameActionException {
+		Direction dir = safeBugNavDirection(targetLoc);
+		if (dir == null)
+			return false;
+		rc.move(dir);
+		return true;
+	}
+	
 	private static boolean canMoveSafely(Direction dir) {
-		return inEnemyBuildingRange(myLoc.add(dir));
+		return !inEnemyBuildingRange(myLoc.add(dir));
+	}
+	
+	private static boolean canMove(Direction dir, boolean safety) {
+		return (safety ? (rc.canMove(dir) && canMoveSafely(dir)) : rc.canMove(dir));
+	}
+	
+	private static Direction bugNavDirection(MapLocation targetLoc) throws GameActionException {
+		return bugNavDirection(targetLoc, false);
+	}
+	
+	private static Direction safeBugNavDirection(MapLocation targetLoc) throws GameActionException {
+		return bugNavDirection(targetLoc, true);
 	}
 
-	private static boolean bugNavMoveTo(MapLocation targetLoc) throws GameActionException {
+	private static Direction bugNavDirection(MapLocation targetLoc, boolean safety) throws GameActionException {
+		if (!targetLoc.equals(navTargetLoc) || navType != NAVTYPE_BUG) {
+			// new bugnav session
+			navTargetLoc = targetLoc;
+			navType = NAVTYPE_BUG;
+			bugNavWinding = 0;
+			navClosestDistSq = myLoc.distanceSquaredTo(targetLoc);
+		}
 		Direction targetDir = myLoc.directionTo(targetLoc);
 		int targetDirNum = targetDir.ordinal();
 		int currentDirNum = (((targetDirNum + bugNavWinding) % 8) + 8) % 8;
@@ -3252,10 +3294,10 @@ public class RobotPlayer {
 		// invariant: currentDirNum - targetDirNum = bugNavWinding in mod 8
 		if (leftHanded) {
 			// move condition for left handed: (bugNavWinding == 0 && rc.canMove(currentDir)) || (!rc.canMove(currentDir.rotateRight()) && rc.canMove(currentDir))
-			while (!((bugNavWinding == 0 && rc.canMove(currentDir)) || (!rc.canMove(currentDir.rotateRight()) && rc.canMove(currentDir)))) { // loop if the move condition is false
+			while (!((bugNavWinding == 0 && canMove(currentDir, safety)) || (!canMove(currentDir.rotateRight(), safety) && canMove(currentDir, safety)))) { // loop if the move condition is false
 				// known: bugNavWinding != 0 || !rc.canMove(currentDir)
 				// known: rc.canMove(currentDir.rotateRight()) || !rc.canMove(currentDir)
-				if (rc.canMove(currentDir.rotateRight()) && bugNavWinding != 0) {
+				if (canMove(currentDir.rotateRight(), safety) && bugNavWinding != 0) {
 					bugNavWinding++;
 				} else {
 					// known: !rc.canMove(currentDir)
@@ -3268,15 +3310,16 @@ public class RobotPlayer {
 				// watchdog for totally blocked
 				if (countWinds >= 8) {
 					bugNavWinding += 8;
-					return false;
+					System.out.println("got here");
+					return null;
 				}
 			}
 		} else {
 			// move condition for right handed: (bugNavWinding == 0 && rc.canMove(currentDir)) || (!rc.canMove(currentDir.rotateLeft()) && rc.canMove(currentDir))
-			while (!((bugNavWinding == 0 && rc.canMove(currentDir)) || (!rc.canMove(currentDir.rotateLeft()) && rc.canMove(currentDir)))) { // loop if the move condition is false
+			while (!((bugNavWinding == 0 && canMove(currentDir, safety)) || (!canMove(currentDir.rotateLeft(), safety) && canMove(currentDir, safety)))) { // loop if the move condition is false
 				// known: bugNavWinding != 0 || !rc.canMove(currentDir)
 				// known: rc.canMove(currentDir.rotateLeft()) || !rc.canMove(currentDir)
-				if (rc.canMove(currentDir.rotateLeft()) && bugNavWinding != 0) {
+				if (canMove(currentDir.rotateLeft(), safety) && bugNavWinding != 0) {
 					bugNavWinding--;
 				} else {
 					// known: !rc.canMove(currentDir)
@@ -3289,12 +3332,20 @@ public class RobotPlayer {
 				// watchdog for totally blocked
 				if (countWinds >= 8) {
 					bugNavWinding -= 8;
-					return false;
+					System.out.println("got here");
+					return null;
 				}
 			}
 		}
-		rc.move(currentDir);
-		return true;
+		int currentDistSq = myLoc.distanceSquaredTo(targetLoc);
+		if (currentDistSq < navClosestDistSq) {
+			navClosestDistSq = currentDistSq;
+		} else if (currentDistSq >  navClosestDistSq * 2) {
+			leftHanded = !leftHanded;
+			bugNavWinding = 0;
+			navClosestDistSq = currentDistSq;
+		}
+		return currentDir;
 	}
 	
 	private static boolean leftSideOfMap() {
