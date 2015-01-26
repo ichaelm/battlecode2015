@@ -54,8 +54,10 @@ public class RobotPlayer {
 	private static final int NAVQUEUE_ENDPTR_SIZE = NAVQUEUE_NUM_QUEUES;
 	private static final int NAVMAP_NUM_WAYPOINTS_CHAN = NAVQUEUE_ENDPTR_CHAN + NAVQUEUE_ENDPTR_SIZE;
 	private static final int NAVMAP_WAYPOINTS_CHAN = NAVMAP_NUM_WAYPOINTS_CHAN + 1;
-	private static final int NAVMAP_WAYPOINTS_SIZE = 7;
-	private static final int NORTH_BOUND_CHAN = NAVMAP_WAYPOINTS_CHAN + NAVMAP_WAYPOINTS_SIZE;
+	private static final int NAVMAP_WAYPOINTS_SIZE = NAVQUEUE_NUM_QUEUES;
+	private static final int NAVMAP_STILL_PATHFINDING_CHAN = NAVMAP_WAYPOINTS_CHAN + NAVMAP_WAYPOINTS_SIZE;
+	private static final int NAVMAP_STILL_PATHFINDING_SIZE = NAVQUEUE_NUM_QUEUES;
+	private static final int NORTH_BOUND_CHAN = NAVMAP_STILL_PATHFINDING_CHAN + NAVMAP_STILL_PATHFINDING_SIZE;
 	private static final int EAST_BOUND_CHAN = NORTH_BOUND_CHAN + 1;
 	private static final int SOUTH_BOUND_CHAN = EAST_BOUND_CHAN + 1;
 	private static final int WEST_BOUND_CHAN = SOUTH_BOUND_CHAN + 1;
@@ -71,6 +73,7 @@ public class RobotPlayer {
 	private static final int UNIT_TOWER_DEFENSE_CHAN = UNIT_ORDER_CHAN + 1;
 	private static final int UNIT_NEEDS_SUPPLY_X_CHAN = UNIT_TOWER_DEFENSE_CHAN + 1;
 	private static final int UNIT_NEEDS_SUPPLY_Y_CHAN = UNIT_NEEDS_SUPPLY_X_CHAN + 1;
+	private static final int TOWER_ASSIGN_NUM_CHAN = UNIT_NEEDS_SUPPLY_Y_CHAN + 1;
 	
 	// Broadcast signaling constants
 	private static final int NO_BOUND = 99999;
@@ -230,8 +233,10 @@ public class RobotPlayer {
 		// turn 1 code
 		try {
 			// initialize bounds channels
+			System.out.println(Clock.getRoundNum());
 			initBounds();
 			initializePathfindingQueues();
+			System.out.println(Clock.getRoundNum());
 			// TODO: better mining strategy picking
 			//double orePerSquare = rc.senseOre(myHQLoc); // approximate
 			//int turnToMaximize = 300 + 2*rushDist + 100*rc.senseTowerLocations().length;
@@ -577,17 +582,21 @@ public class RobotPlayer {
 	}
 
 	private static void runTower() {
+		int myTowerNum = 0;
+		try {
+			myTowerNum = rc.readBroadcast(TOWER_ASSIGN_NUM_CHAN) + 1;
+			rc.broadcast(TOWER_ASSIGN_NUM_CHAN, myTowerNum);
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Tower Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
-				// participate in census
-				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
-
 				// attack
 				if (rc.isWeaponReady()) {
 					attackSomething();
@@ -597,7 +606,7 @@ public class RobotPlayer {
 				transferSupply();
 
 				// end round
-				rc.yield();
+				precomputePathfindingAndYield(myTowerNum);
 			} catch (Exception e) {
 				System.out.println("Tower Exception");
 				e.printStackTrace();
@@ -606,16 +615,20 @@ public class RobotPlayer {
 	}
 
 	private static void runAerospaceLab() {
+		try {
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Aerospace Lab Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
 				// participate in census
 				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
 
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -635,16 +648,20 @@ public class RobotPlayer {
 	}
 
 	private static void runBarracks() {
+		try {
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Barracks Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
 				// participate in census
 				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
 
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -902,16 +919,20 @@ public class RobotPlayer {
 		}
 	}
 	private static void runHandwashStation() {
+		try {
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Handwash Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
 				// participate in census
 				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
 
 				// transfer supply
 				transferSupply();
@@ -926,16 +947,20 @@ public class RobotPlayer {
 	}
 
 	private static void runHelipad() {
+		try {
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Helipad Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
-				// participare in census
+				// participate in census
 				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
 
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -1067,16 +1092,20 @@ public class RobotPlayer {
 	}
 
 	private static void runMinerFactory() {
+		try {
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Miner Factory Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
 				// participate in census
 				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
 
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -1086,7 +1115,7 @@ public class RobotPlayer {
 				// transfer supply
 				transferSupply();
 
-				// end turn
+				// end round
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("Miner Factory Exception");
@@ -1185,16 +1214,20 @@ public class RobotPlayer {
 	}
 
 	private static void runSupplyDepot() {
+		try {
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Supply Depot Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
 				// participate in census
 				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
 
 				// transfer supply
 				transferSupply();
@@ -1267,16 +1300,20 @@ public class RobotPlayer {
 	}
 
 	private static void runTankFactory() {
+		try {
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Tank Factory Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
 				// participate in census
 				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
 
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -1296,16 +1333,20 @@ public class RobotPlayer {
 	}
 
 	private static void runTechnologyInstitute() {
+		try {
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Technology Institute Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
 				// participate in census
 				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
 
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -1325,16 +1366,20 @@ public class RobotPlayer {
 	}
 
 	private static void runTrainingField() {
+		try {
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Training Field Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
 				// participate in census
 				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
 
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -3463,6 +3508,7 @@ public class RobotPlayer {
 				addToNavQueue(0, adjLoc);
 			}
 		}
+		rc.broadcast(NAVMAP_STILL_PATHFINDING_CHAN, 1);
 		
 		// for towers
 		for (int i = numTowers; --i >= 0;) {
@@ -3478,65 +3524,111 @@ public class RobotPlayer {
 					addToNavQueue(i+1, adjLoc);
 				}
 			}
+			rc.broadcast(NAVMAP_STILL_PATHFINDING_CHAN + 1 + i, 1);
 		}
+	}
+	
+	// TODO: prioritize pathfinding
+	private static void precomputePathfindingAndYield() throws GameActionException {
+		precomputePathfindingAndYield(0);
 	}
 	
 	private static void precomputePathfindingAndYield(int waypoint) throws GameActionException {
-		int roundNum = Clock.getRoundNum();
-		while (Clock.getRoundNum() == roundNum) {
-			MapLocation loc = popFromNavQueue(waypoint);
-			if (loc == null) {
-				// finished
-				rc.yield();
-				return;
-			}
-			//System.out.println("popped from queue");
-			TerrainTile tile = rc.senseTerrainTile(loc);
-			int bestCost = 99999999; // never negative
-			Direction bestDir = null;
-			if (tile == TerrainTile.NORMAL) {
-				for (int dirNum = 8; --dirNum >= 0;) {
-					Direction dir = directions[dirNum];
-					MapLocation adjLoc = loc.add(dir);
-					TerrainTile adjTile = rc.senseTerrainTile(adjLoc);
-					if (adjTile == TerrainTile.NORMAL) {
-						short adjBits = readNavMapBits(adjLoc, waypoint);
-						if ((adjBits & -0x8000) == -0x8000) { // if done
-							int newCost = (adjBits & 0x07ff) + (dir.isDiagonal() ? 7 : 5); // move cost function
-							if (newCost < bestCost || (newCost <= bestCost && !dir.isDiagonal())) { // if lowest cost found yet
-								bestCost = newCost;
-								bestDir = dir;
+		if (rc.readBroadcast(NAVMAP_STILL_PATHFINDING_CHAN + waypoint) == 1) {
+			int roundNum = Clock.getRoundNum();
+			//int watchdog = 0;
+			//int bc;
+			while (Clock.getRoundNum() == roundNum) {
+				//bc = Clock.getBytecodeNum();
+				MapLocation loc = popFromNavQueue(waypoint);
+				//System.out.println((Clock.getBytecodeNum() - bc) + " queue pop");
+				//bc = Clock.getBytecodeNum();
+				if (loc == null) {
+					// finished
+					rc.yield();
+					return;
+				}
+				//System.out.println("popped from queue");
+				TerrainTile tile = rc.senseTerrainTile(loc);
+				//System.out.println((Clock.getBytecodeNum() - bc) + " senseterrain");
+				int bestCost = 99999999; // never negative
+				Direction bestDir = null;
+				if (tile == TerrainTile.NORMAL) {
+					for (int dirNum = 8; --dirNum >= 0;) {
+						//bc = Clock.getBytecodeNum();
+						Direction dir = directions[dirNum];
+						MapLocation adjLoc = loc.add(dir);
+						//System.out.println((Clock.getBytecodeNum() - bc) + " dir add");
+						//bc = Clock.getBytecodeNum();
+						TerrainTile adjTile = rc.senseTerrainTile(adjLoc);
+						//System.out.println((Clock.getBytecodeNum() - bc) + " sense adj terrain");
+						if (adjTile == TerrainTile.NORMAL) {
+							//bc = Clock.getBytecodeNum();
+							short adjBits = readNavMapBits(adjLoc, waypoint);
+							//System.out.println((Clock.getBytecodeNum() - bc) + " read nav map 1");
+							//bc = Clock.getBytecodeNum();
+							if ((adjBits & -0x8000) == -0x8000) { // if done
+								int newCost = (adjBits & 0x07ff) + (dir.isDiagonal() ? 7 : 5); // move cost function
+								if (newCost < bestCost || (newCost <= bestCost && !dir.isDiagonal())) { // if lowest cost found yet
+									bestCost = newCost;
+									bestDir = dir;
+								}
+								//System.out.println((Clock.getBytecodeNum() - bc) + " bit manipulation 1");
+							} else if ((adjBits & 0x4000) == 0x0000) { // if not queued
+								//System.out.println((Clock.getBytecodeNum() - bc) + " bit manipulation 2");
+								//bc = Clock.getBytecodeNum();
+								writeNavMapBits(adjLoc, waypoint, (short)0x4000); // mark as queued
+								//System.out.println((Clock.getBytecodeNum() - bc) + " write nav map 1");
+								//bc = Clock.getBytecodeNum();
+								addToNavQueue(waypoint, adjLoc);
+								//System.out.println((Clock.getBytecodeNum() - bc) + " queue add 1");
+								//System.out.println("added to queue");
 							}
-						} else if ((adjBits & 0x4000) == 0x0000) { // if not queued
-							writeNavMapBits(adjLoc, waypoint, (short)0x4000); // mark as queued
-							addToNavQueue(waypoint, adjLoc);
-							//System.out.println("added to queue");
-						}
-					} else if (adjTile == TerrainTile.UNKNOWN) {
-						short adjBits = readNavMapBits(adjLoc, waypoint);
-						if ((adjBits & 0x4000) == 0x0000) { // if not queued
-							writeNavMapBits(adjLoc, waypoint, (short)0x4000); // mark as queued
-							addToNavQueue(waypoint, adjLoc);
-							//System.out.println("added to queue");
+						} else if (adjTile == TerrainTile.UNKNOWN) {
+							//bc = Clock.getBytecodeNum();
+							short adjBits = readNavMapBits(adjLoc, waypoint);
+							//System.out.println((Clock.getBytecodeNum() - bc) + " read nav map 2");
+							//bc = Clock.getBytecodeNum();
+							if ((adjBits & 0x4000) == 0x0000) { // if not queued
+								//System.out.println((Clock.getBytecodeNum() - bc) + " bit manipulation 3");
+								//bc = Clock.getBytecodeNum();
+								writeNavMapBits(adjLoc, waypoint, (short)0x4000); // mark as queued
+								//System.out.println((Clock.getBytecodeNum() - bc) + " write nav map 2");
+								//bc = Clock.getBytecodeNum();
+								addToNavQueue(waypoint, adjLoc);
+								//System.out.println((Clock.getBytecodeNum() - bc) + " queue add 2");
+								//System.out.println("added to queue");
+							} else {
+								//System.out.println((Clock.getBytecodeNum() - bc) + " bit manipulation 4");
+							}
 						}
 					}
+					if (bestDir == null) {
+						System.out.println("pathfinding error: bestDir = null");
+						rc.setIndicatorDot(loc, 255, 0, 0);
+					} else {
+						rc.setIndicatorLine(loc, loc.add(bestDir), 0, 255, 0);
+						//bc = Clock.getBytecodeNum();
+						short bits = (short)(-0x8000 | (bestDir.ordinal() << 11) | (bestCost & 0x07ff));
+						//System.out.println((Clock.getBytecodeNum() - bc) + " bit manipulation 5");
+						//bc = Clock.getBytecodeNum();
+						writeNavMapBits(loc, waypoint, bits);
+						//System.out.println((Clock.getBytecodeNum() - bc) + " write nav map 3");
+						//System.out.println("finished");
+					}
+				} else if (tile == TerrainTile.UNKNOWN) {
+					addToNavQueue(waypoint, loc);
+					rc.setIndicatorDot(loc, 0, 0, 255);
+					//System.out.println("unknown. added back to queue");
 				}
-				if (bestDir == null) {
-					System.out.println("pathfinding error: bestDir = null");
-				} else {
-					rc.setIndicatorLine(loc, loc.add(bestDir), 0, 255, 0);
-					short bits = (short)(-0x8000 | (bestDir.ordinal() << 11) | (bestCost & 0x07ff));
-					writeNavMapBits(loc, waypoint, bits);
-					//System.out.println("finished");
-				}
-			} else if (tile == TerrainTile.UNKNOWN) {
-				addToNavQueue(waypoint, loc);
-				rc.setIndicatorDot(loc, 0, 0, 255);
-				//System.out.println("unknown. added back to queue");
+				//watchdog++;
 			}
+			//System.out.println(myType + " does " + watchdog);
+			
 		}
 	}
 	
+	//TODO: drawstring on pathfinding
 	private static MapLocation[] pathFind(MapLocation startLoc, MapLocation endLoc) throws GameActionException {
 		int numWaypoints = rc.readBroadcast(NAVMAP_NUM_WAYPOINTS_CHAN);
 		int bestCost = 9999999;
