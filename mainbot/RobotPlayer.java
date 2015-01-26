@@ -40,11 +40,22 @@ public class RobotPlayer {
 	private static final int MONTE_CARLO_NUM_RESULTS_CHAN = MONTE_CARLO_RESULTS_TABLE_CHAN + MONTE_CARLO_RESULTS_TABLE_SIZE;
 	private static final int MONTE_CARLO_MAX_FOUND_CHAN = MONTE_CARLO_NUM_RESULTS_CHAN + 1;
 	private static final int NAVMAP_CHAN = MONTE_CARLO_MAX_FOUND_CHAN + 1;
-	private static final int NAVMAP_SQUARE_SIZE = 3;
+	private static final int NAVMAP_SQUARE_SIZE = 4;
 	private static final int NAVMAP_WIDTH = MAX_MAP_WIDTH;
 	private static final int NAVMAP_HEIGHT = MAX_MAP_HEIGHT;
 	private static final int NAVMAP_SIZE = NAVMAP_SQUARE_SIZE * NAVMAP_WIDTH * NAVMAP_HEIGHT;
-	private static final int NORTH_BOUND_CHAN = NAVMAP_CHAN + NAVMAP_SIZE;
+	private static final int NAVQUEUE_CHAN = NAVMAP_CHAN + NAVMAP_SIZE;
+	private static final int NAVQUEUE_QUEUE_SIZE = 1000;
+	private static final int NAVQUEUE_NUM_QUEUES = 7;
+	private static final int NAVQUEUE_SIZE = NAVQUEUE_QUEUE_SIZE * NAVQUEUE_NUM_QUEUES;
+	private static final int NAVQUEUE_STARTPTR_CHAN = NAVQUEUE_CHAN + NAVQUEUE_SIZE;
+	private static final int NAVQUEUE_STARTPTR_SIZE = NAVQUEUE_NUM_QUEUES;
+	private static final int NAVQUEUE_ENDPTR_CHAN = NAVQUEUE_STARTPTR_CHAN + NAVQUEUE_STARTPTR_SIZE;
+	private static final int NAVQUEUE_ENDPTR_SIZE = NAVQUEUE_NUM_QUEUES;
+	private static final int NAVMAP_NUM_WAYPOINTS_CHAN = NAVQUEUE_ENDPTR_CHAN + NAVQUEUE_ENDPTR_SIZE;
+	private static final int NAVMAP_WAYPOINTS_CHAN = NAVMAP_NUM_WAYPOINTS_CHAN + 1;
+	private static final int NAVMAP_WAYPOINTS_SIZE = 7;
+	private static final int NORTH_BOUND_CHAN = NAVMAP_WAYPOINTS_CHAN + NAVMAP_WAYPOINTS_SIZE;
 	private static final int EAST_BOUND_CHAN = NORTH_BOUND_CHAN + 1;
 	private static final int SOUTH_BOUND_CHAN = EAST_BOUND_CHAN + 1;
 	private static final int WEST_BOUND_CHAN = SOUTH_BOUND_CHAN + 1;
@@ -125,6 +136,7 @@ public class RobotPlayer {
 	private static final int NAVTYPE_SIMPLE = 1;
 	private static final int NAVTYPE_BUG = 2;
 	private static final int NAVTYPE_PRECOMP = 3;
+	private static int maxNumBytecodes = 0;
 
 	// should be final, but can't because set in run()
 	private static Direction[] directions;
@@ -219,7 +231,7 @@ public class RobotPlayer {
 		try {
 			// initialize bounds channels
 			initBounds();
-
+			initializePathfindingQueues();
 			// TODO: better mining strategy picking
 			//double orePerSquare = rc.senseOre(myHQLoc); // approximate
 			//int turnToMaximize = 300 + 2*rushDist + 100*rc.senseTowerLocations().length;
@@ -515,7 +527,7 @@ public class RobotPlayer {
 				 */
 
 				// end round
-				rc.yield();
+				precomputePathfindingAndYield(0);
 			} catch (Exception e) {
 				System.out.println("HQ Exception");
 				e.printStackTrace();
@@ -580,7 +592,7 @@ public class RobotPlayer {
 				if (rc.isWeaponReady()) {
 					attackSomething();
 				}
-
+				
 				// transfer supply
 				transferSupply();
 
@@ -3310,7 +3322,6 @@ public class RobotPlayer {
 				// watchdog for totally blocked
 				if (countWinds >= 8) {
 					bugNavWinding += 8;
-					System.out.println("got here");
 					return null;
 				}
 			}
@@ -3332,7 +3343,6 @@ public class RobotPlayer {
 				// watchdog for totally blocked
 				if (countWinds >= 8) {
 					bugNavWinding -= 8;
-					System.out.println("got here");
 					return null;
 				}
 			}
@@ -3376,5 +3386,207 @@ public class RobotPlayer {
 		int connectivity = Math.max(risingEdges, fallingEdges);
 		return connectivity > 1;
 	}
+	
+	private static int getNavMapSquareChannel(MapLocation loc) {
+		int x = ((loc.x - myHQLoc.x) + NAVMAP_WIDTH) % NAVMAP_WIDTH;
+		int y = ((loc.y - myHQLoc.y) + NAVMAP_HEIGHT) % NAVMAP_HEIGHT;
+		return NAVMAP_CHAN + NAVMAP_SQUARE_SIZE * ((NAVMAP_WIDTH * y) + x);
+	}
+	
+	private static short readNavMapBits(MapLocation loc, int waypoint) throws GameActionException {
+		int channel = getNavMapSquareChannel(loc) + (waypoint / 2);
+		int dataInt = rc.readBroadcast(channel);
+		short dataShort = (waypoint % 2 == 0) ? (short)(dataInt >>> 16) : (short)(dataInt & 0xFFFF);
+		return dataShort;
+	}
+	
+	private static void writeNavMapBits(MapLocation loc, int waypoint, short bits) throws GameActionException {
+		int channel = getNavMapSquareChannel(loc) + (waypoint / 2);
+		int dataInt = rc.readBroadcast(channel);
+		dataInt = (waypoint % 2 == 0) ? ((bits << 16) | (dataInt & 0xFFFF)) : ((dataInt & 0xFFFF0000) | (bits & 0xFFFF));
+		rc.broadcast(channel, dataInt);
+	}
+	
+	private static int packLocation(MapLocation loc) {
+		return (((short)loc.x) << 16) | (((short)loc.y) & 0xFFFF);
+	}
+	
+	private static MapLocation unpackLocation(int packedLoc) {
+		return new MapLocation((packedLoc >>> 16), (packedLoc & 0xFFFF));
+	}
+	
+	private static void addToNavQueue(int waypoint, MapLocation loc) throws GameActionException {
+		int startPtr = rc.readBroadcast(NAVQUEUE_STARTPTR_CHAN + waypoint);
+		int endPtr = rc.readBroadcast(NAVQUEUE_ENDPTR_CHAN + waypoint);
+		int size = ((endPtr - startPtr) + NAVQUEUE_QUEUE_SIZE) % NAVQUEUE_QUEUE_SIZE;
+		if (size >= NAVQUEUE_QUEUE_SIZE - 1) {
+			System.out.println("Nav queue full!");
+			return;
+		}
+		int packedLoc = packLocation(loc);
+		rc.broadcast(NAVQUEUE_CHAN + (waypoint * NAVQUEUE_QUEUE_SIZE) + endPtr, packedLoc);
+		endPtr = (endPtr + 1) % NAVQUEUE_QUEUE_SIZE;
+		rc.broadcast(NAVQUEUE_ENDPTR_CHAN + waypoint, endPtr);
+	}
+	
+	private static MapLocation popFromNavQueue(int waypoint) throws GameActionException {
+		int startPtr = rc.readBroadcast(NAVQUEUE_STARTPTR_CHAN + waypoint);
+		int endPtr = rc.readBroadcast(NAVQUEUE_ENDPTR_CHAN + waypoint);
+		int size = ((endPtr - startPtr) + NAVQUEUE_QUEUE_SIZE) % NAVQUEUE_QUEUE_SIZE;
+		if (size <= 0) { // queue empty
+			System.out.println("queue empty");
+			return null;
+		}
+		int packedLoc = rc.readBroadcast(NAVQUEUE_CHAN + (waypoint * NAVQUEUE_QUEUE_SIZE) + startPtr);
+		startPtr = (startPtr + 1) % NAVQUEUE_QUEUE_SIZE;
+		rc.broadcast(NAVQUEUE_STARTPTR_CHAN + waypoint, startPtr);
+		return unpackLocation(packedLoc);
+	}
+	
+	private static void initializePathfindingQueues() throws GameActionException {
+		MapLocation[] towerLocs = rc.senseTowerLocations();
+		int numTowers = towerLocs.length;
+		// broadcast waypoint info
+		rc.broadcast(NAVMAP_NUM_WAYPOINTS_CHAN, numTowers + 1);
+		short rootBits = -0x8000;
+		short adjBits = 0x4000;
+		
+		// for hq
+		rc.broadcast(NAVMAP_WAYPOINTS_CHAN, packLocation(myHQLoc));
+		writeNavMapBits(myHQLoc, 0, rootBits);
+		for (int dirNum = 0; dirNum < 8; dirNum++) {
+			Direction dir = directions[dirNum];
+			MapLocation adjLoc = myHQLoc.add(dir);
+			TerrainTile adjTile = rc.senseTerrainTile(adjLoc);
+			if (adjTile == TerrainTile.NORMAL || adjTile == TerrainTile.UNKNOWN) {
+				writeNavMapBits(adjLoc, 0, adjBits);
+				addToNavQueue(0, adjLoc);
+			}
+		}
+		
+		// for towers
+		for (int i = numTowers; --i >= 0;) {
+			MapLocation towerLoc = towerLocs[i];
+			rc.broadcast(NAVMAP_WAYPOINTS_CHAN + 1 + i, packLocation(towerLoc));
+			writeNavMapBits(towerLoc, i+1, rootBits);
+			for (int dirNum = 0; dirNum < 8; dirNum++) {
+				Direction dir = directions[dirNum];
+				MapLocation adjLoc = towerLoc.add(dir);
+				TerrainTile adjTile = rc.senseTerrainTile(adjLoc);
+				if (adjTile == TerrainTile.NORMAL || adjTile == TerrainTile.UNKNOWN) {
+					writeNavMapBits(adjLoc, i+1, adjBits);
+					addToNavQueue(i+1, adjLoc);
+				}
+			}
+		}
+	}
+	
+	private static void precomputePathfindingAndYield(int waypoint) throws GameActionException {
+		int roundNum = Clock.getRoundNum();
+		while (Clock.getRoundNum() == roundNum) {
+			MapLocation loc = popFromNavQueue(waypoint);
+			if (loc == null) {
+				// finished
+				rc.yield();
+				return;
+			}
+			//System.out.println("popped from queue");
+			TerrainTile tile = rc.senseTerrainTile(loc);
+			int bestCost = 99999999; // never negative
+			Direction bestDir = null;
+			if (tile == TerrainTile.NORMAL) {
+				for (int dirNum = 8; --dirNum >= 0;) {
+					Direction dir = directions[dirNum];
+					MapLocation adjLoc = loc.add(dir);
+					TerrainTile adjTile = rc.senseTerrainTile(adjLoc);
+					if (adjTile == TerrainTile.NORMAL) {
+						short adjBits = readNavMapBits(adjLoc, waypoint);
+						if ((adjBits & -0x8000) == -0x8000) { // if done
+							int newCost = (adjBits & 0x07ff) + (dir.isDiagonal() ? 7 : 5); // move cost function
+							if (newCost < bestCost || (newCost <= bestCost && !dir.isDiagonal())) { // if lowest cost found yet
+								bestCost = newCost;
+								bestDir = dir;
+							}
+						} else if ((adjBits & 0x4000) == 0x0000) { // if not queued
+							writeNavMapBits(adjLoc, waypoint, (short)0x4000); // mark as queued
+							addToNavQueue(waypoint, adjLoc);
+							//System.out.println("added to queue");
+						}
+					} else if (adjTile == TerrainTile.UNKNOWN) {
+						short adjBits = readNavMapBits(adjLoc, waypoint);
+						if ((adjBits & 0x4000) == 0x0000) { // if not queued
+							writeNavMapBits(adjLoc, waypoint, (short)0x4000); // mark as queued
+							addToNavQueue(waypoint, adjLoc);
+							//System.out.println("added to queue");
+						}
+					}
+				}
+				if (bestDir == null) {
+					System.out.println("pathfinding error: bestDir = null");
+				} else {
+					rc.setIndicatorLine(loc, loc.add(bestDir), 0, 255, 0);
+					short bits = (short)(-0x8000 | (bestDir.ordinal() << 11) | (bestCost & 0x07ff));
+					writeNavMapBits(loc, waypoint, bits);
+					//System.out.println("finished");
+				}
+			} else if (tile == TerrainTile.UNKNOWN) {
+				addToNavQueue(waypoint, loc);
+				rc.setIndicatorDot(loc, 0, 0, 255);
+				//System.out.println("unknown. added back to queue");
+			}
+		}
+	}
+	
+	private static MapLocation[] pathFind(MapLocation startLoc, MapLocation endLoc) throws GameActionException {
+		int numWaypoints = rc.readBroadcast(NAVMAP_NUM_WAYPOINTS_CHAN);
+		int bestCost = 9999999;
+		int bestWaypoint = -1;
+		for (int waypoint = 0; waypoint < numWaypoints; waypoint++) {
+			short startBits = readNavMapBits(startLoc, waypoint);
+			if ((startBits & -0x8000) == 0x0000) // if not done
+				continue;
+			short endBits = readNavMapBits(endLoc, waypoint);
+			if ((endBits & -0x8000) == 0x0000) // if not done
+				continue;
+			int cost = (startBits & 0x07FF) + (endBits & 0x07FF);
+			if (cost < bestCost) {
+				bestCost = cost;
+				bestWaypoint = waypoint;
+			}
+		}
+		if (bestWaypoint < 0)
+			return null;
+		MapLocation waypointLoc = unpackLocation(rc.readBroadcast(NAVMAP_WAYPOINTS_CHAN + bestWaypoint));
+		MapLocation[] startPath = new MapLocation[1000];
+		int startPathSize = 0;
+		MapLocation currentLoc = startLoc;
+		while (!currentLoc.equals(waypointLoc)) {
+			short bits = readNavMapBits(currentLoc, bestWaypoint);
+			int dirNum = (bits & 0x3800) >>> 11;
+			Direction dir = directions[dirNum];
+			currentLoc = currentLoc.add(dir);
+			startPath[startPathSize] = currentLoc;
+			startPathSize++;
+		}
+		MapLocation[] endPath = new MapLocation[1000];
+		int endPathSize = 0;
+		currentLoc = endLoc;
+		while (!currentLoc.equals(waypointLoc)) {
+			short bits = readNavMapBits(currentLoc, bestWaypoint);
+			int dirNum = (bits & 0x3800) >>> 11;
+			Direction dir = directions[dirNum];
+			currentLoc = currentLoc.add(dir);
+			endPath[endPathSize] = currentLoc;
+			endPathSize++;
+		}
+		for (int i = endPathSize - 1; --i >= 0;) {
+			startPath[startPathSize] = endPath[i];
+			startPathSize++;
+		}
+		return startPath;
+	}
+
+	
+
 
 }
