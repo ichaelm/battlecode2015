@@ -74,6 +74,7 @@ public class RobotPlayer {
 	private static final int UNIT_NEEDS_SUPPLY_X_CHAN = UNIT_TOWER_DEFENSE_CHAN + 1;
 	private static final int UNIT_NEEDS_SUPPLY_Y_CHAN = UNIT_NEEDS_SUPPLY_X_CHAN + 1;
 	private static final int TOWER_ASSIGN_NUM_CHAN = UNIT_NEEDS_SUPPLY_Y_CHAN + 1;
+	private static final int SYMMETRY_TYPE_CHAN = TOWER_ASSIGN_NUM_CHAN + 1;
 	
 	// Broadcast signaling constants
 	private static final int NO_BOUND = 99999;
@@ -81,6 +82,12 @@ public class RobotPlayer {
 	private static final int UNIT_ORDER_DEFEND = 2;
 	private static final int UNIT_ORDER_RALLY = 3;
 	private static final int UNIT_ORDER_ATTACK_VULNERABLE_TOWER = 4;
+	private static final int SYMMETRY_TYPE_NONE = 0;
+	private static final int SYMMETRY_TYPE_ROTATIONAL = 1;
+	private static final int SYMMETRY_TYPE_HORIZONTAL = 2;
+	private static final int SYMMETRY_TYPE_VERTICAL = 3;
+	private static final int SYMMETRY_TYPE_DIAGONAL_POS = 4;
+	private static final int SYMMETRY_TYPE_DIAGONAL_NEG = 5;
 
 	// cached enums for brevity
 	private static RobotType HQ;
@@ -233,14 +240,119 @@ public class RobotPlayer {
 		// turn 1 code
 		try {
 			// initialize bounds channels
-			System.out.println(Clock.getRoundNum());
 			initBounds();
+			
+			// update locations
+			updateLocations();
+			
 			initializePathfindingQueues();
-			System.out.println(Clock.getRoundNum());
 			// TODO: better mining strategy picking
 			//double orePerSquare = rc.senseOre(myHQLoc); // approximate
 			//int turnToMaximize = 300 + 2*rushDist + 100*rc.senseTowerLocations().length;
 			// forget about rush safety for now, just go long term
+			
+			
+			
+			//**********************************
+			
+			// decisions
+			// determine symmetry
+			boolean couldBeHorizontal = true;
+			boolean couldBeVertical = true;
+			boolean couldBeDiagonalPos = true;
+			boolean couldBeDiagonalNeg = true;
+			boolean couldBeRotational = true;
+			int numPossible = 5;
+			int rushX = enemyHQLoc.x - myHQLoc.x;
+			int rushY = enemyHQLoc.y - myHQLoc.y;
+			if (rushX != 0) {
+				couldBeHorizontal = false;
+				numPossible--;
+			}
+			if (rushY != 0) {
+				couldBeVertical = false;
+				numPossible--;
+			}
+			if (rushX != rushY) {
+				couldBeDiagonalNeg = false;
+				numPossible--;
+			}
+			if (rushX != -rushY) {
+				couldBeDiagonalPos = false;
+				numPossible--;
+			}
+			for (int i = 0; i < myTowerLocs.length; i++) {
+				MapLocation myTowerLoc = myTowerLocs[i];
+				MapLocation enemyTowerLoc = enemyTowerLocs[i];
+				int relX = myTowerLoc.x - myHQLoc.x;
+				int relY = myTowerLoc.y - myHQLoc.y;
+				MapLocation expectedLoc;
+				if (couldBeHorizontal) {
+					expectedLoc = new MapLocation(enemyHQLoc.x + relX, enemyHQLoc.y - relY);
+					if (!enemyTowerLoc.equals(expectedLoc)) {
+						couldBeHorizontal = false;
+						numPossible--;
+					}
+				}
+				if (couldBeVertical) {
+					expectedLoc = new MapLocation(enemyHQLoc.x - relX, enemyHQLoc.y + relY);
+					if (!enemyTowerLoc.equals(expectedLoc)) {
+						couldBeVertical = false;
+						numPossible--;
+					}
+				}
+				if (couldBeDiagonalPos) {
+					expectedLoc = new MapLocation(enemyHQLoc.x + relY, enemyHQLoc.y + relX);
+					if (!enemyTowerLoc.equals(expectedLoc)) {
+						couldBeDiagonalPos = false;
+						numPossible--;
+					}
+				}
+				if (couldBeDiagonalNeg) {
+					expectedLoc = new MapLocation(enemyHQLoc.x - relY, enemyHQLoc.y - relX);
+					if (!enemyTowerLoc.equals(expectedLoc)) {
+						couldBeDiagonalNeg = false;
+						numPossible--;
+					}
+				}
+				if (couldBeRotational) {
+					expectedLoc = new MapLocation(enemyHQLoc.x - relX, enemyHQLoc.y - relY);
+					if (!enemyTowerLoc.equals(expectedLoc)) {
+						couldBeRotational = false;
+						numPossible--;
+					}
+				}
+				if (numPossible <= 1) {
+					break;
+				}
+			}
+			Direction symmetryDirection;
+			if (couldBeRotational) {
+				symmetryDirection = Direction.OMNI;
+				rc.broadcast(SYMMETRY_TYPE_CHAN, SYMMETRY_TYPE_ROTATIONAL);
+			} else if (couldBeHorizontal) {
+				symmetryDirection = Direction.EAST;
+				rc.broadcast(SYMMETRY_TYPE_CHAN, SYMMETRY_TYPE_HORIZONTAL);
+			} else if (couldBeVertical) {
+				symmetryDirection = Direction.SOUTH;
+				rc.broadcast(SYMMETRY_TYPE_CHAN, SYMMETRY_TYPE_VERTICAL);
+			} else if (couldBeDiagonalPos) {
+				symmetryDirection = Direction.SOUTH_EAST;
+				rc.broadcast(SYMMETRY_TYPE_CHAN, SYMMETRY_TYPE_DIAGONAL_POS);
+			} else if (couldBeDiagonalNeg) {
+				symmetryDirection = Direction.NORTH_EAST;
+				rc.broadcast(SYMMETRY_TYPE_CHAN, SYMMETRY_TYPE_DIAGONAL_NEG);
+			} else {
+				// never happen
+				System.out.println("bad symmetry!");
+				symmetryDirection = null;
+			}
+			
+			
+			//***********************************
+			
+			
+			
 		} catch (Exception e) {
 			System.out.println("HQ Exception");
 			e.printStackTrace();
@@ -248,6 +360,17 @@ public class RobotPlayer {
 
 		while (true) {
 			try {
+				if (Clock.getRoundNum() > 1000) {
+					MapLocation[] path = pathFind(new MapLocation((myHQLoc.x + enemyHQLoc.x)/2-10, (myHQLoc.y + enemyHQLoc.y)/2), new MapLocation((myHQLoc.x + enemyHQLoc.x)/2, (myHQLoc.y + enemyHQLoc.y)/2));
+					int i = 1;
+					while (path[i] != null) {
+						rc.setIndicatorLine(path[i-1], path[i], 0, 0, 255);
+						i++;
+					}
+					System.out.println("path length = " + i);
+				}
+				
+				
 				int[] bytecodes = new int[50];
 				bytecodes[0] = Clock.getBytecodeNum();
 
@@ -258,6 +381,15 @@ public class RobotPlayer {
 
 				// update locations
 				updateLocations();
+				
+				rc.setIndicatorDot(myTowerLocs[0].add(Direction.NORTH), 255, 0, 0);
+				rc.setIndicatorDot(enemyTowerLocs[0].add(Direction.NORTH), 255, 0, 0);
+				rc.setIndicatorDot(myTowerLocs[1].add(Direction.NORTH), 255, 255, 0);
+				rc.setIndicatorDot(enemyTowerLocs[1].add(Direction.NORTH), 255, 255, 0);
+				rc.setIndicatorDot(myTowerLocs[2].add(Direction.NORTH), 0, 255, 0);
+				rc.setIndicatorDot(enemyTowerLocs[2].add(Direction.NORTH), 0, 255, 0);
+				rc.setIndicatorDot(myTowerLocs[3].add(Direction.NORTH), 0, 255, 255);
+				rc.setIndicatorDot(enemyTowerLocs[3].add(Direction.NORTH), 0, 255, 255);
 
 				// look for map boundaries
 				lookForBounds();
@@ -3605,9 +3737,9 @@ public class RobotPlayer {
 					}
 					if (bestDir == null) {
 						System.out.println("pathfinding error: bestDir = null");
-						rc.setIndicatorDot(loc, 255, 0, 0);
+						//rc.setIndicatorDot(loc, 255, 0, 0);
 					} else {
-						rc.setIndicatorLine(loc, loc.add(bestDir), 0, 255, 0);
+						//rc.setIndicatorLine(loc, loc.add(bestDir), 0, 255, 0);
 						//bc = Clock.getBytecodeNum();
 						short bits = (short)(-0x8000 | (bestDir.ordinal() << 11) | (bestCost & 0x07ff));
 						//System.out.println((Clock.getBytecodeNum() - bc) + " bit manipulation 5");
@@ -3618,7 +3750,7 @@ public class RobotPlayer {
 					}
 				} else if (tile == TerrainTile.UNKNOWN) {
 					addToNavQueue(waypoint, loc);
-					rc.setIndicatorDot(loc, 0, 0, 255);
+					//rc.setIndicatorDot(loc, 0, 0, 255);
 					//System.out.println("unknown. added back to queue");
 				}
 				//watchdog++;
@@ -3671,14 +3803,133 @@ public class RobotPlayer {
 			endPath[endPathSize] = currentLoc;
 			endPathSize++;
 		}
-		for (int i = endPathSize - 1; --i >= 0;) {
-			startPath[startPathSize] = endPath[i];
-			startPathSize++;
+		// drawstring
+		while (startPathSize > 2 && endPathSize > 2) {
+			MapLocation currentStartLoc = startPath[startPathSize - 1];
+			MapLocation prevStartLoc = startPath[startPathSize - 2];
+			MapLocation currentEndLoc = endPath[endPathSize - 1];
+			MapLocation prevEndLoc = endPath[endPathSize - 2];
+			if (isPathSimple(prevStartLoc, prevEndLoc)) {
+				int currentCost = straightPathCost(currentStartLoc, currentEndLoc);
+				int prevCost = straightPathCost(prevStartLoc, prevEndLoc);
+				currentCost += prevStartLoc.directionTo(currentStartLoc).isDiagonal() ? 7 : 5;
+				currentCost += prevEndLoc.directionTo(currentEndLoc).isDiagonal() ? 7 : 5;
+				if (prevCost <= currentCost) {
+					startPathSize--;
+					startPath[startPathSize] = null;
+					endPathSize--;
+				} else {
+					break;
+				}
+			}
+		}
+		for (; --endPathSize >= 0; startPathSize++) {
+			startPath[startPathSize] = endPath[endPathSize];
 		}
 		return startPath;
 	}
-
 	
+	private static boolean isPathSimple(MapLocation startLoc, MapLocation endLoc) {
+		MapLocation currentLoc = startLoc;
+		while (currentLoc.distanceSquaredTo(endLoc) > 2) {
+			currentLoc = currentLoc.add(currentLoc.directionTo(endLoc));
+			if (rc.senseTerrainTile(currentLoc) != TerrainTile.NORMAL) {
+				return false;
+			}
+		}
+		return true;
+	}
 
+	private static int straightPathCost(MapLocation startLoc, MapLocation endLoc) {
+		int x = Math.abs(endLoc.x - startLoc.x);
+		int y = Math.abs(endLoc.y - startLoc.y);
+		int diagonals = Math.min(x, y);
+		int cardinals = Math.max(x, y) - diagonals;
+		return (cardinals * 5) + (diagonals * 7);
+	}
+	
+	private static boolean isOnSymmetryBoundary(MapLocation loc) throws GameActionException {
+		MapLocation symmetricLoc = symmetricLocation(loc);
+		if (loc.distanceSquaredTo(symmetricLoc) <= 2) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+	
+	private static MapLocation symmetricLocation(MapLocation loc) throws GameActionException {
+		int relX = loc.x - myHQLoc.x;
+		int relY = loc.y - myHQLoc.y;
+		MapLocation symmetricLoc = null;
+		int symmetryType = rc.readBroadcast(SYMMETRY_TYPE_CHAN);
+		switch (symmetryType) {
+		case (SYMMETRY_TYPE_HORIZONTAL):
+			symmetricLoc = new MapLocation(enemyHQLoc.x + relX, enemyHQLoc.y - relY);
+			break;
+		case (SYMMETRY_TYPE_VERTICAL):
+			symmetricLoc = new MapLocation(enemyHQLoc.x - relX, enemyHQLoc.y + relY);
+			break;
+		case (SYMMETRY_TYPE_DIAGONAL_POS):
+			symmetricLoc = new MapLocation(enemyHQLoc.x + relY, enemyHQLoc.y + relX);
+			break;
+		case (SYMMETRY_TYPE_DIAGONAL_NEG):
+			symmetricLoc = new MapLocation(enemyHQLoc.x - relY, enemyHQLoc.y - relX);
+			break;
+		case (SYMMETRY_TYPE_ROTATIONAL):
+			symmetricLoc = new MapLocation(enemyHQLoc.x - relX, enemyHQLoc.y - relY);
+			break;
+		}
+		return symmetricLoc;
+	}
+	
+	private static Direction symmetricDirection(Direction dir) throws GameActionException {
+		Direction symmetricDir = null;
+		int symmetryType = rc.readBroadcast(SYMMETRY_TYPE_CHAN);
+		switch (symmetryType) {
+		case (SYMMETRY_TYPE_HORIZONTAL):
+			symmetricDir = diffsToDir(dir.dx, -dir.dy);
+		break;
+		case (SYMMETRY_TYPE_VERTICAL):
+			symmetricDir = diffsToDir(-dir.dx, dir.dy);
+		break;
+		case (SYMMETRY_TYPE_DIAGONAL_POS):
+			symmetricDir = diffsToDir(dir.dy, dir.dx);
+		break;
+		case (SYMMETRY_TYPE_DIAGONAL_NEG):
+			symmetricDir = diffsToDir(-dir.dy, -dir.dx);
+		break;
+		case (SYMMETRY_TYPE_ROTATIONAL):
+			symmetricDir = diffsToDir(-dir.dx, -dir.dy);
+		break;
+		}
+		return symmetricDir;
+	}
+	
+	private static Direction diffsToDir(int dx, int dy) {
+		Direction dir = null;
+		switch (dx) {
+		case -1:
+			switch (dy) {
+			case -1: return Direction.NORTH_WEST;
+			case 0: return Direction.WEST;
+			case 1: return Direction.SOUTH_WEST;
+			}
+			break;
+		case 0:
+			switch (dy) {
+			case -1: return Direction.NORTH;
+			case 1: return Direction.SOUTH;
+			}
+			break;
+		case 1:
+			switch (dy) {
+			case -1: return Direction.NORTH_EAST;
+			case 0: return Direction.EAST;
+			case 1: return Direction.SOUTH_EAST;
+			}
+			break;
+		}
+		return null;
+	}
 
 }
