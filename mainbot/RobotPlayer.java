@@ -57,7 +57,11 @@ public class RobotPlayer {
 	private static final int NAVMAP_WAYPOINTS_SIZE = NAVQUEUE_NUM_QUEUES;
 	private static final int NAVMAP_STILL_PATHFINDING_CHAN = NAVMAP_WAYPOINTS_CHAN + NAVMAP_WAYPOINTS_SIZE;
 	private static final int NAVMAP_STILL_PATHFINDING_SIZE = NAVQUEUE_NUM_QUEUES;
-	private static final int NORTH_BOUND_CHAN = NAVMAP_STILL_PATHFINDING_CHAN + NAVMAP_STILL_PATHFINDING_SIZE;
+	private static final int NAVMAP_SYMMETRY_LOCS_CHAN = NAVMAP_STILL_PATHFINDING_CHAN + NAVMAP_STILL_PATHFINDING_SIZE;
+	private static final int NAVMAP_SYMMETRY_LOCS_SIZE = NAVQUEUE_NUM_QUEUES;
+	private static final int NAVMAP_SYMMETRY_COSTS_CHAN = NAVMAP_SYMMETRY_LOCS_CHAN + NAVMAP_SYMMETRY_LOCS_SIZE;
+	private static final int NAVMAP_SYMMETRY_COSTS_SIZE = NAVQUEUE_NUM_QUEUES;
+	private static final int NORTH_BOUND_CHAN = NAVMAP_SYMMETRY_COSTS_CHAN + NAVMAP_SYMMETRY_COSTS_SIZE;
 	private static final int EAST_BOUND_CHAN = NORTH_BOUND_CHAN + 1;
 	private static final int SOUTH_BOUND_CHAN = EAST_BOUND_CHAN + 1;
 	private static final int WEST_BOUND_CHAN = SOUTH_BOUND_CHAN + 1;
@@ -77,7 +81,7 @@ public class RobotPlayer {
 	private static final int SYMMETRY_TYPE_CHAN = TOWER_ASSIGN_NUM_CHAN + 1;
 	
 	// Broadcast signaling constants
-	private static final int NO_BOUND = 99999;
+	private static final int NO_BOUND = 32000;
 	private static final int UNIT_ORDER_ATTACK_TOWERS = 1;
 	private static final int UNIT_ORDER_DEFEND = 2;
 	private static final int UNIT_ORDER_RALLY = 3;
@@ -246,6 +250,10 @@ public class RobotPlayer {
 			updateLocations();
 			
 			initializePathfindingQueues();
+			
+			for (int i = 0; i < myTowerLocs.length + 1; i++) {
+				rc.broadcast(NAVMAP_SYMMETRY_LOCS_CHAN + i, packLocation(new MapLocation(NO_BOUND, NO_BOUND)));
+			}
 			// TODO: better mining strategy picking
 			//double orePerSquare = rc.senseOre(myHQLoc); // approximate
 			//int turnToMaximize = 300 + 2*rushDist + 100*rc.senseTowerLocations().length;
@@ -361,13 +369,15 @@ public class RobotPlayer {
 		while (true) {
 			try {
 				if (Clock.getRoundNum() > 1000) {
-					MapLocation[] path = pathFind(new MapLocation((myHQLoc.x + enemyHQLoc.x)/2-10, (myHQLoc.y + enemyHQLoc.y)/2), new MapLocation((myHQLoc.x + enemyHQLoc.x)/2, (myHQLoc.y + enemyHQLoc.y)/2));
-					int i = 1;
-					while (path[i] != null) {
-						rc.setIndicatorLine(path[i-1], path[i], 0, 0, 255);
-						i++;
+					MapLocation[] path = pathFind(new MapLocation((myHQLoc.x + enemyHQLoc.x)/2+12, (myHQLoc.y + enemyHQLoc.y)/2), new MapLocation((myHQLoc.x + enemyHQLoc.x)/2, (myHQLoc.y + enemyHQLoc.y)/2));
+					if (path != null) {
+						int i = 1;
+						while (path[i] != null) {
+							rc.setIndicatorLine(path[i-1], path[i], 0, 0, 255);
+							i++;
+						}
+						System.out.println("path length = " + i);
 					}
-					System.out.println("path length = " + i);
 				}
 				
 				
@@ -381,15 +391,6 @@ public class RobotPlayer {
 
 				// update locations
 				updateLocations();
-				
-				rc.setIndicatorDot(myTowerLocs[0].add(Direction.NORTH), 255, 0, 0);
-				rc.setIndicatorDot(enemyTowerLocs[0].add(Direction.NORTH), 255, 0, 0);
-				rc.setIndicatorDot(myTowerLocs[1].add(Direction.NORTH), 255, 255, 0);
-				rc.setIndicatorDot(enemyTowerLocs[1].add(Direction.NORTH), 255, 255, 0);
-				rc.setIndicatorDot(myTowerLocs[2].add(Direction.NORTH), 0, 255, 0);
-				rc.setIndicatorDot(enemyTowerLocs[2].add(Direction.NORTH), 0, 255, 0);
-				rc.setIndicatorDot(myTowerLocs[3].add(Direction.NORTH), 0, 255, 255);
-				rc.setIndicatorDot(enemyTowerLocs[3].add(Direction.NORTH), 0, 255, 255);
 
 				// look for map boundaries
 				lookForBounds();
@@ -3747,6 +3748,13 @@ public class RobotPlayer {
 						writeNavMapBits(loc, waypoint, bits);
 						//System.out.println((Clock.getBytecodeNum() - bc) + " write nav map 3");
 						//System.out.println("finished");
+						if (isOnSymmetryBoundary(loc)) {
+							int bestSymmetryCost = rc.readBroadcast(NAVMAP_SYMMETRY_COSTS_CHAN + waypoint);
+							if (bestCost < bestSymmetryCost) {
+								rc.broadcast(NAVMAP_SYMMETRY_LOCS_CHAN + waypoint, packLocation(loc));
+								rc.broadcast(NAVMAP_SYMMETRY_COSTS_CHAN + waypoint, bestCost);
+							}
+						}
 					}
 				} else if (tile == TerrainTile.UNKNOWN) {
 					addToNavQueue(waypoint, loc);
@@ -3763,44 +3771,73 @@ public class RobotPlayer {
 	//TODO: drawstring on pathfinding
 	private static MapLocation[] pathFind(MapLocation startLoc, MapLocation endLoc) throws GameActionException {
 		int numWaypoints = rc.readBroadcast(NAVMAP_NUM_WAYPOINTS_CHAN);
+		MapLocation symmetricStartLoc = symmetricLocation(startLoc);
+		MapLocation symmetricEndLoc = symmetricLocation(endLoc);
 		int bestCost = 9999999;
 		int bestWaypoint = -1;
+		boolean bestSymmetric = false;
 		for (int waypoint = 0; waypoint < numWaypoints; waypoint++) {
 			short startBits = readNavMapBits(startLoc, waypoint);
-			if ((startBits & -0x8000) == 0x0000) // if not done
-				continue;
 			short endBits = readNavMapBits(endLoc, waypoint);
-			if ((endBits & -0x8000) == 0x0000) // if not done
-				continue;
-			int cost = (startBits & 0x07FF) + (endBits & 0x07FF);
-			if (cost < bestCost) {
-				bestCost = cost;
-				bestWaypoint = waypoint;
+			short symmetricStartBits = readNavMapBits(symmetricStartLoc, waypoint);
+			short symmetricEndBits = readNavMapBits(symmetricEndLoc, waypoint);
+			boolean startDone = ((startBits & -0x8000) != 0);
+			boolean endDone = ((endBits & -0x8000) != 0);
+			boolean symmetricStartDone = ((symmetricStartBits & -0x8000) != 0);
+			boolean symmetricEndDone = ((symmetricEndBits & -0x8000) != 0);
+			if (startDone && endDone) {
+				int cost = (startBits & 0x07FF) + (endBits & 0x07FF);
+				if (cost < bestCost) {
+					bestCost = cost;
+					bestWaypoint = waypoint;
+					bestSymmetric = false;
+				}
+			} else if (symmetricStartDone && symmetricEndDone) {
+				int cost = (symmetricStartBits & 0x07FF) + (symmetricEndBits & 0x07FF);
+				if (cost < bestCost) {
+					bestCost = cost;
+					bestWaypoint = waypoint;
+					bestSymmetric = true;
+				}
 			}
+
 		}
-		if (bestWaypoint < 0)
+		if (bestWaypoint < 0) {
 			return null;
-		MapLocation waypointLoc = unpackLocation(rc.readBroadcast(NAVMAP_WAYPOINTS_CHAN + bestWaypoint));
+		}
 		MapLocation[] startPath = new MapLocation[1000];
 		int startPathSize = 0;
+		MapLocation[] endPath = new MapLocation[1000];
+		int endPathSize = 0;
+		if (bestSymmetric) {
+			startLoc = symmetricLocation(startLoc);
+			endLoc = symmetricLocation(endLoc);
+		}
+		MapLocation waypointLoc = unpackLocation(rc.readBroadcast(NAVMAP_WAYPOINTS_CHAN + bestWaypoint));
 		MapLocation currentLoc = startLoc;
 		while (!currentLoc.equals(waypointLoc)) {
 			short bits = readNavMapBits(currentLoc, bestWaypoint);
 			int dirNum = (bits & 0x3800) >>> 11;
 			Direction dir = directions[dirNum];
 			currentLoc = currentLoc.add(dir);
-			startPath[startPathSize] = currentLoc;
+			if (bestSymmetric) {
+				startPath[startPathSize] = symmetricLocation(currentLoc);
+			} else {
+				startPath[startPathSize] = currentLoc;
+			}
 			startPathSize++;
 		}
-		MapLocation[] endPath = new MapLocation[1000];
-		int endPathSize = 0;
 		currentLoc = endLoc;
 		while (!currentLoc.equals(waypointLoc)) {
 			short bits = readNavMapBits(currentLoc, bestWaypoint);
 			int dirNum = (bits & 0x3800) >>> 11;
 			Direction dir = directions[dirNum];
 			currentLoc = currentLoc.add(dir);
-			endPath[endPathSize] = currentLoc;
+			if (bestSymmetric) {
+				endPath[endPathSize] = symmetricLocation(currentLoc);
+			} else {
+				endPath[endPathSize] = currentLoc;
+			}
 			endPathSize++;
 		}
 		// drawstring
