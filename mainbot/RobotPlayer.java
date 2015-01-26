@@ -249,11 +249,12 @@ public class RobotPlayer {
 			// update locations
 			updateLocations();
 			
-			initializePathfindingQueues();
-			
 			for (int i = 0; i < myTowerLocs.length + 1; i++) {
 				rc.broadcast(NAVMAP_SYMMETRY_LOCS_CHAN + i, packLocation(new MapLocation(NO_BOUND, NO_BOUND)));
 			}
+			
+			initializePathfindingQueues();
+			
 			// TODO: better mining strategy picking
 			//double orePerSquare = rc.senseOre(myHQLoc); // approximate
 			//int turnToMaximize = 300 + 2*rushDist + 100*rc.senseTowerLocations().length;
@@ -369,7 +370,8 @@ public class RobotPlayer {
 		while (true) {
 			try {
 				if (Clock.getRoundNum() > 1000) {
-					MapLocation[] path = pathFind(new MapLocation((myHQLoc.x + enemyHQLoc.x)/2+12, (myHQLoc.y + enemyHQLoc.y)/2), new MapLocation((myHQLoc.x + enemyHQLoc.x)/2, (myHQLoc.y + enemyHQLoc.y)/2));
+					//MapLocation[] path = pathFind(new MapLocation((myHQLoc.x + enemyHQLoc.x)/2+12, (myHQLoc.y + enemyHQLoc.y)/2), new MapLocation((myHQLoc.x + enemyHQLoc.x)/2, (myHQLoc.y + enemyHQLoc.y)/2));
+					MapLocation[] path = pathFind(myHQLoc, enemyHQLoc);
 					if (path != null) {
 						int i = 1;
 						while (path[i] != null) {
@@ -1582,10 +1584,107 @@ public class RobotPlayer {
 		rc.broadcast(EAST_BOUND_CHAN, NO_BOUND);
 		rc.broadcast(SOUTH_BOUND_CHAN, NO_BOUND);
 		rc.broadcast(WEST_BOUND_CHAN, NO_BOUND);
-		rc.broadcast(NORTH_FARTHEST_CHAN, NO_BOUND);
-		rc.broadcast(EAST_FARTHEST_CHAN, NO_BOUND);
-		rc.broadcast(SOUTH_FARTHEST_CHAN, NO_BOUND);
-		rc.broadcast(WEST_FARTHEST_CHAN, NO_BOUND);
+		rc.broadcast(NORTH_FARTHEST_CHAN, myHQLoc.y);
+		rc.broadcast(EAST_FARTHEST_CHAN, myHQLoc.x);
+		rc.broadcast(SOUTH_FARTHEST_CHAN, myHQLoc.y);
+		rc.broadcast(WEST_FARTHEST_CHAN, myHQLoc.x);
+	}
+	
+	// combine both versions of lookForBounds to eliminate duplicated code
+	private static void lookForBounds(MapLocation myLoc, int rangeSq) throws GameActionException {
+		int range = (int)Math.sqrt(rangeSq);
+		Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
+		int[] knownBounds = {
+				rc.readBroadcast(NORTH_BOUND_CHAN),
+				rc.readBroadcast(EAST_BOUND_CHAN),
+				rc.readBroadcast(SOUTH_BOUND_CHAN),
+				rc.readBroadcast(WEST_BOUND_CHAN)
+		};
+		for (int dirNum = 0; dirNum < 4; dirNum++) {
+			Direction dir = myDirections[dirNum];
+			int bound = knownBounds[dirNum];
+			if (bound == NO_BOUND) {
+				MapLocation testLoc = myLoc.add(dir, range);
+				if (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP) {
+					do {
+						testLoc = testLoc.add(dir.opposite());
+					} while (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP && !testLoc.equals(myLoc));
+					if (dirNum == 0) {
+						// y direction
+						rc.broadcast(NORTH_BOUND_CHAN, testLoc.y);
+					} else if (dirNum == 1) {
+						// x direction
+						rc.broadcast(EAST_BOUND_CHAN, testLoc.x);
+					} else if (dirNum == 2) {
+						// y direction
+						rc.broadcast(SOUTH_BOUND_CHAN, testLoc.y);
+					} else if (dirNum == 3) {
+						// x direction
+						rc.broadcast(WEST_BOUND_CHAN, testLoc.x);
+					}
+				}
+			}
+		}
+		if (myLoc.y - range < rc.readBroadcast(NORTH_FARTHEST_CHAN)) {
+			rc.broadcast(NORTH_FARTHEST_CHAN, myLoc.y - range);
+		}
+		if (myLoc.y + range > rc.readBroadcast(SOUTH_FARTHEST_CHAN)) {
+			rc.broadcast(SOUTH_FARTHEST_CHAN, myLoc.y + range);
+		}
+		if (myLoc.x - range < rc.readBroadcast(WEST_FARTHEST_CHAN)) {
+			rc.broadcast(WEST_FARTHEST_CHAN, myLoc.x - range);
+		}
+		if (myLoc.x + range > rc.readBroadcast(EAST_FARTHEST_CHAN)) {
+			rc.broadcast(EAST_FARTHEST_CHAN, myLoc.x + range);
+		}
+	}
+
+	private static void lookForBounds() throws GameActionException {
+		int range = (int)Math.sqrt(myType.sensorRadiusSquared);
+		Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
+		int[] knownBounds = {
+				rc.readBroadcast(NORTH_BOUND_CHAN),
+				rc.readBroadcast(EAST_BOUND_CHAN),
+				rc.readBroadcast(SOUTH_BOUND_CHAN),
+				rc.readBroadcast(WEST_BOUND_CHAN)
+		};
+		for (int dirNum = 0; dirNum < 4; dirNum++) {
+			Direction dir = myDirections[dirNum];
+			int bound = knownBounds[dirNum];
+			if (bound == NO_BOUND) {
+				MapLocation testLoc = myLoc.add(dir, range);
+				if (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP) {
+					do {
+						testLoc = testLoc.add(dir.opposite());
+					} while (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP && !testLoc.equals(myLoc));
+					if (dirNum == 0) {
+						// y direction
+						rc.broadcast(NORTH_BOUND_CHAN, testLoc.y);
+					} else if (dirNum == 1) {
+						// x direction
+						rc.broadcast(EAST_BOUND_CHAN, testLoc.x);
+					} else if (dirNum == 2) {
+						// y direction
+						rc.broadcast(SOUTH_BOUND_CHAN, testLoc.y);
+					} else if (dirNum == 3) {
+						// x direction
+						rc.broadcast(WEST_BOUND_CHAN, testLoc.x);
+					}
+				}
+			}
+		}
+		if (myLoc.y - range < rc.readBroadcast(NORTH_FARTHEST_CHAN)) {
+			rc.broadcast(NORTH_FARTHEST_CHAN, myLoc.y - range);
+		}
+		if (myLoc.y + range > rc.readBroadcast(SOUTH_FARTHEST_CHAN)) {
+			rc.broadcast(SOUTH_FARTHEST_CHAN, myLoc.y + range);
+		}
+		if (myLoc.x - range < rc.readBroadcast(WEST_FARTHEST_CHAN)) {
+			rc.broadcast(WEST_FARTHEST_CHAN, myLoc.x - range);
+		}
+		if (myLoc.x + range > rc.readBroadcast(EAST_FARTHEST_CHAN)) {
+			rc.broadcast(EAST_FARTHEST_CHAN, myLoc.x + range);
+		}
 	}
 
 	private static int northBound() throws GameActionException {
@@ -2992,103 +3091,6 @@ public class RobotPlayer {
 		return null;
 	}
 
-	// combine both versions of lookForBounds to eliminate duplicated code
-	private static void lookForBounds(MapLocation myLoc, int rangeSq) throws GameActionException {
-		int range = (int)Math.sqrt(rangeSq);
-		Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
-		int[] knownBounds = {
-				rc.readBroadcast(NORTH_BOUND_CHAN),
-				rc.readBroadcast(EAST_BOUND_CHAN),
-				rc.readBroadcast(SOUTH_BOUND_CHAN),
-				rc.readBroadcast(WEST_BOUND_CHAN)
-		};
-		for (int dirNum = 0; dirNum < 4; dirNum++) {
-			Direction dir = myDirections[dirNum];
-			int bound = knownBounds[dirNum];
-			if (bound == NO_BOUND) {
-				MapLocation testLoc = myLoc.add(dir, range);
-				if (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP) {
-					do {
-						testLoc = testLoc.add(dir.opposite());
-					} while (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP && !testLoc.equals(myLoc));
-					if (dirNum == 0) {
-						// y direction
-						rc.broadcast(NORTH_BOUND_CHAN, testLoc.y);
-					} else if (dirNum == 1) {
-						// x direction
-						rc.broadcast(EAST_BOUND_CHAN, testLoc.x);
-					} else if (dirNum == 2) {
-						// y direction
-						rc.broadcast(SOUTH_BOUND_CHAN, testLoc.y);
-					} else if (dirNum == 3) {
-						// x direction
-						rc.broadcast(WEST_BOUND_CHAN, testLoc.x);
-					}
-				}
-			}
-		}
-		if (Math.max(myLoc.y - range, knownBounds[0]) < rc.readBroadcast(NORTH_FARTHEST_CHAN)) {
-			rc.broadcast(NORTH_FARTHEST_CHAN, myLoc.y - range);
-		}
-		if (Math.min(myLoc.y + range, knownBounds[2]) > rc.readBroadcast(SOUTH_FARTHEST_CHAN)) {
-			rc.broadcast(SOUTH_FARTHEST_CHAN, myLoc.y + range);
-		}
-		if (Math.max(myLoc.x - range, knownBounds[3]) < rc.readBroadcast(WEST_FARTHEST_CHAN)) {
-			rc.broadcast(WEST_FARTHEST_CHAN, myLoc.y - range);
-		}
-		if (Math.min(myLoc.x + range, knownBounds[1]) > rc.readBroadcast(EAST_FARTHEST_CHAN)) {
-			rc.broadcast(EAST_FARTHEST_CHAN, myLoc.y + range);
-		}
-	}
-
-	private static void lookForBounds() throws GameActionException {
-		int range = (int)Math.sqrt(myType.sensorRadiusSquared);
-		Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
-		int[] knownBounds = {
-				rc.readBroadcast(NORTH_BOUND_CHAN),
-				rc.readBroadcast(EAST_BOUND_CHAN),
-				rc.readBroadcast(SOUTH_BOUND_CHAN),
-				rc.readBroadcast(WEST_BOUND_CHAN)
-		};
-		for (int dirNum = 0; dirNum < 4; dirNum++) {
-			Direction dir = myDirections[dirNum];
-			int bound = knownBounds[dirNum];
-			if (bound == NO_BOUND) {
-				MapLocation testLoc = myLoc.add(dir, range);
-				if (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP) {
-					do {
-						testLoc = testLoc.add(dir.opposite());
-					} while (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP && !testLoc.equals(myLoc));
-					if (dirNum == 0) {
-						// y direction
-						rc.broadcast(NORTH_BOUND_CHAN, testLoc.y);
-					} else if (dirNum == 1) {
-						// x direction
-						rc.broadcast(EAST_BOUND_CHAN, testLoc.x);
-					} else if (dirNum == 2) {
-						// y direction
-						rc.broadcast(SOUTH_BOUND_CHAN, testLoc.y);
-					} else if (dirNum == 3) {
-						// x direction
-						rc.broadcast(WEST_BOUND_CHAN, testLoc.x);
-					}
-				}
-			}
-		}
-		if (Math.max(myLoc.y - range, knownBounds[0]) < rc.readBroadcast(NORTH_FARTHEST_CHAN)) {
-			rc.broadcast(NORTH_FARTHEST_CHAN, myLoc.y - range);
-		}
-		if (Math.min(myLoc.y + range, knownBounds[2]) > rc.readBroadcast(SOUTH_FARTHEST_CHAN)) {
-			rc.broadcast(SOUTH_FARTHEST_CHAN, myLoc.y + range);
-		}
-		if (Math.max(myLoc.x - range, knownBounds[3]) < rc.readBroadcast(WEST_FARTHEST_CHAN)) {
-			rc.broadcast(WEST_FARTHEST_CHAN, myLoc.x - range);
-		}
-		if (Math.min(myLoc.x + range, knownBounds[1]) > rc.readBroadcast(EAST_FARTHEST_CHAN)) {
-			rc.broadcast(EAST_FARTHEST_CHAN, myLoc.x + range);
-		}
-	}
-
 	// TODO: replace with josh's drone micro
 	private static MapLocation droneAttackLocation() {
 		RobotInfo[] myEnemies = rc.senseNearbyRobots(myAttackRangeSq, enemyTeam);
@@ -3669,85 +3671,51 @@ public class RobotPlayer {
 	private static void precomputePathfindingAndYield(int waypoint) throws GameActionException {
 		if (rc.readBroadcast(NAVMAP_STILL_PATHFINDING_CHAN + waypoint) == 1) {
 			int roundNum = Clock.getRoundNum();
-			//int watchdog = 0;
-			//int bc;
 			while (Clock.getRoundNum() == roundNum) {
-				//bc = Clock.getBytecodeNum();
 				MapLocation loc = popFromNavQueue(waypoint);
-				//System.out.println((Clock.getBytecodeNum() - bc) + " queue pop");
-				//bc = Clock.getBytecodeNum();
 				if (loc == null) {
 					// finished
 					rc.yield();
 					return;
 				}
-				//System.out.println("popped from queue");
 				TerrainTile tile = rc.senseTerrainTile(loc);
-				//System.out.println((Clock.getBytecodeNum() - bc) + " senseterrain");
-				int bestCost = 99999999; // never negative
-				Direction bestDir = null;
-				if (tile == TerrainTile.NORMAL) {
+				MapLocation symmetricLoc = symmetricLocation(loc);
+				TerrainTile symmetricTile = (symmetricLoc != null) ? rc.senseTerrainTile(symmetricLoc) : null;
+				if (tile == TerrainTile.NORMAL || symmetricTile == TerrainTile.NORMAL) {
+					int bestCost = 99999999; // never negative
+					Direction bestDir = null;
 					for (int dirNum = 8; --dirNum >= 0;) {
-						//bc = Clock.getBytecodeNum();
 						Direction dir = directions[dirNum];
 						MapLocation adjLoc = loc.add(dir);
-						//System.out.println((Clock.getBytecodeNum() - bc) + " dir add");
-						//bc = Clock.getBytecodeNum();
 						TerrainTile adjTile = rc.senseTerrainTile(adjLoc);
-						//System.out.println((Clock.getBytecodeNum() - bc) + " sense adj terrain");
-						if (adjTile == TerrainTile.NORMAL) {
-							//bc = Clock.getBytecodeNum();
+						MapLocation symmetricAdjLoc = symmetricLocation(adjLoc);
+						TerrainTile symmetricAdjTile = (symmetricAdjLoc != null) ? rc.senseTerrainTile(symmetricAdjLoc) : null;
+						if (adjTile == TerrainTile.NORMAL || symmetricAdjTile == TerrainTile.NORMAL) {
 							short adjBits = readNavMapBits(adjLoc, waypoint);
-							//System.out.println((Clock.getBytecodeNum() - bc) + " read nav map 1");
-							//bc = Clock.getBytecodeNum();
 							if ((adjBits & -0x8000) == -0x8000) { // if done
 								int newCost = (adjBits & 0x07ff) + (dir.isDiagonal() ? 7 : 5); // move cost function
 								if (newCost < bestCost || (newCost <= bestCost && !dir.isDiagonal())) { // if lowest cost found yet
 									bestCost = newCost;
 									bestDir = dir;
 								}
-								//System.out.println((Clock.getBytecodeNum() - bc) + " bit manipulation 1");
 							} else if ((adjBits & 0x4000) == 0x0000) { // if not queued
-								//System.out.println((Clock.getBytecodeNum() - bc) + " bit manipulation 2");
-								//bc = Clock.getBytecodeNum();
 								writeNavMapBits(adjLoc, waypoint, (short)0x4000); // mark as queued
-								//System.out.println((Clock.getBytecodeNum() - bc) + " write nav map 1");
-								//bc = Clock.getBytecodeNum();
 								addToNavQueue(waypoint, adjLoc);
-								//System.out.println((Clock.getBytecodeNum() - bc) + " queue add 1");
-								//System.out.println("added to queue");
 							}
 						} else if (adjTile == TerrainTile.UNKNOWN) {
-							//bc = Clock.getBytecodeNum();
 							short adjBits = readNavMapBits(adjLoc, waypoint);
-							//System.out.println((Clock.getBytecodeNum() - bc) + " read nav map 2");
-							//bc = Clock.getBytecodeNum();
 							if ((adjBits & 0x4000) == 0x0000) { // if not queued
-								//System.out.println((Clock.getBytecodeNum() - bc) + " bit manipulation 3");
-								//bc = Clock.getBytecodeNum();
 								writeNavMapBits(adjLoc, waypoint, (short)0x4000); // mark as queued
-								//System.out.println((Clock.getBytecodeNum() - bc) + " write nav map 2");
-								//bc = Clock.getBytecodeNum();
 								addToNavQueue(waypoint, adjLoc);
-								//System.out.println((Clock.getBytecodeNum() - bc) + " queue add 2");
-								//System.out.println("added to queue");
 							} else {
-								//System.out.println((Clock.getBytecodeNum() - bc) + " bit manipulation 4");
 							}
 						}
 					}
 					if (bestDir == null) {
 						System.out.println("pathfinding error: bestDir = null");
-						//rc.setIndicatorDot(loc, 255, 0, 0);
 					} else {
-						//rc.setIndicatorLine(loc, loc.add(bestDir), 0, 255, 0);
-						//bc = Clock.getBytecodeNum();
 						short bits = (short)(-0x8000 | (bestDir.ordinal() << 11) | (bestCost & 0x07ff));
-						//System.out.println((Clock.getBytecodeNum() - bc) + " bit manipulation 5");
-						//bc = Clock.getBytecodeNum();
 						writeNavMapBits(loc, waypoint, bits);
-						//System.out.println((Clock.getBytecodeNum() - bc) + " write nav map 3");
-						//System.out.println("finished");
 						if (isOnSymmetryBoundary(loc)) {
 							int bestSymmetryCost = rc.readBroadcast(NAVMAP_SYMMETRY_COSTS_CHAN + waypoint);
 							if (bestCost < bestSymmetryCost) {
@@ -3758,12 +3726,8 @@ public class RobotPlayer {
 					}
 				} else if (tile == TerrainTile.UNKNOWN) {
 					addToNavQueue(waypoint, loc);
-					//rc.setIndicatorDot(loc, 0, 0, 255);
-					//System.out.println("unknown. added back to queue");
 				}
-				//watchdog++;
 			}
-			//System.out.println(myType + " does " + watchdog);
 			
 		}
 	}
@@ -3967,6 +3931,27 @@ public class RobotPlayer {
 			break;
 		}
 		return null;
+	}
+	
+	private static void debug_showNavMap(int waypoint) throws GameActionException {
+		int xmin = westFarthest();
+		int xmax = eastFarthest() + 20;
+		int ymin = northFarthest();
+		int ymax = southFarthest();
+		if (xmin != NO_BOUND && xmax != NO_BOUND && ymin != NO_BOUND && ymax != NO_BOUND) {
+			for (int i = xmin; i <= xmax; i++) {
+				for (int j = ymin; j <= ymax; j++) {
+					MapLocation loc = new MapLocation(i, j);
+					short bits = readNavMapBits(loc, waypoint);
+					if ((bits & -0x8000) != 0) { // if done
+						int dirNum = (bits & 0x3800) >> 11;
+						Direction dir = directions[dirNum];
+						rc.setIndicatorLine(loc, loc.add(dir), 0, 255, 0);
+						
+					}
+				}
+			}
+		}
 	}
 
 }
