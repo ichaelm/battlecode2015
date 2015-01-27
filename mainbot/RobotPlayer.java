@@ -148,13 +148,17 @@ public class RobotPlayer {
 	private static int[] numCompletedByType;
 	private static int buildingParity;
 	private static int bugNavWinding;
+	private static int bugNavFallTimes = 0;
 	private static MapLocation navTargetLoc;
+	private static MapLocation navSourceLoc;
 	private static int navType;
 	private static int navClosestDistSq;
 	private static final int NAVTYPE_SIMPLE = 1;
 	private static final int NAVTYPE_BUG = 2;
 	private static final int NAVTYPE_PRECOMP = 3;
 	private static int maxNumBytecodes = 0;
+	private static MapLocation[] foundPath = null;
+	private static int foundPathIndex = 0;
 
 	// should be final, but can't because set in run()
 	private static Direction[] directions;
@@ -1140,10 +1144,10 @@ public class RobotPlayer {
 				if (rc.isCoreReady()) {
 					if (nearestEnemy != null && myLoc.distanceSquaredTo(nearestEnemy) <= 15) { // if i am too close
 						safeTryMove(nearestEnemy.directionTo(myLoc));
-					} else if (nearestEnemy != null && myLoc.add(myLoc.directionTo(nearestEnemy)).distanceSquaredTo(nearestEnemy) <= 15) { // if i would move too close {
+					} else if (nearestEnemy != null && myLoc.add(myLoc.directionTo(nearestEnemy)).distanceSquaredTo(nearestEnemy) <= 35) { // if i would move too close {
 						// don't move
 					} else {
-						if (Clock.getRoundNum() < 500) {
+						if (Clock.getRoundNum() < 1500) {
 							if(isVulnerable(baseTarget) && rc.senseNearbyRobots(baseTarget, 36, myTeam).length >= 10 ) {
 								moveToSafely(baseTarget);
 							} else {
@@ -1206,10 +1210,10 @@ public class RobotPlayer {
 					} else {
 						mine();
 					}
+				} else { // hack for bytecodes
+					// transfer supply
+					transferSupply();
 				}
-
-				// transfer supply
-				transferSupply();
 
 				// end round
 				rc.yield();
@@ -2391,20 +2395,14 @@ public class RobotPlayer {
 						safeTryMove(directions[rand.nextInt(8)]);
 					} else {
 						rc.setIndicatorString(1,"branch7 " + targetLoc.x + " " + targetLoc.y);
-						rc.setIndicatorDot(targetLoc, 0, 255, 0);
-						//rc.setIndicatorDot(targetLoc, 0, 0, 255);
 						moveToSafely(targetLoc);
 					}
 				} else {
 					if (bestOre > bestEverOre / 2) {
 						rc.setIndicatorString(1,"branch5");
-						rc.setIndicatorDot(bestLoc, 0, 255, 0);
-						//rc.setIndicatorDot(targetLoc, 0, 0, 255);
 						moveToSafely(bestLoc);
 					} else {
 						rc.setIndicatorString(1,"branch9");
-						rc.setIndicatorDot(targetLoc, 0, 255, 0);
-						//rc.setIndicatorDot(targetLoc, 0, 0, 255);
 						moveToSafely(targetLoc);
 					}
 
@@ -2416,7 +2414,7 @@ public class RobotPlayer {
 		}
 
 		if (Clock.getRoundNum() > round) {
-			System.out.println("miners exceed bytecodes!!");
+			//System.out.println("miners exceed bytecodes!!");
 		}
 
 	}
@@ -3063,7 +3061,7 @@ public class RobotPlayer {
 				}
 			}
 			i++;
-			if (i >= 7) {
+			if (i >= 3) {
 				break;
 			}
 		}
@@ -3441,7 +3439,24 @@ public class RobotPlayer {
 	}
 	
 	private static boolean moveTo(MapLocation targetLoc) throws GameActionException {
-		Direction dir = bugNavDirection(targetLoc);
+		Direction dir = null;
+		if (targetLoc.equals(navTargetLoc)) {
+			if (navType == NAVTYPE_BUG && !pathExists(myLoc, targetLoc)) {
+				dir = bugNavDirection(targetLoc);
+			} else {
+				dir = pathFindingDirection(targetLoc);
+				if (dir == null) {
+					navType = 0;
+					dir = bugNavDirection(targetLoc);
+				}
+			}
+		} else {
+			navType = 0;
+			dir = pathFindingDirection(targetLoc);
+			if (dir == null) {
+				dir = bugNavDirection(targetLoc);
+			}
+		}
 		if (dir == null)
 			return false;
 		rc.move(dir);
@@ -3449,9 +3464,33 @@ public class RobotPlayer {
 	}
 	
 	private static boolean moveToSafely(MapLocation targetLoc) throws GameActionException {
-		Direction dir = safeBugNavDirection(targetLoc);
-		if (dir == null)
+		Direction dir = null;
+		if (targetLoc.equals(navTargetLoc)) {
+			if (navType == NAVTYPE_BUG && !pathExists(myLoc, targetLoc)) {
+				rc.setIndicatorString(0, "trying to bug again");
+				dir = safeBugNavDirection(targetLoc);
+			} else {
+				rc.setIndicatorString(1, "trying to path again");
+				dir = safePathFindingDirection(targetLoc);
+				if (dir == null) {
+					rc.setIndicatorString(2, "failed, trying to bug again");
+					navType = 0;
+					dir = safeBugNavDirection(targetLoc);
+				}
+			}
+		} else {
+			navType = 0;
+			rc.setIndicatorString(0, "trying to path first");
+			dir = safePathFindingDirection(targetLoc);
+			if (dir == null) {
+				rc.setIndicatorString(1, "failed, trying to bug first");
+				dir = safeBugNavDirection(targetLoc);
+			}
+		}
+		if (dir == null) {
+			rc.setIndicatorString(2, "epic fail");
 			return false;
+		}
 		rc.move(dir);
 		return true;
 	}
@@ -3533,12 +3572,57 @@ public class RobotPlayer {
 		int currentDistSq = myLoc.distanceSquaredTo(targetLoc);
 		if (currentDistSq < navClosestDistSq) {
 			navClosestDistSq = currentDistSq;
-		} else if (currentDistSq >  navClosestDistSq * 2) {
+		} else if (Math.sqrt(currentDistSq) > Math.sqrt(navClosestDistSq)*(Math.pow(2, bugNavFallTimes+1)) + 10) {
 			leftHanded = !leftHanded;
 			bugNavWinding = 0;
 			navClosestDistSq = currentDistSq;
+			bugNavFallTimes++;
 		}
 		return currentDir;
+	}
+	
+	private static Direction pathFindingDirection(MapLocation targetLoc) throws GameActionException {
+		return pathFindingDirection(targetLoc, false);
+	}
+	
+	private static Direction safePathFindingDirection(MapLocation targetLoc) throws GameActionException {
+		return pathFindingDirection(targetLoc, true);
+	}
+	
+	private static Direction pathFindingDirection(MapLocation targetLoc, boolean safety) throws GameActionException {
+		if (!targetLoc.equals(navTargetLoc) || navType != NAVTYPE_PRECOMP || navSourceLoc.distanceSquaredTo(myLoc) > 2) {
+			navTargetLoc = targetLoc;
+			navSourceLoc = myLoc;
+			navType = NAVTYPE_PRECOMP;
+			foundPath = pathFind(myLoc, navTargetLoc);
+			foundPathIndex = 0;
+		}
+		if (foundPath == null || foundPath[0] == null) {
+			return null;
+		}
+
+		MapLocation currentLoc = foundPath[foundPathIndex];
+		while (currentLoc != null && currentLoc.distanceSquaredTo(myLoc) <= 8) {
+			foundPathIndex++;
+			currentLoc = foundPath[foundPathIndex];
+		}
+		if (currentLoc == null) {
+			return null;
+		}
+		Direction d = myLoc.directionTo(currentLoc);
+		navSourceLoc = myLoc.add(d);
+		if (canMove(d, safety)) {
+			return d;
+		} else if (canMove(d.rotateLeft(), safety)) {
+			return d.rotateLeft();
+		} else if (canMove(d.rotateRight(), safety)) {
+			return d.rotateRight();
+		}else if (canMove(d.rotateLeft().rotateLeft(), safety)) {
+			return d.rotateLeft().rotateLeft();
+		} else if (canMove(d.rotateRight().rotateRight(), safety)) {
+			return d.rotateRight().rotateRight();
+		}
+		return null;
 	}
 	
 	private static boolean leftSideOfMap() {
@@ -3799,7 +3883,27 @@ public class RobotPlayer {
 		}
 	}
 	
-	//TODO: drawstring on pathfinding
+	private static boolean pathExists(MapLocation startLoc, MapLocation endLoc) throws GameActionException {
+		MapLocation symmetricStartLoc = symmetricLocation(startLoc);
+		MapLocation symmetricEndLoc = symmetricLocation(endLoc);
+		final int waypoint = 0;
+		short startBits = readNavMapBits(startLoc, waypoint);
+		short endBits = readNavMapBits(endLoc, waypoint);
+		short symmetricStartBits = readNavMapBits(symmetricStartLoc, waypoint);
+		short symmetricEndBits = readNavMapBits(symmetricEndLoc, waypoint);
+		boolean startDone = ((startBits & -0x8000) != 0);
+		boolean endDone = ((endBits & -0x8000) != 0);
+		boolean symmetricStartDone = ((symmetricStartBits & -0x8000) != 0);
+		boolean symmetricEndDone = ((symmetricEndBits & -0x8000) != 0);
+		if (startDone && endDone) {
+			return true;
+		} else if (symmetricStartDone && symmetricEndDone) {
+			return true;
+		}
+		return false;
+	}
+	
+	//TODO: better drawstring on pathfinding
 	private static MapLocation[] pathFind(MapLocation startLoc, MapLocation endLoc) throws GameActionException {
 		int numWaypoints = rc.readBroadcast(NAVMAP_NUM_WAYPOINTS_CHAN);
 		MapLocation symmetricStartLoc = symmetricLocation(startLoc);
@@ -3889,6 +3993,8 @@ public class RobotPlayer {
 				} else {
 					break;
 				}
+			} else {
+				break;
 			}
 		}
 		for (; --endPathSize >= 0; startPathSize++) {
