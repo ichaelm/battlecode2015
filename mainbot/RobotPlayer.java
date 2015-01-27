@@ -1196,11 +1196,11 @@ public class RobotPlayer {
 				// TODO: launcher movement code
 				// move according to orders
 				if (rc.isCoreReady()) {
-					/* if (nearestEnemy != null && myLoc.distanceSquaredTo(nearestEnemy) <= 15) { // if i am too close
+					if (nearestEnemy != null && myLoc.distanceSquaredTo(nearestEnemy) <= 15) { // if i am too close
 						safeTryMove(nearestEnemy.directionTo(myLoc));
 					} else  if (nearestEnemy != null && myLoc.add(myLoc.directionTo(nearestEnemy)).distanceSquaredTo(nearestEnemy) <= 35) { // if i would move too close {
 						// don't move
-					} else */ {
+					} else {
 						if (rc.getRoundLimit()-Clock.getRoundNum() > RUSH_TURNS_LEFT) {
 							if(isVulnerable(baseTarget) && rc.senseNearbyRobots(baseTarget, 36, myTeam).length >= 10 ) {
 								moveToSafely(baseTarget);
@@ -3091,7 +3091,7 @@ public class RobotPlayer {
 	}
 
 	private static MapLocation nearestSensedEnemy() throws GameActionException {
-		RobotInfo[] enemies = rc.senseNearbyRobots(mySensorRangeSq, enemyTeam);
+		RobotInfo[] enemies = rc.senseNearbyRobots(35, enemyTeam);
 		int closestDist = 9999;
 		RobotInfo closestRobot = null;
 		for (RobotInfo r : enemies) {
