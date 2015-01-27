@@ -278,6 +278,9 @@ public class RobotPlayer {
 		try {
 			// initialize bounds channels
 			initBounds();
+			rc.broadcast(SWARM_ONE_LOCATION,packLocation(new MapLocation(NO_BOUND,NO_BOUND)));
+			rc.broadcast(SWARM_TWO_LOCATION,packLocation(new MapLocation(NO_BOUND,NO_BOUND)));
+			rc.broadcast(SWARM_THREE_LOCATION,packLocation(new MapLocation(NO_BOUND,NO_BOUND)));
 			
 			// update locations
 			updateLocations();
@@ -695,6 +698,20 @@ public class RobotPlayer {
 				rc.broadcast(SWARM_ONE_DRONES, 0);
 				rc.broadcast(SWARM_ONE_LAUNCHERS, 0);
 				rc.broadcast(SWARM_ONE_COMMANDER, 0);
+				
+				rc.broadcast(SWARM_TWO_SOLDIERS, 0);
+				rc.broadcast(SWARM_TWO_BASHERS, 0);
+				rc.broadcast(SWARM_TWO_TANKS, 0);
+				rc.broadcast(SWARM_TWO_DRONES, 0);
+				rc.broadcast(SWARM_TWO_LAUNCHERS, 0);
+				rc.broadcast(SWARM_TWO_COMMANDER, 0);
+				
+				rc.broadcast(SWARM_THREE_SOLDIERS, 0);
+				rc.broadcast(SWARM_THREE_BASHERS, 0);
+				rc.broadcast(SWARM_THREE_TANKS, 0);
+				rc.broadcast(SWARM_THREE_DRONES, 0);
+				rc.broadcast(SWARM_THREE_LAUNCHERS, 0);
+				rc.broadcast(SWARM_THREE_COMMANDER, 0);
 				// end round
 				precomputePathfindingAndYield(0);
 			} catch (Exception e) {
@@ -3043,6 +3060,14 @@ public class RobotPlayer {
 		RobotInfo[] enemies = rc.senseNearbyRobots(mySensorRangeSq, enemyTeam);
 		int closestDist = 9999;
 		RobotInfo closestRobot = null;
+		int centroidX = 0;
+		int centroidY = 0;
+		int soldiers = 0;
+		int bashers = 0;
+		int tanks = 0;
+		int drones = 0;
+		int launchers = 0;
+		int commander = 0;	
 		for (RobotInfo r : enemies) {
 			if (r.type != MISSILE) {
 				MapLocation enemyLoc = r.location;
@@ -3051,6 +3076,133 @@ public class RobotPlayer {
 					closestDist = dist;
 					closestRobot = r;
 				}
+				centroidX += r.location.x;
+				centroidY += r.location.y;
+				if(r.type == SOLDIER){
+					soldiers++;
+				}
+				if(r.type == BASHER){
+					bashers++;
+				}
+				if(r.type == TANK){
+					tanks++;
+				}
+				if(r.type == DRONE){
+					drones++;
+				}
+				if(r.type == LAUNCHER){
+					launchers++;
+				}
+				if(r.type == COMMANDER){
+					commander = 1;
+				}
+			}
+		}
+		centroidX /= enemies.length;
+		centroidY /= enemies.length;
+		MapLocation swarmLocation = new MapLocation(centroidX,centroidY);
+		MapLocation swarm1 = unpackLocation(rc.readBroadcast(SWARM_ONE_LOCATION));
+		MapLocation swarm2 = unpackLocation(rc.readBroadcast(SWARM_TWO_LOCATION));
+		MapLocation swarm3 = unpackLocation(rc.readBroadcast(SWARM_THREE_LOCATION));
+		//initialize a swarm
+		if(swarm1.x == NO_BOUND){
+			rc.broadcast(SWARM_ONE_LOCATION, packLocation(swarmLocation));
+			rc.broadcast(SWARM_ONE_SOLDIERS, soldiers);
+			rc.broadcast(SWARM_ONE_BASHERS, bashers);
+			rc.broadcast(SWARM_ONE_TANKS, tanks);
+			rc.broadcast(SWARM_ONE_DRONES, drones);
+			rc.broadcast(SWARM_ONE_LAUNCHERS, launchers);
+			rc.broadcast(SWARM_ONE_COMMANDER, commander);
+		}
+		else{
+			//if its the same swarm as swarm 1
+			if(distance(swarmLocation, swarm1) < 100){
+				MapLocation meanCenter = new MapLocation((swarmLocation.x + swarm1.x)/2, (swarmLocation.y + swarm1.y)/2);
+				rc.broadcast(SWARM_ONE_LOCATION, packLocation(meanCenter));
+				if(soldiers > rc.readBroadcast(SWARM_ONE_SOLDIERS)){
+					rc.broadcast(SWARM_ONE_SOLDIERS, soldiers);
+				}
+				if(bashers > rc.readBroadcast(SWARM_ONE_BASHERS)){
+					rc.broadcast(SWARM_ONE_BASHERS, bashers);
+				}
+				if(tanks > rc.readBroadcast(SWARM_ONE_TANKS)){
+					rc.broadcast(SWARM_ONE_TANKS, tanks);
+				}
+				if(drones > rc.readBroadcast(SWARM_ONE_DRONES)){
+					rc.broadcast(SWARM_ONE_DRONES, drones);
+				}
+				if(soldiers > rc.readBroadcast(SWARM_ONE_LAUNCHERS)){
+					rc.broadcast(SWARM_ONE_LAUNCHERS, launchers);
+				}
+				if(commander == 1){ 
+					rc.broadcast(SWARM_ONE_COMMANDER, 1);
+				}
+			}
+			else if(swarm2.x == NO_BOUND){
+				rc.broadcast(SWARM_TWO_LOCATION, packLocation(swarmLocation));
+				rc.broadcast(SWARM_TWO_SOLDIERS, soldiers);
+				rc.broadcast(SWARM_TWO_BASHERS, bashers);
+				rc.broadcast(SWARM_TWO_TANKS, tanks);
+				rc.broadcast(SWARM_TWO_DRONES, drones);
+				rc.broadcast(SWARM_TWO_LAUNCHERS, launchers);
+				rc.broadcast(SWARM_TWO_COMMANDER, commander);
+			}
+			else if(distance(swarmLocation, swarm2) < 100){
+				MapLocation meanCenter = new MapLocation((swarmLocation.x + swarm1.x)/2, (swarmLocation.y + swarm1.y)/2);
+				rc.broadcast(SWARM_TWO_LOCATION, packLocation(meanCenter));
+				if(soldiers > rc.readBroadcast(SWARM_TWO_SOLDIERS)){
+					rc.broadcast(SWARM_TWO_SOLDIERS, soldiers);
+				}
+				if(bashers > rc.readBroadcast(SWARM_TWO_BASHERS)){
+					rc.broadcast(SWARM_TWO_BASHERS, bashers);
+				}
+				if(tanks > rc.readBroadcast(SWARM_TWO_TANKS)){
+					rc.broadcast(SWARM_TWO_TANKS, tanks);
+				}
+				if(drones > rc.readBroadcast(SWARM_TWO_DRONES)){
+					rc.broadcast(SWARM_TWO_DRONES, drones);
+				}
+				if(soldiers > rc.readBroadcast(SWARM_TWO_LAUNCHERS)){
+					rc.broadcast(SWARM_TWO_LAUNCHERS, launchers);
+				}
+				if((commander == 1 )){ 
+					rc.broadcast(SWARM_TWO_COMMANDER, 1);
+				}
+			}
+			else if(swarm3.x == NO_BOUND){
+				rc.broadcast(SWARM_THREE_LOCATION, packLocation(swarmLocation));
+				rc.broadcast(SWARM_THREE_SOLDIERS, soldiers);
+				rc.broadcast(SWARM_THREE_BASHERS, bashers);
+				rc.broadcast(SWARM_THREE_TANKS, tanks);
+				rc.broadcast(SWARM_THREE_DRONES, drones);
+				rc.broadcast(SWARM_THREE_LAUNCHERS, launchers);
+				rc.broadcast(SWARM_THREE_COMMANDER, commander);
+			}
+			else if(distance(swarmLocation, swarm3) < 100){
+				MapLocation meanCenter = new MapLocation((swarmLocation.x + swarm1.x)/2, (swarmLocation.y + swarm1.y)/2);
+				rc.broadcast(SWARM_THREE_LOCATION, packLocation(meanCenter));
+				if(soldiers > rc.readBroadcast(SWARM_THREE_SOLDIERS)){
+					rc.broadcast(SWARM_THREE_SOLDIERS, soldiers);
+				}
+				if(bashers > rc.readBroadcast(SWARM_THREE_BASHERS)){
+					rc.broadcast(SWARM_THREE_BASHERS, bashers);
+				}
+				if(tanks > rc.readBroadcast(SWARM_THREE_TANKS)){
+					rc.broadcast(SWARM_THREE_TANKS, tanks);
+				}
+				if(drones > rc.readBroadcast(SWARM_THREE_DRONES)){
+					rc.broadcast(SWARM_THREE_DRONES, drones);
+				}
+				if(soldiers > rc.readBroadcast(SWARM_THREE_LAUNCHERS)){
+					rc.broadcast(SWARM_THREE_LAUNCHERS, launchers);
+				}
+				if(commander == 1){ 
+					rc.broadcast(SWARM_THREE_COMMANDER, 1);
+				}
+				
+			}
+			else{
+				System.out.print("WTF! more than 3 swarms!?");
 			}
 		}
 		if (closestRobot != null) {
