@@ -9,7 +9,8 @@ public class RobotPlayer {
 	private static final int ROUND_TO_BUILD_LAUNCHERS = 100;
 
 	// AI parameters
-	private static final int RUSH_TURN = 1200;
+	private static final int RUSH_TURNS_LEFT = 500;
+	private static final int ALL_OUT_RUSH_TURNS_LEFT = 300;
 
 	// Game parameters
 	private static final int MAX_MAP_WIDTH = 120;
@@ -83,6 +84,10 @@ public class RobotPlayer {
 	private static final int UNKNOWN_QUEUE_SIZE = 1000;
 	private static final int UNKNOWN_QUEUE_STARTPTR_CHAN = UNKNOWN_QUEUE_CHAN + UNKNOWN_QUEUE_SIZE;
 	private static final int UNKNOWN_QUEUE_ENDPTR_CHAN = UNKNOWN_QUEUE_STARTPTR_CHAN + 1;
+	private static final int RALLY_POINT_NUM_CHAN = UNKNOWN_QUEUE_ENDPTR_CHAN + 1;
+	private static final int RALLY_POINT_CHAN = RALLY_POINT_NUM_CHAN + 1;
+	private static final int RALLY_POINT_SIZE = 2;
+	private static final int SAFETY_RADIUS_SQ_CHAN = RALLY_POINT_CHAN + RALLY_POINT_SIZE;
 	
 	// Broadcast signaling constants
 	private static final int NO_BOUND = 32000;
@@ -159,6 +164,9 @@ public class RobotPlayer {
 	private static int maxNumBytecodes = 0;
 	private static MapLocation[] foundPath = null;
 	private static int foundPathIndex = 0;
+	private static double enemyHQHealth = 2000;
+	private static MapLocation[] originalEnemyTowerLocs;
+	private static double[] enemyTowerHealths = null;
 
 	// should be final, but can't because set in run()
 	private static Direction[] directions;
@@ -241,6 +249,8 @@ public class RobotPlayer {
 	}
 
 	private static void runHQ() {
+		
+		boolean builtADrone = false;
 
 		// information stored across rounds
 		double[] oreMinedByTurn = new double[10];
@@ -257,11 +267,20 @@ public class RobotPlayer {
 			// update locations
 			updateLocations();
 			
+			enemyTowerHealths = new double[enemyTowerLocs.length];
+			
+			originalEnemyTowerLocs = new MapLocation[enemyTowerLocs.length];
+			for (int i = 0; i < enemyTowerLocs.length; i++) {
+				originalEnemyTowerLocs[i] = enemyTowerLocs[i];
+			}
+			
 			for (int i = 0; i < myTowerLocs.length + 1; i++) {
 				rc.broadcast(NAVMAP_SYMMETRY_LOCS_CHAN + i, packLocation(new MapLocation(NO_BOUND, NO_BOUND)));
 			}
 			
 			initializePathfindingQueues();
+			
+			initializeRallyLocs();
 			
 			// TODO: better mining strategy picking
 			//double orePerSquare = rc.senseOre(myHQLoc); // approximate
@@ -518,8 +537,12 @@ public class RobotPlayer {
 					buildQueue[row][1] = 1;
 					row++;
 				} else {
-					int breakEvenRounds = (int)Math.ceil(MINER.oreCost / oreMinedPerMiner) + MINER.buildTurns;
-					if (numRobotsByType[MINER.ordinal()] < 30) {
+					//int breakEvenRounds = (int)Math.ceil(MINER.oreCost / oreMinedPerMiner) + MINER.buildTurns;
+					if (numRobotsByType[MINER.ordinal()] < 30 && roundNum < 1000) {
+						buildQueue[row][0] = MINER.ordinal();
+						buildQueue[row][1] = 1;
+						row++;
+					} else if (numRobotsByType[MINER.ordinal()] < 15 && rc.getRoundLimit()-Clock.getRoundNum() > 500) {
 						buildQueue[row][0] = MINER.ordinal();
 						buildQueue[row][1] = 1;
 						row++;
@@ -556,11 +579,13 @@ public class RobotPlayer {
 					}
 				}
 				 */
+				/*
 				if (numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()] < 1) {
-					//buildQueue[row][0] = BARRACKS.ordinal();
-					//buildQueue[row][1] = 1;
-					//row++;
+					buildQueue[row][0] = BARRACKS.ordinal();
+					buildQueue[row][1] = 1;
+					row++;
 				}
+				*/
 
 				if (roundNum < ROUND_TO_BUILD_LAUNCHERS) {
 					//addToBuildQueue(SOLDIER);
@@ -568,20 +593,41 @@ public class RobotPlayer {
 				} else {
 					if (numHelipad < 1) {
 						addToBuildQueue(HELIPAD);
-						addToBuildQueue(SOLDIER);
+						//addToBuildQueue(SOLDIER);
 					} else if (numRobotsByType[HELIPAD.ordinal()] < 1) {
-						addToBuildQueue(SOLDIER);
+						//addToBuildQueue(SOLDIER);
 					} else if (numAeroLab < 1) {
+						if (!builtADrone)
+							addToBuildQueue(DRONE);
 						addToBuildQueue(AEROSPACELAB);
-						addToBuildQueue(SOLDIER);
+						//addToBuildQueue(SOLDIER);
 					} else if (numRobotsByType[AEROSPACELAB.ordinal()] < 1) {
-						addToBuildQueue(SOLDIER);
+						if (!builtADrone)
+							addToBuildQueue(DRONE);
+						//addToBuildQueue(SOLDIER);
 					} else {
-						addToBuildQueue(LAUNCHER);
-						addToBuildQueue(AEROSPACELAB);
-						addToBuildQueue(AEROSPACELAB);
-						addToBuildQueue(AEROSPACELAB);
+						if (!builtADrone)
+							addToBuildQueue(DRONE);
+						if (true) {
+							addToBuildQueue(LAUNCHER);
+							addToBuildQueue(AEROSPACELAB);
+							addToBuildQueue(AEROSPACELAB);
+							addToBuildQueue(AEROSPACELAB);
+						} else {
+							addToBuildQueue(SOLDIER);
+							addToBuildQueue(BARRACKS);
+							addToBuildQueue(LAUNCHER);
+							addToBuildQueue(AEROSPACELAB);
+							addToBuildQueue(AEROSPACELAB);
+							addToBuildQueue(AEROSPACELAB);
+						}
+						
+						
 					}
+				}
+				
+				if (numDrones > 0) {
+					builtADrone = true;
 				}
 
 
@@ -663,8 +709,13 @@ public class RobotPlayer {
 
 				rc.setIndicatorString(0, sb.toString());
 				 */
+				
+				if (roundNum % 100 == 0) {
+					debug_showNavMap(0);
+				}
 
 				// end round
+				System.out.println(Clock.getRoundNum());
 				precomputePathfindingAndYield(0);
 			} catch (Exception e) {
 				System.out.println("HQ Exception");
@@ -827,7 +878,7 @@ public class RobotPlayer {
 
 				// TODO: basher movement and combat code
 				if (rc.isCoreReady()) {
-					if (Clock.getRoundNum() < RUSH_TURN) {
+					if (rc.getRoundLimit()-Clock.getRoundNum() < RUSH_TURNS_LEFT) {
 						rally();
 					} else {
 						MapLocation enemyLoc = nearestSensedEnemy();
@@ -894,7 +945,7 @@ public class RobotPlayer {
 				
 				rc.setIndicatorString(0, "leftHanded = " + leftHanded);
 				if (rc.isCoreReady()) {
-					if (Clock.getRoundNum() > 1700) {
+					if (rc.getRoundLimit()-Clock.getRoundNum() < ALL_OUT_RUSH_TURNS_LEFT) {
 						if (enemyTowerLocs.length == 0) {
 							tryMove(myLoc.directionTo(enemyHQLoc));
 						} else {
@@ -1018,6 +1069,7 @@ public class RobotPlayer {
 
 				// TODO: drone movement code
 				if (rc.isCoreReady()) {
+					/*
 					// find units that need supply
 					if (allyUnitLoc == null && rc.readBroadcast(UNIT_NEEDS_SUPPLY_X_CHAN) != 0) {
 						allyUnitLoc = new MapLocation(rc.readBroadcast(UNIT_NEEDS_SUPPLY_X_CHAN), rc.readBroadcast(UNIT_NEEDS_SUPPLY_Y_CHAN));
@@ -1040,6 +1092,8 @@ public class RobotPlayer {
 					} else { //if I don't have supply, go to HQ and wait for enough supply
 						safeTryMove(myLoc.directionTo(myHQLoc));
 					}
+					*/
+					moveToSafely(enemyHQLoc);
 
 				}
 
@@ -1142,12 +1196,12 @@ public class RobotPlayer {
 				// TODO: launcher movement code
 				// move according to orders
 				if (rc.isCoreReady()) {
-					if (nearestEnemy != null && myLoc.distanceSquaredTo(nearestEnemy) <= 15) { // if i am too close
+					/* if (nearestEnemy != null && myLoc.distanceSquaredTo(nearestEnemy) <= 15) { // if i am too close
 						safeTryMove(nearestEnemy.directionTo(myLoc));
-					} else if (nearestEnemy != null && myLoc.add(myLoc.directionTo(nearestEnemy)).distanceSquaredTo(nearestEnemy) <= 35) { // if i would move too close {
+					} else  if (nearestEnemy != null && myLoc.add(myLoc.directionTo(nearestEnemy)).distanceSquaredTo(nearestEnemy) <= 35) { // if i would move too close {
 						// don't move
-					} else {
-						if (Clock.getRoundNum() < 1500) {
+					} else */ {
+						if (rc.getRoundLimit()-Clock.getRoundNum() > RUSH_TURNS_LEFT) {
 							if(isVulnerable(baseTarget) && rc.senseNearbyRobots(baseTarget, 36, myTeam).length >= 10 ) {
 								moveToSafely(baseTarget);
 							} else {
@@ -1159,10 +1213,15 @@ public class RobotPlayer {
 								}
 							}
 						} else {
-							if (enemyTowerLocs.length == 0) {
-								moveToSafely(enemyHQLoc);
+							MapLocation invader = attackingEnemy();
+							if (invader != null) {
+								safeTryMove(myLoc.directionTo(invader));
 							} else {
-								moveToSafely(closestLocation(mapCenter, enemyTowerLocs));
+								if (enemyTowerLocs.length == 0) {
+									moveToSafely(enemyHQLoc);
+								} else {
+									moveToSafely(closestLocation(mapCenter, enemyTowerLocs));
+								}
 							}
 						}
 					}
@@ -1201,7 +1260,7 @@ public class RobotPlayer {
 				// TODO: miner code
 				// TODO: make miners avoid enemy towers
 				if (rc.isCoreReady()) {
-					if (Clock.getRoundNum() > 1700) {
+					if (rc.getRoundLimit()-Clock.getRoundNum() < ALL_OUT_RUSH_TURNS_LEFT) {
 						if (enemyTowerLocs.length == 0) {
 							tryMove(myLoc.directionTo(enemyHQLoc));
 						} else {
@@ -1266,6 +1325,7 @@ public class RobotPlayer {
 					MapLocation target = fastNearestEnemy();
 					if (target == null) {
 						quickTryMove(myLoc.directionTo(enemyHQLoc));
+						//rc.disintegrate();
 					} else {
 						if (myLoc.distanceSquaredTo(target) <= 2) { // if adjacent
 							quickTryMove(myLoc.directionTo(target)); // not sure if this should be done
@@ -1309,16 +1369,16 @@ public class RobotPlayer {
 
 				// move according to orders
 				if (rc.isCoreReady()) {
-					if (Clock.getRoundNum() < 1500) {
+					if (rc.getRoundLimit()-Clock.getRoundNum() > RUSH_TURNS_LEFT) {
 						MapLocation target = closestLocation(myLoc, enemyTowerLocs);
 						if(isVulnerable(target) && rc.senseNearbyRobots(target, 36, myTeam).length >= 10 ) {
 							safeTryMove(myLoc.directionTo(target));
 						} else {
 							MapLocation invader = attackingEnemy();
-							if (invader != null) {
+							if (false) {
 								safeTryMove(myLoc.directionTo(invader));
 							} else {
-								if (Clock.getRoundNum() < 500) {
+								if (Clock.getRoundNum() < 0) {
 									harass();
 								} else {
 									rally();
@@ -1326,10 +1386,15 @@ public class RobotPlayer {
 							}
 						}
 					} else {
-						if (enemyTowerLocs.length == 0) {
-							safeTryMove(myLoc.directionTo(enemyHQLoc));
+						MapLocation invader = attackingEnemy();
+						if (false) {
+							safeTryMove(myLoc.directionTo(invader));
 						} else {
-							safeTryMove(myLoc.directionTo(closestLocation(mapCenter, enemyTowerLocs)));
+							if (enemyTowerLocs.length == 0) {
+								safeTryMove(myLoc.directionTo(enemyHQLoc));
+							} else {
+								safeTryMove(myLoc.directionTo(closestLocation(mapCenter, enemyTowerLocs)));
+							}
 						}
 					}
 				} else { // hack for bytecodes
@@ -1399,7 +1464,7 @@ public class RobotPlayer {
 
 				// move according to orders
 				if (rc.isCoreReady()) {
-					if (Clock.getRoundNum() < 1500) {
+					if (rc.getRoundLimit()-Clock.getRoundNum() < RUSH_TURNS_LEFT) {
 						MapLocation target = closestLocation(myLoc, enemyTowerLocs);
 						if(isVulnerable(target) && rc.senseNearbyRobots(target, 36, myTeam).length >= 10 ) {
 							tryMove(myLoc.directionTo(target));
@@ -2054,9 +2119,10 @@ public class RobotPlayer {
 		boolean rebuild = (monteCarloMaxOre > miningTableMinOre);
 		double minOre = Math.max(miningTableMinOre, monteCarloMaxOre);
 		int lastMiningTableRowWritten = rebuild ? -1 : numMiningTableRows-1;
+		boolean endOfMonteCarlo = false;
 		// i = row in mining table
 		for (int i = 0; i < MINING_TABLE_NUM_ROWS; i++) {
-			if (rebuild || i >= numMiningTableRows || rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 5) == 1) { // if row doesn't exist or is marked as bad
+			if (!endOfMonteCarlo && (rebuild || i >= numMiningTableRows || rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 5) == 1)) { // if row doesn't exist or is marked as bad
 				// get an entry from monte carlo
 				double newOre = 0;
 				int x = NO_BOUND;
@@ -2080,12 +2146,25 @@ public class RobotPlayer {
 					//rc.setIndicatorDot(newLoc, 0, 0, 255);
 				} else {
 					// end of monte carlo
-					break;
+					endOfMonteCarlo = true;
+				}
+			} else {
+				if (i < numMiningTableRows) {
+					int x = rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 2);
+					int y = rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 3);
+					double sensedOre = rc.senseOre(new MapLocation(x, y));
+					if (sensedOre < minOre) {
+						rc.broadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 5, 1);
+					}
 				}
 			}
 		}
 		rc.broadcast(MINING_TABLE_CURRENT_NUMROWS_CHAN, lastMiningTableRowWritten + 1);
 		rc.broadcast(MONTE_CARLO_NUM_RESULTS_CHAN, 0);
+	}
+	
+	private static void pruneMiningTable() {
+		
 	}
 
 	private static void runMonteCarloOreFinder(int times) throws GameActionException {
@@ -2414,7 +2493,7 @@ public class RobotPlayer {
 		}
 
 		if (Clock.getRoundNum() > round) {
-			//System.out.println("miners exceed bytecodes!!");
+			System.out.println("miners exceed bytecodes!!");
 		}
 
 	}
@@ -2484,7 +2563,7 @@ public class RobotPlayer {
 			if (invaderLoc != null) {
 				tryMove(myLoc.directionTo(invaderLoc));
 			} else {
-				launcherTryMoveTo(mapCenter);
+				moveToSafely(getClosestRallyPoint());
 			}
 		}
 	}
@@ -2837,6 +2916,9 @@ public class RobotPlayer {
 	}
 	
 	private static boolean goodPlaceForBeaver (MapLocation loc) {
+		if (isLocationNextToVoid(loc)) {
+			return false;
+		}
 		if (loc.equals(myLoc) || rc.isPathable(BEAVER, loc)) {
 			if (fitsCheckerboard(loc)) {
 				if (goodBuildLoc(loc.add(Direction.NORTH_EAST))
@@ -3073,7 +3155,7 @@ public class RobotPlayer {
 
 	// TODO: should sense all invading enemies and let units attack the closest
 	private static MapLocation attackingEnemy() throws GameActionException {
-		RobotInfo[] enemies = rc.senseNearbyRobots(myHQLoc, rushDistSq*4/9, enemyTeam);
+		RobotInfo[] enemies = rc.senseNearbyRobots(myHQLoc, rc.readBroadcast(SAFETY_RADIUS_SQ_CHAN), enemyTeam);
 		int closestDist = 9999999;
 		RobotInfo closestRobot = null;
 		for (RobotInfo r : enemies) {
@@ -3470,10 +3552,10 @@ public class RobotPlayer {
 				rc.setIndicatorString(0, "trying to bug again");
 				dir = safeBugNavDirection(targetLoc);
 			} else {
-				rc.setIndicatorString(1, "trying to path again");
+				rc.setIndicatorString(0, "trying to path again");
 				dir = safePathFindingDirection(targetLoc);
 				if (dir == null) {
-					rc.setIndicatorString(2, "failed, trying to bug again");
+					rc.setIndicatorString(0, "failed path again, trying to bug again");
 					navType = 0;
 					dir = safeBugNavDirection(targetLoc);
 				}
@@ -3483,12 +3565,12 @@ public class RobotPlayer {
 			rc.setIndicatorString(0, "trying to path first");
 			dir = safePathFindingDirection(targetLoc);
 			if (dir == null) {
-				rc.setIndicatorString(1, "failed, trying to bug first");
+				rc.setIndicatorString(0, "failed path first, trying to bug first");
 				dir = safeBugNavDirection(targetLoc);
 			}
 		}
 		if (dir == null) {
-			rc.setIndicatorString(2, "epic fail");
+			rc.setIndicatorString(1, "epic fail");
 			return false;
 		}
 		rc.move(dir);
@@ -3632,6 +3714,15 @@ public class RobotPlayer {
 		int myVecY = myLoc.y - myHQLoc.y;
 		int crossProduct = (rushVecX * myVecY) - (rushVecY * myVecX);
 		return crossProduct < 0;
+	}
+	
+	private static boolean isLocationNextToVoid(MapLocation loc) {
+		for (int i = 0; i < 8; i++) {
+			if (rc.senseTerrainTile(loc.add(directions[i])) != TerrainTile.NORMAL) {
+				return true;
+			}
+		}
+		return false;
 	}
 	
 	private static boolean isLocationBlocking(MapLocation loc) {
@@ -4135,5 +4226,97 @@ public class RobotPlayer {
 		}
 		return false;
 	}
-
+	
+	private static void initializeRallyLocs() throws GameActionException {
+		MapLocation bestLoc = null;
+		int bestDistSq = 9999999;
+		MapLocation secBestLoc = null;
+		int secBestDistSq = 9999999;
+		for (MapLocation loc : myTowerLocs) {
+			int distSq = loc.distanceSquaredTo(mapCenter);
+			if (distSq < bestDistSq) {
+				secBestLoc = bestLoc;
+				secBestDistSq = bestDistSq;
+				bestLoc = loc;
+				bestDistSq = distSq;
+			} else if (distSq < secBestDistSq) {
+				secBestLoc = loc;
+				secBestDistSq = distSq;
+			}
+		}
+		rc.broadcast(RALLY_POINT_NUM_CHAN, secBestLoc == null ? 1 : 2);
+		rc.broadcast(RALLY_POINT_CHAN, packLocation(bestLoc));
+		if (secBestLoc != null)
+			rc.broadcast(RALLY_POINT_CHAN + 1, packLocation(secBestLoc));
+		rc.broadcast(SAFETY_RADIUS_SQ_CHAN, (int)Math.pow(Math.sqrt(myHQLoc.distanceSquaredTo(bestLoc)) + 8, 2));
+	}
+	
+	private static MapLocation getClosestRallyPoint() throws GameActionException {
+		MapLocation rallyPoint = unpackLocation(rc.readBroadcast(RALLY_POINT_CHAN));
+		if (rc.readBroadcast(RALLY_POINT_NUM_CHAN) > 1) {
+			MapLocation otherRallyPoint = unpackLocation(rc.readBroadcast(RALLY_POINT_CHAN + 1));
+			if (otherRallyPoint.distanceSquaredTo(myLoc) < rallyPoint.distanceSquaredTo(myLoc)) {
+				rallyPoint = otherRallyPoint;
+			}
+		}
+		return rallyPoint;
+	}
+	
+	private static void updateEnemyHQHealth() throws GameActionException {
+		if (rc.canSenseLocation(enemyHQLoc))
+			enemyHQHealth = rc.senseRobotAtLocation(enemyHQLoc).health;
+	}
+	
+	private static void updateEnemyTowerHealth() throws GameActionException {
+		for (int i = 0; i < originalEnemyTowerLocs.length; i++) {
+			MapLocation loc = originalEnemyTowerLocs[i];
+			if (rc.canSenseLocation(loc)) {
+				RobotInfo ri = rc.senseRobotAtLocation(loc);
+				if (ri != null) {
+					enemyTowerHealths[i] = ri.health;
+				} else {
+					enemyTowerHealths[i] = 0;
+				}
+			}
+		}
+		
+	}
+	
+	private static boolean winning() throws GameActionException {
+		if (myTowerLocs.length > enemyTowerLocs.length) {
+			return true;
+		} else if (myTowerLocs.length < enemyTowerLocs.length) {
+			return false;
+		} else {
+			if (rc.getHealth() > enemyHQHealth) {
+				return true;
+			} else if (rc.getHealth() < enemyHQHealth) {
+				return false;
+			} else {
+				double totalEnemyTowerHealth = 0;
+				for (int i = 0; i < enemyTowerHealths.length; i++) {
+					totalEnemyTowerHealth += enemyTowerHealths[i];
+				}
+				double totalMyTowerHealth = 0;
+				for (int i = 0; i < myTowerLocs.length; i++) {
+					MapLocation loc = myTowerLocs[i];
+					if (rc.canSenseLocation(loc)) {
+						RobotInfo ri = rc.senseRobotAtLocation(loc);
+						if (ri != null) {
+							totalMyTowerHealth += ri.health;
+						} else {
+							totalMyTowerHealth += 0;
+						}
+					}
+				}
+				if (totalMyTowerHealth > totalEnemyTowerHealth) {
+					return true;
+				} else if (totalMyTowerHealth < totalEnemyTowerHealth) {
+					return false;
+				} else {
+					return false; // always build more handwash stations
+				}
+			}
+		}
+	}
 }
