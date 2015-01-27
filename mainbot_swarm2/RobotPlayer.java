@@ -1,4 +1,4 @@
-package mainbot;
+package mainbot_swarm2;
 
 import battlecode.common.*;
 
@@ -178,20 +178,20 @@ public class RobotPlayer {
 	private static int[] numCompletedByType;
 	private static int buildingParity;
 	private static int bugNavWinding;
-	private static int bugNavFallTimes;
+	private static int bugNavFallTimes = 0;
 	private static MapLocation navTargetLoc;
 	private static MapLocation navSourceLoc;
 	private static int navType;
 	private static int navClosestDistSq;
-	private static MapLocation[] foundPath;
-	private static int foundPathIndex;
-	private static double enemyHQHealth;
-	private static MapLocation[] originalEnemyTowerLocs;
-	private static double[] enemyTowerHealths;
-	
 	private static final int NAVTYPE_SIMPLE = 1;
 	private static final int NAVTYPE_BUG = 2;
 	private static final int NAVTYPE_PRECOMP = 3;
+	private static int maxNumBytecodes = 0;
+	private static MapLocation[] foundPath = null;
+	private static int foundPathIndex = 0;
+	private static double enemyHQHealth = 2000;
+	private static MapLocation[] originalEnemyTowerLocs;
+	private static double[] enemyTowerHealths = null;
 
 	// should be final, but can't because set in run()
 	private static Direction[] directions;
@@ -200,6 +200,7 @@ public class RobotPlayer {
 
 	public static void run(RobotController myrc) {
 		// Initialize cached game information
+		System.out.println(SWARM_THREE_COMMANDER);
 		rc = myrc;
 		myTeam = rc.getTeam();
 		enemyTeam = myTeam.opponent();
@@ -246,11 +247,6 @@ public class RobotPlayer {
 		bugNavWinding = 0;
 		leftHanded = rand.nextBoolean();
 		navClosestDistSq = 0;
-		bugNavFallTimes = 0;
-		foundPath = null;
-		foundPathIndex = 0;
-		enemyHQHealth = 2000;
-		enemyTowerHealths = null;
 
 		switch (myType) {
 		case HQ: runHQ(); break;
@@ -728,8 +724,23 @@ public class RobotPlayer {
 
 				bytecodes[26] = Clock.getBytecodeNum();
 
-				//getAllMiningTargets();
+				getAllMiningTargets();
+
+				/*
+				StringBuilder sb = new StringBuilder();
+				for (int i = 1; i < 27; i++) {
+					sb.append(i + ": ");
+					sb.append((bytecodes[i] - bytecodes[i-1]) + " ");
+				}
+
+				rc.setIndicatorString(0, sb.toString());
+				 */
 				
+				if (roundNum % 100 == 0) {
+					debug_showNavMap(0);
+				}
+
+				// end round
 				rc.broadcast(SWARM_ONE_SOLDIERS, 0);
 				rc.broadcast(SWARM_ONE_BASHERS, 0);
 				rc.broadcast(SWARM_ONE_TANKS, 0);
@@ -750,23 +761,8 @@ public class RobotPlayer {
 				rc.broadcast(SWARM_THREE_DRONES, 0);
 				rc.broadcast(SWARM_THREE_LAUNCHERS, 0);
 				rc.broadcast(SWARM_THREE_COMMANDER, 0);
-
-				/*
-				StringBuilder sb = new StringBuilder();
-				for (int i = 1; i < 27; i++) {
-					sb.append(i + ": ");
-					sb.append((bytecodes[i] - bytecodes[i-1]) + " ");
-				}
-
-				rc.setIndicatorString(0, sb.toString());
-				 */
 				
-				//if (roundNum % 100 == 0) {
-				//	debug_showNavMap(0);
-				//}
-
-				// end round
-				//System.out.println(Clock.getRoundNum());
+				System.out.println(Clock.getRoundNum());
 				precomputePathfindingAndYield(0);
 			} catch (Exception e) {
 				System.out.println("HQ Exception");
@@ -1369,45 +1365,24 @@ public class RobotPlayer {
 
 	private static void runMissile() {
 		try {
-			int turnsLeft = 4;
 			while (true) {
-				System.out.println("start");
 				// missile move and explode code
 				if (rc.isCoreReady()) {
 					myLoc = rc.getLocation();
-					if (turnsLeft > 0) {
-						MapLocation target = fastNearestEnemy();
-						if (target == null) {
-							quickTryMove(myLoc.directionTo(enemyHQLoc));
-							//rc.disintegrate();
-						} else {
-							if (myLoc.distanceSquaredTo(target) <= 2) { // if adjacent
-								rc.explode();
-							} else {
-								quickTryMove(myLoc.directionTo(target));
-							}
-						}
+					MapLocation target = fastNearestEnemy();
+					if (target == null) {
+						quickTryMove(myLoc.directionTo(enemyHQLoc));
+						//rc.disintegrate();
 					} else {
-						RobotInfo[] allies = rc.senseNearbyRobots(8, myTeam);
-						if (allies.length > 0) {
-							rc.disintegrate();
-						}
-						MapLocation target = rc.senseNearbyRobots(8, enemyTeam)[0].location;
-						if (target == null) {
-							quickTryMove(myLoc.directionTo(enemyHQLoc));
-							//rc.disintegrate();
+						if (myLoc.distanceSquaredTo(target) <= 2) { // if adjacent
+							quickTryMove(myLoc.directionTo(target)); // not sure if this should be done
+							rc.explode();
 						} else {
-							if (myLoc.distanceSquaredTo(target) <= 2) { // if adjacent
-								rc.explode();
-							} else {
-								quickTryMove(myLoc.directionTo(target));
-							}
+							quickTryMove(myLoc.directionTo(target));
 						}
 					}
 				}
-				System.out.println("end");
 				// end turn
-				turnsLeft--;
 				rc.yield();
 			}
 		}  
@@ -2102,7 +2077,7 @@ public class RobotPlayer {
 				x = rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 2);
 				y = rc.readBroadcast(MINING_TABLE_CHAN + i*MINING_TABLE_ROW_SIZE + 3);
 				locs[i] = new MapLocation(x, y);
-				//rc.setIndicatorDot(locs[i], 0, 255, 255);
+				rc.setIndicatorDot(locs[i], 0, 255, 255);
 			}
 		}
 		return locs;
@@ -2565,7 +2540,7 @@ public class RobotPlayer {
 		}
 
 		if (Clock.getRoundNum() > round) {
-			//System.out.println("miners exceed bytecodes!!");
+			System.out.println("miners exceed bytecodes!!");
 		}
 
 	}
@@ -3163,11 +3138,9 @@ public class RobotPlayer {
 	}
 
 	private static MapLocation nearestSensedEnemy() throws GameActionException {
-		RobotInfo[] enemies = rc.senseNearbyRobots(63, enemyTeam);
+		RobotInfo[] enemies = rc.senseNearbyRobots(mySensorRangeSq, enemyTeam);
 		int closestDist = 9999;
 		RobotInfo closestRobot = null;
-		
-		
 		int centroidX = 0;
 		int centroidY = 0;
 		int soldiers = 0;
@@ -3176,8 +3149,6 @@ public class RobotPlayer {
 		int drones = 0;
 		int launchers = 0;
 		int commander = 0;	
-		
-		
 		for (RobotInfo r : enemies) {
 			if (r.type != MISSILE) {
 				MapLocation enemyLoc = r.location;
@@ -3186,8 +3157,6 @@ public class RobotPlayer {
 					closestDist = dist;
 					closestRobot = r;
 				}
-				
-				
 				centroidX += r.location.x;
 				centroidY += r.location.y;
 				if(r.type == SOLDIER){
@@ -3208,12 +3177,8 @@ public class RobotPlayer {
 				if(r.type == COMMANDER){
 					commander = 1;
 				}
-				
-				
 			}
 		}
-		
-		System.out.println("enemies sensed:" +  enemies.length);
 		if(enemies.length > 3){
 			centroidX /= enemies.length;
 			centroidY /= enemies.length;
@@ -3223,11 +3188,7 @@ public class RobotPlayer {
 			MapLocation swarm2 = unpackLocation(rc.readBroadcast(SWARM_TWO_LOCATION));
 			MapLocation swarm3 = unpackLocation(rc.readBroadcast(SWARM_THREE_LOCATION));
 			//initialize a swarm
-			System.out.println("Swarm 1 :" + swarm1.x + ", " + swarm1.y);
-			System.out.println("Swarm 2 :" + swarm2.x + ", " + swarm2.y);
-			System.out.println("Swarm 3 :" + swarm3.x + ", " + swarm3.y);
-			
-			if(swarm1.x == 0 && swarm1.y == 0){
+			if(swarm1.x == NO_BOUND){
 				rc.setIndicatorString(1, "broadcasting initial for swarm 1");
 				rc.broadcast(SWARM_ONE_LOCATION, packLocation(swarmLocation));
 				rc.broadcast(SWARM_ONE_SOLDIERS, soldiers);
@@ -3237,7 +3198,9 @@ public class RobotPlayer {
 				rc.broadcast(SWARM_ONE_LAUNCHERS, launchers);
 				rc.broadcast(SWARM_ONE_COMMANDER, commander);
 			}
-			else if(distance(swarmLocation, swarm1) < 200){
+			else{
+				//if its the same swarm as swarm 1
+				if(distance(swarmLocation, swarm1) < 100){
 					rc.setIndicatorString(1, "broadcasting updated for swarm 1");
 					MapLocation meanCenter = new MapLocation((swarmLocation.x + swarm1.x)/2, (swarmLocation.y + swarm1.y)/2);
 					rc.broadcast(SWARM_ONE_LOCATION, packLocation(meanCenter));
@@ -3259,8 +3222,8 @@ public class RobotPlayer {
 					if(commander == 1){ 
 						rc.broadcast(SWARM_ONE_COMMANDER, 1);
 					}
-				}				
-				else if(swarm2.x == 0 && swarm2.y == 0){
+				}
+				else if(swarm2.x == NO_BOUND){
 					rc.setIndicatorString(1, "broadcasting initial for swarm 2");
 					rc.broadcast(SWARM_TWO_LOCATION, packLocation(swarmLocation));
 					rc.broadcast(SWARM_TWO_SOLDIERS, soldiers);
@@ -3293,7 +3256,7 @@ public class RobotPlayer {
 						rc.broadcast(SWARM_TWO_COMMANDER, 1);
 					}
 				}
-				else if(swarm3.x == 0 && swarm3.y == 0){
+				else if(swarm3.x == NO_BOUND){
 					rc.setIndicatorString(1, "broadcasting initial for swarm 3");
 					rc.broadcast(SWARM_THREE_LOCATION, packLocation(swarmLocation));
 					rc.broadcast(SWARM_THREE_SOLDIERS, soldiers);
@@ -3331,14 +3294,13 @@ public class RobotPlayer {
 					System.out.print("WTF! more than 3 swarms!?");
 				}
 			}
-		
-		
+		}
 		if (closestRobot != null) {
 			return closestRobot.location;
 		}
 		return null;
 	}
-
+	
 	private static MapLocation nearestAttackableEnemyAll() throws GameActionException {
 		RobotInfo[] enemies = rc.senseNearbyRobots(myAttackRangeSq, enemyTeam);
 		int closestDist = 9999;
@@ -4552,5 +4514,4 @@ public class RobotPlayer {
 	private static double distance(MapLocation l1, MapLocation l2){
 		return Math.sqrt((l1.x - l2.x)*(l1.x - l2.x)+(l1.y - l2.y)*(l1.y - l2.y));
 	}
-	
 }
