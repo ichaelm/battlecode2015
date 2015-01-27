@@ -1,4 +1,4 @@
-package mainbot_launcher;
+package mainbot_swarm;
 
 import battlecode.common.*;
 
@@ -6,7 +6,7 @@ import java.util.*;
 
 public class RobotPlayer {
 	
-	private static final int ROUND_TO_BUILD_LAUNCHERS = 800;
+	private static final int ROUND_TO_BUILD_LAUNCHERS = 100;
 
 	// AI parameters
 	private static final int RUSH_TURN = 1200;
@@ -30,7 +30,7 @@ public class RobotPlayer {
 	private static final int BUILD_QUEUE_SIZE = BUILD_QUEUE_ROW_SIZE * BUILD_QUEUE_NUM_ROWS;
 	private static final int MINING_TABLE_CHAN = BUILD_QUEUE_CHAN + BUILD_QUEUE_SIZE;
 	private static final int MINING_TABLE_ROW_SIZE = 6;
-	private static final int MINING_TABLE_NUM_ROWS = 50;
+	private static final int MINING_TABLE_NUM_ROWS = 20;
 	private static final int MINING_TABLE_SIZE = MINING_TABLE_ROW_SIZE * MINING_TABLE_NUM_ROWS;
 	private static final int MINING_TABLE_CURRENT_NUMROWS_CHAN = MINING_TABLE_CHAN + MINING_TABLE_SIZE;
 	private static final int MONTE_CARLO_RESULTS_TABLE_CHAN = MINING_TABLE_CURRENT_NUMROWS_CHAN + 1;
@@ -40,11 +40,28 @@ public class RobotPlayer {
 	private static final int MONTE_CARLO_NUM_RESULTS_CHAN = MONTE_CARLO_RESULTS_TABLE_CHAN + MONTE_CARLO_RESULTS_TABLE_SIZE;
 	private static final int MONTE_CARLO_MAX_FOUND_CHAN = MONTE_CARLO_NUM_RESULTS_CHAN + 1;
 	private static final int NAVMAP_CHAN = MONTE_CARLO_MAX_FOUND_CHAN + 1;
-	private static final int NAVMAP_SQUARE_SIZE = 3;
+	private static final int NAVMAP_SQUARE_SIZE = 4;
 	private static final int NAVMAP_WIDTH = MAX_MAP_WIDTH;
 	private static final int NAVMAP_HEIGHT = MAX_MAP_HEIGHT;
 	private static final int NAVMAP_SIZE = NAVMAP_SQUARE_SIZE * NAVMAP_WIDTH * NAVMAP_HEIGHT;
-	private static final int NORTH_BOUND_CHAN = NAVMAP_CHAN + NAVMAP_SIZE;
+	private static final int NAVQUEUE_CHAN = NAVMAP_CHAN + NAVMAP_SIZE;
+	private static final int NAVQUEUE_QUEUE_SIZE = 500;
+	private static final int NAVQUEUE_NUM_QUEUES = 7;
+	private static final int NAVQUEUE_SIZE = NAVQUEUE_QUEUE_SIZE * NAVQUEUE_NUM_QUEUES;
+	private static final int NAVQUEUE_STARTPTR_CHAN = NAVQUEUE_CHAN + NAVQUEUE_SIZE;
+	private static final int NAVQUEUE_STARTPTR_SIZE = NAVQUEUE_NUM_QUEUES;
+	private static final int NAVQUEUE_ENDPTR_CHAN = NAVQUEUE_STARTPTR_CHAN + NAVQUEUE_STARTPTR_SIZE;
+	private static final int NAVQUEUE_ENDPTR_SIZE = NAVQUEUE_NUM_QUEUES;
+	private static final int NAVMAP_NUM_WAYPOINTS_CHAN = NAVQUEUE_ENDPTR_CHAN + NAVQUEUE_ENDPTR_SIZE;
+	private static final int NAVMAP_WAYPOINTS_CHAN = NAVMAP_NUM_WAYPOINTS_CHAN + 1;
+	private static final int NAVMAP_WAYPOINTS_SIZE = NAVQUEUE_NUM_QUEUES;
+	private static final int NAVMAP_STILL_PATHFINDING_CHAN = NAVMAP_WAYPOINTS_CHAN + NAVMAP_WAYPOINTS_SIZE;
+	private static final int NAVMAP_STILL_PATHFINDING_SIZE = NAVQUEUE_NUM_QUEUES;
+	private static final int NAVMAP_SYMMETRY_LOCS_CHAN = NAVMAP_STILL_PATHFINDING_CHAN + NAVMAP_STILL_PATHFINDING_SIZE;
+	private static final int NAVMAP_SYMMETRY_LOCS_SIZE = NAVQUEUE_NUM_QUEUES;
+	private static final int NAVMAP_SYMMETRY_COSTS_CHAN = NAVMAP_SYMMETRY_LOCS_CHAN + NAVMAP_SYMMETRY_LOCS_SIZE;
+	private static final int NAVMAP_SYMMETRY_COSTS_SIZE = NAVQUEUE_NUM_QUEUES;
+	private static final int NORTH_BOUND_CHAN = NAVMAP_SYMMETRY_COSTS_CHAN + NAVMAP_SYMMETRY_COSTS_SIZE;
 	private static final int EAST_BOUND_CHAN = NORTH_BOUND_CHAN + 1;
 	private static final int SOUTH_BOUND_CHAN = EAST_BOUND_CHAN + 1;
 	private static final int WEST_BOUND_CHAN = SOUTH_BOUND_CHAN + 1;
@@ -60,36 +77,73 @@ public class RobotPlayer {
 	private static final int UNIT_TOWER_DEFENSE_CHAN = UNIT_ORDER_CHAN + 1;
 	private static final int UNIT_NEEDS_SUPPLY_X_CHAN = UNIT_TOWER_DEFENSE_CHAN + 1;
 	private static final int UNIT_NEEDS_SUPPLY_Y_CHAN = UNIT_NEEDS_SUPPLY_X_CHAN + 1;
+	private static final int TOWER_ASSIGN_NUM_CHAN = UNIT_NEEDS_SUPPLY_Y_CHAN + 1;
+	private static final int SYMMETRY_TYPE_CHAN = TOWER_ASSIGN_NUM_CHAN + 1;
+	private static final int UNKNOWN_QUEUE_CHAN = SYMMETRY_TYPE_CHAN + 1;
+	private static final int UNKNOWN_QUEUE_SIZE = 1000;
+	private static final int UNKNOWN_QUEUE_STARTPTR_CHAN = UNKNOWN_QUEUE_CHAN + UNKNOWN_QUEUE_SIZE;
+	private static final int UNKNOWN_QUEUE_ENDPTR_CHAN = UNKNOWN_QUEUE_STARTPTR_CHAN + 1;
+	
+	//Swarm estimates
+	private static final int SWARM_ONE_LOCATION = UNIT_NEEDS_SUPPLY_Y_CHAN + 1;
+	private static final int SWARM_ONE_SOLDIERS = SWARM_ONE_LOCATION + 1;
+	private static final int SWARM_ONE_BASHERS = SWARM_ONE_SOLDIERS + 1;
+	private static final int SWARM_ONE_TANKS = SWARM_ONE_BASHERS + 1;
+	private static final int SWARM_ONE_DRONES = SWARM_ONE_TANKS + 1;
+	private static final int SWARM_ONE_LAUNCHERS = SWARM_ONE_DRONES + 1;
+	private static final int SWARM_ONE_COMMANDER = SWARM_ONE_LAUNCHERS + 1;
 
+	private static final int SWARM_TWO_LOCATION = SWARM_ONE_COMMANDER + 1;
+	private static final int SWARM_TWO_SOLDIERS = SWARM_TWO_LOCATION + 1;
+	private static final int SWARM_TWO_BASHERS = SWARM_TWO_SOLDIERS + 1;
+	private static final int SWARM_TWO_TANKS = SWARM_TWO_BASHERS + 1;
+	private static final int SWARM_TWO_DRONES = SWARM_TWO_TANKS + 1;
+	private static final int SWARM_TWO_LAUNCHERS = SWARM_TWO_DRONES + 1;
+	private static final int SWARM_TWO_COMMANDER = SWARM_TWO_LAUNCHERS + 1;
+	
+	private static final int SWARM_THREE_LOCATION = SWARM_TWO_COMMANDER + 1;
+	private static final int SWARM_THREE_SOLDIERS = SWARM_THREE_LOCATION + 1;
+	private static final int SWARM_THREE_BASHERS = SWARM_THREE_SOLDIERS + 1;
+	private static final int SWARM_THREE_TANKS = SWARM_THREE_BASHERS + 1;
+	private static final int SWARM_THREE_DRONES = SWARM_THREE_TANKS + 1;
+	private static final int SWARM_THREE_LAUNCHERS = SWARM_THREE_DRONES + 1;
+	private static final int SWARM_THREE_COMMANDER = SWARM_THREE_LAUNCHERS + 1;
+	
 	// Broadcast signaling constants
-	private static final int NO_BOUND = 99999;
+	private static final int NO_BOUND = 32000;
 	private static final int UNIT_ORDER_ATTACK_TOWERS = 1;
 	private static final int UNIT_ORDER_DEFEND = 2;
 	private static final int UNIT_ORDER_RALLY = 3;
 	private static final int UNIT_ORDER_ATTACK_VULNERABLE_TOWER = 4;
+	private static final int SYMMETRY_TYPE_NONE = 0;
+	private static final int SYMMETRY_TYPE_ROTATIONAL = 1;
+	private static final int SYMMETRY_TYPE_HORIZONTAL = 2;
+	private static final int SYMMETRY_TYPE_VERTICAL = 3;
+	private static final int SYMMETRY_TYPE_DIAGONAL_POS = 4;
+	private static final int SYMMETRY_TYPE_DIAGONAL_NEG = 5;
 
 	// cached enums for brevity
-	private static final RobotType HQ = RobotType.HQ;
-	private static final RobotType TOWER = RobotType.TOWER;
-	private static final RobotType SUPPLYDEPOT = RobotType.SUPPLYDEPOT;
-	private static final RobotType TECHNOLOGYINSTITUTE = RobotType.TECHNOLOGYINSTITUTE;
-	private static final RobotType BARRACKS = RobotType.BARRACKS;
-	private static final RobotType HELIPAD = RobotType.HELIPAD;
-	private static final RobotType TRAININGFIELD = RobotType.TRAININGFIELD;
-	private static final RobotType TANKFACTORY = RobotType.TANKFACTORY;
-	private static final RobotType MINERFACTORY = RobotType.MINERFACTORY;
-	private static final RobotType HANDWASHSTATION = RobotType.HANDWASHSTATION;
-	private static final RobotType AEROSPACELAB = RobotType.AEROSPACELAB;
-	private static final RobotType BEAVER = RobotType.BEAVER;
-	private static final RobotType COMPUTER = RobotType.COMPUTER;
-	private static final RobotType SOLDIER = RobotType.SOLDIER;
-	private static final RobotType BASHER = RobotType.BASHER;
-	private static final RobotType MINER = RobotType.MINER;
-	private static final RobotType DRONE = RobotType.DRONE;
-	private static final RobotType TANK = RobotType.TANK;
-	private static final RobotType COMMANDER = RobotType.COMMANDER;
-	private static final RobotType LAUNCHER = RobotType.LAUNCHER;
-	private static final RobotType MISSILE = RobotType.MISSILE;
+	private static RobotType HQ;
+	private static RobotType TOWER;
+	private static RobotType SUPPLYDEPOT;
+	private static RobotType TECHNOLOGYINSTITUTE;
+	private static RobotType BARRACKS;
+	private static RobotType HELIPAD;
+	private static RobotType TRAININGFIELD;
+	private static RobotType TANKFACTORY;
+	private static RobotType MINERFACTORY;
+	private static RobotType HANDWASHSTATION;
+	private static RobotType AEROSPACELAB;
+	private static RobotType BEAVER;
+	private static RobotType COMPUTER;
+	private static RobotType SOLDIER;
+	private static RobotType BASHER;
+	private static RobotType MINER;
+	private static RobotType DRONE;
+	private static RobotType TANK;
+	private static RobotType COMMANDER;
+	private static RobotType LAUNCHER;
+	private static RobotType MISSILE;
 
 	// Cached game information
 	private static RobotController rc;
@@ -109,7 +163,6 @@ public class RobotPlayer {
 	private static boolean leftHanded;
 	private static MapLocation[] enemyTowerLocs;
 	private static MapLocation[] myTowerLocs;
-	private static boolean mineWithBeavers;
 	private static boolean mining;
 	private static int mineCounter;
 	private static RobotInfo[] enemyRobots;
@@ -118,11 +171,23 @@ public class RobotPlayer {
 	private static int[] numRobotsByType;
 	private static int[] numInProgressByType;
 	private static int[] numCompletedByType;
+	private static int buildingParity;
+	private static int bugNavWinding;
+	private static int bugNavFallTimes = 0;
+	private static MapLocation navTargetLoc;
+	private static MapLocation navSourceLoc;
+	private static int navType;
+	private static int navClosestDistSq;
+	private static final int NAVTYPE_SIMPLE = 1;
+	private static final int NAVTYPE_BUG = 2;
+	private static final int NAVTYPE_PRECOMP = 3;
+	private static int maxNumBytecodes = 0;
+	private static MapLocation[] foundPath = null;
+	private static int foundPathIndex = 0;
 
 	// should be final, but can't because set in run()
 	private static Direction[] directions;
 	private static RobotType[] robotTypes;
-	private static int[] offsets;
 	private static double[] oreConsumptionByType;
 
 	public static void run(RobotController myrc) {
@@ -130,22 +195,34 @@ public class RobotPlayer {
 		rc = myrc;
 		myTeam = rc.getTeam();
 		enemyTeam = myTeam.opponent();
-		robotTypes = RobotType.values();
-		offsets = new int[] {0,1,-1,2,-2};
 		enemyHQLoc = rc.senseEnemyHQLocation();
-		directions = new Direction[]{
-				Direction.NORTH,
-				Direction.NORTH_EAST,
-				Direction.EAST,
-				Direction.SOUTH_EAST,
-				Direction.SOUTH,
-				Direction.SOUTH_WEST,
-				Direction.WEST,
-				Direction.NORTH_WEST};
-		if (myrc.getType() == MISSILE) { //hack for missiles to run faster
-			rc.setIndicatorString(1, "Bytecodes Used: " + Clock.getBytecodeNum() + " Left: " + Clock.getBytecodesLeft());
+		if (myrc.getType() == RobotType.MISSILE) { //hack for missiles to run faster
 			runMissile();
 		}
+		robotTypes = RobotType.values();
+		directions = Direction.values(); // happens to be {NORTH, NORTH_EAST, EAST, SOUTH_EAST, SOUTH, SOUTH_WEST, WEST, NORTH_WEST, NONE, OMNI}
+		HQ = RobotType.HQ;
+		TOWER = RobotType.TOWER;
+		SUPPLYDEPOT = RobotType.SUPPLYDEPOT;
+		TECHNOLOGYINSTITUTE = RobotType.TECHNOLOGYINSTITUTE;
+		BARRACKS = RobotType.BARRACKS;
+		HELIPAD = RobotType.HELIPAD;
+		TRAININGFIELD = RobotType.TRAININGFIELD;
+		TANKFACTORY = RobotType.TANKFACTORY;
+		MINERFACTORY = RobotType.MINERFACTORY;
+		HANDWASHSTATION = RobotType.HANDWASHSTATION;
+		AEROSPACELAB = RobotType.AEROSPACELAB;
+		BEAVER = RobotType.BEAVER;
+		COMPUTER = RobotType.COMPUTER;
+		SOLDIER = RobotType.SOLDIER;
+		BASHER = RobotType.BASHER;
+		MINER = RobotType.MINER;
+		DRONE = RobotType.DRONE;
+		TANK = RobotType.TANK;
+		COMMANDER = RobotType.COMMANDER;
+		LAUNCHER = RobotType.LAUNCHER;
+		MISSILE = RobotType.MISSILE;
+		
 		myType = rc.getType();
 		myAttackRangeSq = myType.attackRadiusSquared;
 		mySensorRangeSq = myType.sensorRadiusSquared;
@@ -157,6 +234,10 @@ public class RobotPlayer {
 		oreConsumptionByType = new double[]{5, 0, 0, 0.4, 4, 25/6, 1.25, 5, 2.5, 0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 		mining = false;
 		mineCounter = 0;
+		buildingParity = (((myHQLoc.x + myHQLoc.y) % 2) + 2) % 2;
+		bugNavWinding = 0;
+		leftHanded = rand.nextBoolean();
+		navClosestDistSq = 0;
 
 		switch (myType) {
 		case HQ: runHQ(); break;
@@ -197,22 +278,130 @@ public class RobotPlayer {
 		try {
 			// initialize bounds channels
 			initBounds();
-
-			// TODO: better mining strategy picking
-			double orePerSquare = rc.senseOre(myHQLoc); // approximate
-			int turnToMaximize = 300 + 2*rushDist + 100*rc.senseTowerLocations().length;
-			// forget about rush safety for now, just go long term
-			double beaverEarlyOre = Simulator.simulateMaximumEarlyMiningOre(BEAVER, orePerSquare, turnToMaximize);
-			double minerEarlyOre = Simulator.simulateMaximumEarlyMiningOre(MINER, orePerSquare, turnToMaximize);
-			if (beaverEarlyOre > minerEarlyOre) {
-				mineWithBeavers = true;
-				//idealOreGenerationPerUnit = Simulator.beaverOreRateGivenNumMines(orePerSquare, Simulator.beaverOptimalNumMines(orePerSquare));
-				//minOre = Simulator.beaverOreLeftAfterMining(orePerSquare, Simulator.beaverOptimalNumMines(orePerSquare)) + 0.1;
-			} else {
-				mineWithBeavers = false;
-				//idealOreGenerationPerUnit = Simulator.minerOreRateGivenNumMines(orePerSquare, Simulator.minerOptimalNumMines(orePerSquare));
-				//minOre = Simulator.beaverOreLeftAfterMining(orePerSquare, Simulator.beaverOptimalNumMines(orePerSquare)) + 0.1;
+			rc.broadcast(SWARM_ONE_LOCATION,packLocation(new MapLocation(NO_BOUND,NO_BOUND)));
+			rc.broadcast(SWARM_TWO_LOCATION,packLocation(new MapLocation(NO_BOUND,NO_BOUND)));
+			rc.broadcast(SWARM_THREE_LOCATION,packLocation(new MapLocation(NO_BOUND,NO_BOUND)));
+			
+			// update locations
+			updateLocations();
+			
+			for (int i = 0; i < myTowerLocs.length + 1; i++) {
+				rc.broadcast(NAVMAP_SYMMETRY_LOCS_CHAN + i, packLocation(new MapLocation(NO_BOUND, NO_BOUND)));
 			}
+			
+			initializePathfindingQueues();
+			
+			// TODO: better mining strategy picking
+			//double orePerSquare = rc.senseOre(myHQLoc); // approximate
+			//int turnToMaximize = 300 + 2*rushDist + 100*rc.senseTowerLocations().length;
+			// forget about rush safety for now, just go long term
+			
+			
+			
+			//**********************************
+			
+			// decisions
+			// determine symmetry
+			boolean couldBeHorizontal = true;
+			boolean couldBeVertical = true;
+			boolean couldBeDiagonalPos = true;
+			boolean couldBeDiagonalNeg = true;
+			boolean couldBeRotational = true;
+			int numPossible = 5;
+			int rushX = enemyHQLoc.x - myHQLoc.x;
+			int rushY = enemyHQLoc.y - myHQLoc.y;
+			if (rushX != 0) {
+				couldBeHorizontal = false;
+				numPossible--;
+			}
+			if (rushY != 0) {
+				couldBeVertical = false;
+				numPossible--;
+			}
+			if (rushX != rushY) {
+				couldBeDiagonalNeg = false;
+				numPossible--;
+			}
+			if (rushX != -rushY) {
+				couldBeDiagonalPos = false;
+				numPossible--;
+			}
+			for (int i = 0; i < myTowerLocs.length; i++) {
+				MapLocation myTowerLoc = myTowerLocs[i];
+				int relX = myTowerLoc.x - myHQLoc.x;
+				int relY = myTowerLoc.y - myHQLoc.y;
+				MapLocation expectedLoc;
+				if (couldBeHorizontal) {
+					expectedLoc = new MapLocation(enemyHQLoc.x + relX, enemyHQLoc.y - relY);
+					if (!isEnemyTowerLoc(expectedLoc)) {
+						couldBeHorizontal = false;
+						numPossible--;
+					}
+				}
+				if (couldBeVertical) {
+					expectedLoc = new MapLocation(enemyHQLoc.x - relX, enemyHQLoc.y + relY);
+					if (!isEnemyTowerLoc(expectedLoc)) {
+						couldBeVertical = false;
+						numPossible--;
+					}
+				}
+				if (couldBeDiagonalPos) {
+					expectedLoc = new MapLocation(enemyHQLoc.x + relY, enemyHQLoc.y + relX);
+					if (!isEnemyTowerLoc(expectedLoc)) {
+						couldBeDiagonalPos = false;
+						numPossible--;
+					}
+				}
+				if (couldBeDiagonalNeg) {
+					expectedLoc = new MapLocation(enemyHQLoc.x - relY, enemyHQLoc.y - relX);
+					if (!isEnemyTowerLoc(expectedLoc)) {
+						couldBeDiagonalNeg = false;
+						numPossible--;
+					}
+				}
+				if (couldBeRotational) {
+					expectedLoc = new MapLocation(enemyHQLoc.x - relX, enemyHQLoc.y - relY);
+					if (!isEnemyTowerLoc(expectedLoc)) {
+						couldBeRotational = false;
+						numPossible--;
+					}
+				}
+				if (numPossible <= 1) {
+					break;
+				}
+			}
+			Direction symmetryDirection;
+			if (couldBeRotational) {
+				System.out.println("rotational symmetry");
+				symmetryDirection = Direction.OMNI;
+				rc.broadcast(SYMMETRY_TYPE_CHAN, SYMMETRY_TYPE_ROTATIONAL);
+			} else if (couldBeHorizontal) {
+				System.out.println("horizontal symmetry");
+				symmetryDirection = Direction.EAST;
+				rc.broadcast(SYMMETRY_TYPE_CHAN, SYMMETRY_TYPE_HORIZONTAL);
+			} else if (couldBeVertical) {
+				System.out.println("vertical symmetry");
+				symmetryDirection = Direction.SOUTH;
+				rc.broadcast(SYMMETRY_TYPE_CHAN, SYMMETRY_TYPE_VERTICAL);
+			} else if (couldBeDiagonalPos) {
+				System.out.println("diagonal pos symmetry");
+				symmetryDirection = Direction.SOUTH_EAST;
+				rc.broadcast(SYMMETRY_TYPE_CHAN, SYMMETRY_TYPE_DIAGONAL_POS);
+			} else if (couldBeDiagonalNeg) {
+				System.out.println("diagonal neg symmetry");
+				symmetryDirection = Direction.NORTH_EAST;
+				rc.broadcast(SYMMETRY_TYPE_CHAN, SYMMETRY_TYPE_DIAGONAL_NEG);
+			} else {
+				// never happen
+				System.out.println("bad symmetry!");
+				symmetryDirection = null;
+			}
+			
+			
+			//***********************************
+			
+			
+			
 		} catch (Exception e) {
 			System.out.println("HQ Exception");
 			e.printStackTrace();
@@ -240,6 +429,10 @@ public class RobotPlayer {
 				numRobotsByType = readCensus();
 				numInProgressByType = readProgressTable();
 				numCompletedByType = readCompletedTable();
+				int numInProgress = 0;
+				for (int i = 21; --i >= 0;) {
+					numInProgress += numInProgressByType[i];
+				}
 
 				bytecodes[3] = Clock.getBytecodeNum();
 
@@ -339,7 +532,7 @@ public class RobotPlayer {
 				// calculate build queue
 				buildQueue = new int[BUILD_QUEUE_NUM_ROWS][2];
 				row = 0;
-				if (numBuilderBeavers < 1) { // HACK, CALCULATE REAL NUMBER
+				if (numBuilderBeavers <= numInProgress) {
 					buildQueue[row][0] = BEAVER.ordinal();
 					buildQueue[row][1] = 1;
 					row++;
@@ -348,39 +541,17 @@ public class RobotPlayer {
 
 				bytecodes[13] = Clock.getBytecodeNum();
 
-				if (mineWithBeavers) {
-					if (numRobotsByType[BEAVER.ordinal()] - numBuilderBeavers < 2) {
-						buildQueue[row][0] = BEAVER.ordinal();
-						buildQueue[row][1] = 1;
-						row++;
-					} else {
-						int breakEvenRounds = (int)Math.ceil(BEAVER.oreCost / oreMinedPerBeaver) + BEAVER.buildTurns;
-						if (roundNum + breakEvenRounds < 2000 - rushDist) {
-							buildQueue[row][0] = BEAVER.ordinal();
-							buildQueue[row][1] = 1;
-							row++;
-						}
-					}
-				} else {
-					if (numRobotsByType[MINERFACTORY.ordinal()] + numInProgressByType[MINERFACTORY.ordinal()] < 1) {
-						buildQueue[row][0] = MINERFACTORY.ordinal();
-						buildQueue[row][1] = 1;
-						row++;
-					} else {
-						int breakEvenRounds = (int)Math.ceil(MINER.oreCost / oreMinedPerMiner) + MINER.buildTurns;
-						if (numRobotsByType[MINER.ordinal()] < 30) {
-							buildQueue[row][0] = MINER.ordinal();
-							buildQueue[row][1] = 1;
-							row++;
-						}
-					}
-				}
-
-				if (numBuilderBeavers < 2) { // HACK, CALCULATE REAL NUMBER
-					buildQueue[row][0] = BEAVER.ordinal();
+				if (numRobotsByType[MINERFACTORY.ordinal()] + numInProgressByType[MINERFACTORY.ordinal()] < 1) {
+					buildQueue[row][0] = MINERFACTORY.ordinal();
 					buildQueue[row][1] = 1;
 					row++;
-					requestBuilderBeaver();
+				} else {
+					int breakEvenRounds = (int)Math.ceil(MINER.oreCost / oreMinedPerMiner) + MINER.buildTurns;
+					if (numRobotsByType[MINER.ordinal()] < 30) {
+						buildQueue[row][0] = MINER.ordinal();
+						buildQueue[row][1] = 1;
+						row++;
+					}
 				}
 
 				bytecodes[14] = Clock.getBytecodeNum();
@@ -397,7 +568,8 @@ public class RobotPlayer {
 				int numLaunchers = numRobotsByType[LAUNCHER.ordinal()] + numInProgressByType[LAUNCHER.ordinal()];
 				int numDrones = numRobotsByType[DRONE.ordinal()] + numInProgressByType[DRONE.ordinal()];
 				int numTanks = numRobotsByType[TANK.ordinal()] + numInProgressByType[TANK.ordinal()];
-				int numUnits = numLaunchers + numTanks;
+				int numSoldiers = numRobotsByType[SOLDIER.ordinal()] + numInProgressByType[SOLDIER.ordinal()];
+				int numUnits = numLaunchers + numTanks + numDrones + numSoldiers;
 				int numHelipad = numRobotsByType[HELIPAD.ordinal()] + numInProgressByType[HELIPAD.ordinal()];
 				int numAeroLab = numRobotsByType[AEROSPACELAB.ordinal()] + numInProgressByType[AEROSPACELAB.ordinal()];
 				
@@ -413,35 +585,31 @@ public class RobotPlayer {
 				}
 				 */
 				if (numRobotsByType[BARRACKS.ordinal()] + numInProgressByType[BARRACKS.ordinal()] < 1) {
-					buildQueue[row][0] = BARRACKS.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
+					//buildQueue[row][0] = BARRACKS.ordinal();
+					//buildQueue[row][1] = 1;
+					//row++;
 				}
 
 				if (roundNum < ROUND_TO_BUILD_LAUNCHERS) {
-					if (numRobotsByType[TANKFACTORY.ordinal()] + numInProgressByType[TANKFACTORY.ordinal()] < 1) {
-						buildQueue[row][0] = TANKFACTORY.ordinal();
-						buildQueue[row][1] = 1;
-						row++;
-					}
-
-					buildQueue[row][0] = TANK.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
-
-					buildQueue[row][0] = TANKFACTORY.ordinal();
-					buildQueue[row][1] = 1;
-					row++;
+					//addToBuildQueue(SOLDIER);
+					//addToBuildQueue(BARRACKS);
 				} else {
 					if (numHelipad < 1) {
 						addToBuildQueue(HELIPAD);
-					}
-					if ( numHelipad > 0 && numAeroLab < 1) {
+						addToBuildQueue(SOLDIER);
+					} else if (numRobotsByType[HELIPAD.ordinal()] < 1) {
+						addToBuildQueue(SOLDIER);
+					} else if (numAeroLab < 1) {
+						addToBuildQueue(AEROSPACELAB);
+						addToBuildQueue(SOLDIER);
+					} else if (numRobotsByType[AEROSPACELAB.ordinal()] < 1) {
+						addToBuildQueue(SOLDIER);
+					} else {
+						addToBuildQueue(LAUNCHER);
+						addToBuildQueue(AEROSPACELAB);
+						addToBuildQueue(AEROSPACELAB);
 						addToBuildQueue(AEROSPACELAB);
 					}
-					addToBuildQueue(LAUNCHER);
-					addToBuildQueue(AEROSPACELAB);
-					
 				}
 
 
@@ -524,15 +692,35 @@ public class RobotPlayer {
 				rc.setIndicatorString(0, sb.toString());
 				 */
 
+				rc.broadcast(SWARM_ONE_SOLDIERS, 0);
+				rc.broadcast(SWARM_ONE_BASHERS, 0);
+				rc.broadcast(SWARM_ONE_TANKS, 0);
+				rc.broadcast(SWARM_ONE_DRONES, 0);
+				rc.broadcast(SWARM_ONE_LAUNCHERS, 0);
+				rc.broadcast(SWARM_ONE_COMMANDER, 0);
+				
+				rc.broadcast(SWARM_TWO_SOLDIERS, 0);
+				rc.broadcast(SWARM_TWO_BASHERS, 0);
+				rc.broadcast(SWARM_TWO_TANKS, 0);
+				rc.broadcast(SWARM_TWO_DRONES, 0);
+				rc.broadcast(SWARM_TWO_LAUNCHERS, 0);
+				rc.broadcast(SWARM_TWO_COMMANDER, 0);
+				
+				rc.broadcast(SWARM_THREE_SOLDIERS, 0);
+				rc.broadcast(SWARM_THREE_BASHERS, 0);
+				rc.broadcast(SWARM_THREE_TANKS, 0);
+				rc.broadcast(SWARM_THREE_DRONES, 0);
+				rc.broadcast(SWARM_THREE_LAUNCHERS, 0);
+				rc.broadcast(SWARM_THREE_COMMANDER, 0);
 				// end round
-				rc.yield();
+				precomputePathfindingAndYield(0);
 			} catch (Exception e) {
 				System.out.println("HQ Exception");
 				e.printStackTrace();
 			}
 		}
 	}
-	
+
 	private static void addToBuildQueue(RobotType type) {
 		buildQueue[row][0] = type.ordinal();
 		buildQueue[row][1] = 1;
@@ -575,27 +763,31 @@ public class RobotPlayer {
 	}
 
 	private static void runTower() {
+		int myTowerNum = 0;
+		try {
+			myTowerNum = rc.readBroadcast(TOWER_ASSIGN_NUM_CHAN) + 1;
+			rc.broadcast(TOWER_ASSIGN_NUM_CHAN, myTowerNum);
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Tower Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
-				// participate in census
-				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
-
 				// attack
 				if (rc.isWeaponReady()) {
 					attackSomething();
 				}
-
+				
 				// transfer supply
 				transferSupply();
 
 				// end round
-				rc.yield();
+				precomputePathfindingAndYield(myTowerNum);
 			} catch (Exception e) {
 				System.out.println("Tower Exception");
 				e.printStackTrace();
@@ -604,16 +796,20 @@ public class RobotPlayer {
 	}
 
 	private static void runAerospaceLab() {
+		try {
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Aerospace Lab Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
 				// participate in census
 				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
 
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -633,16 +829,20 @@ public class RobotPlayer {
 	}
 
 	private static void runBarracks() {
+		try {
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Barracks Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
 				// participate in census
 				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
 
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -739,7 +939,8 @@ public class RobotPlayer {
 				if (rc.isWeaponReady()) {
 					attackSomething();
 				}
-
+				
+				rc.setIndicatorString(0, "leftHanded = " + leftHanded);
 				if (rc.isCoreReady()) {
 					if (Clock.getRoundNum() > 1700) {
 						if (enemyTowerLocs.length == 0) {
@@ -750,11 +951,12 @@ public class RobotPlayer {
 					} else {
 						if (builderBeaver) {
 							// follow spawn orders
-							Direction escapeDir = escapeCrowding(); // hack, better place to put this
-							if (escapeDir != null) {
-								tryMove(escapeDir);
-							} else {
-								thingIJustBuilt = beaverFollowOrders();
+							boolean moved = beaverMove();
+							if (!moved) {
+								Direction buildDir = bestBuildDir();
+								if (buildDir != null) {
+									thingIJustBuilt = beaverFollowOrders(buildDir);
+								}
 							}
 						} else {
 							// TODO: beaver mining
@@ -873,7 +1075,7 @@ public class RobotPlayer {
 					// If I have supply, go to said unit
 					if (allyUnitLoc != null && rc.getSupplyLevel() > 1000) {
 						if (myLoc.distanceSquaredTo(allyUnitLoc) >= GameConstants.SUPPLY_TRANSFER_RADIUS_SQUARED) {
-							launcherTryMove(myLoc.directionTo(allyUnitLoc));
+							safeTryMove(myLoc.directionTo(allyUnitLoc));
 						} else {
 							//transfer nearly all supplies to unit
 							if (rc.senseRobotAtLocation(allyUnitLoc) != null) { // TODO: hack: fix the root of the problem
@@ -884,7 +1086,7 @@ public class RobotPlayer {
 							rc.broadcast(UNIT_NEEDS_SUPPLY_Y_CHAN, 0);
 						}
 					} else { //if I don't have supply, go to HQ and wait for enough supply
-						launcherTryMove(myLoc.directionTo(myHQLoc));
+						safeTryMove(myLoc.directionTo(myHQLoc));
 					}
 
 				}
@@ -898,16 +1100,20 @@ public class RobotPlayer {
 		}
 	}
 	private static void runHandwashStation() {
+		try {
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Handwash Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
 				// participate in census
 				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
 
 				// transfer supply
 				transferSupply();
@@ -922,16 +1128,20 @@ public class RobotPlayer {
 	}
 
 	private static void runHelipad() {
+		try {
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Helipad Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
-				// participare in census
+				// participate in census
 				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
 
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -956,34 +1166,58 @@ public class RobotPlayer {
 			try {
 				// participate in census
 				markCensus();
-				
+
 				// update locations
 				updateLocations();
+
+				// look for map boundaries
+				lookForBounds();
+				
+				MapLocation nearestEnemy = nearestSensedEnemy();
+				MapLocation baseTarget = closestLocation(myLoc, enemyTowerLocs);
 				
 				// attack
 				if (rc.getMissileCount() > 0) {
-					MapLocation target = nearestSensedEnemy();
-					if (target != null) {
-						tryLaunch(rc.getLocation().directionTo(target));
+					if (nearestEnemy != null) {
+						tryLaunch(rc.getLocation().directionTo(nearestEnemy));
+					} else if (baseTarget != null && myLoc.distanceSquaredTo(baseTarget) <= 36) {
+						tryLaunch(rc.getLocation().directionTo(baseTarget));
+					} else if (myLoc.distanceSquaredTo(enemyHQLoc) <= 36) {
+						tryLaunch(rc.getLocation().directionTo(enemyHQLoc));
 					}
 				}
 				
 				// TODO: launcher movement code
+				// move according to orders
 				if (rc.isCoreReady()) {
-					if (Clock.getRoundNum() < RUSH_TURN) {
-						harass();
+					if (nearestEnemy != null && myLoc.distanceSquaredTo(nearestEnemy) <= 15) { // if i am too close
+						safeTryMove(nearestEnemy.directionTo(myLoc));
+					} else if (nearestEnemy != null && myLoc.add(myLoc.directionTo(nearestEnemy)).distanceSquaredTo(nearestEnemy) <= 35) { // if i would move too close {
+						// don't move
 					} else {
-						MapLocation enemyLoc = nearestSensedEnemy();
-						if (enemyLoc == null) {
-							launcherTryMove(rc.getLocation().directionTo(enemyHQLoc));
+						if (Clock.getRoundNum() < 1500) {
+							if(isVulnerable(baseTarget) && rc.senseNearbyRobots(baseTarget, 36, myTeam).length >= 10 ) {
+								moveToSafely(baseTarget);
+							} else {
+								MapLocation invader = attackingEnemy();
+								if (invader != null) {
+									moveToSafely(invader);
+								} else {
+									rally();
+								}
+							}
 						} else {
-							// stay put
+							if (enemyTowerLocs.length == 0) {
+								moveToSafely(enemyHQLoc);
+							} else {
+								moveToSafely(closestLocation(mapCenter, enemyTowerLocs));
+							}
 						}
 					}
+				} else { // hack for bytecodes
+					// transfer supply
+					transferSupply();
 				}
-				
-				// transfer supply
-				transferSupply();
 				
 				// end round
 				rc.yield();
@@ -1024,10 +1258,10 @@ public class RobotPlayer {
 					} else {
 						mine();
 					}
+				} else { // hack for bytecodes
+					// transfer supply
+					transferSupply();
 				}
-
-				// transfer supply
-				transferSupply();
 
 				// end round
 				rc.yield();
@@ -1039,16 +1273,20 @@ public class RobotPlayer {
 	}
 
 	private static void runMinerFactory() {
+		try {
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Miner Factory Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
 				// participate in census
 				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
 
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -1058,7 +1296,7 @@ public class RobotPlayer {
 				// transfer supply
 				transferSupply();
 
-				// end turn
+				// end round
 				rc.yield();
 			} catch (Exception e) {
 				System.out.println("Miner Factory Exception");
@@ -1072,13 +1310,13 @@ public class RobotPlayer {
 			while (true) {
 				// missile move and explode code
 				if (rc.isCoreReady()) {
-					MapLocation myLoc = rc.getLocation();
+					myLoc = rc.getLocation();
 					MapLocation target = fastNearestEnemy();
 					if (target == null) {
 						quickTryMove(myLoc.directionTo(enemyHQLoc));
 					} else {
 						if (myLoc.distanceSquaredTo(target) <= 2) { // if adjacent
-							quickTryMove(myLoc.directionTo(target));
+							quickTryMove(myLoc.directionTo(target)); // not sure if this should be done
 							rc.explode();
 						} else {
 							quickTryMove(myLoc.directionTo(target));
@@ -1107,6 +1345,11 @@ public class RobotPlayer {
 				// look for map boundaries
 				lookForBounds();
 
+				//communincate supply need
+				if (rc.getSupplyLevel() < 500) {
+					broadcastNeedSupplyLocation();
+				}
+
 				// attack
 				if (rc.isWeaponReady()) {
 					focusAttackEnemies();
@@ -1117,21 +1360,30 @@ public class RobotPlayer {
 					if (Clock.getRoundNum() < 1500) {
 						MapLocation target = closestLocation(myLoc, enemyTowerLocs);
 						if(isVulnerable(target) && rc.senseNearbyRobots(target, 36, myTeam).length >= 10 ) {
-							tryMove(myLoc.directionTo(target));
+							safeTryMove(myLoc.directionTo(target));
 						} else {
-							harass();
+							MapLocation invader = attackingEnemy();
+							if (invader != null) {
+								safeTryMove(myLoc.directionTo(invader));
+							} else {
+								if (Clock.getRoundNum() < 500) {
+									harass();
+								} else {
+									rally();
+								}
+							}
 						}
 					} else {
 						if (enemyTowerLocs.length == 0) {
-							tryMove(myLoc.directionTo(enemyHQLoc));
+							safeTryMove(myLoc.directionTo(enemyHQLoc));
 						} else {
-							tryMove(myLoc.directionTo(closestLocation(mapCenter, enemyTowerLocs)));
+							safeTryMove(myLoc.directionTo(closestLocation(mapCenter, enemyTowerLocs)));
 						}
 					}
+				} else { // hack for bytecodes
+					// transfer supply
+					transferSupply();
 				}
-
-				// transfer supply
-				transferSupply();
 
 				// end round
 				rc.yield();
@@ -1143,16 +1395,20 @@ public class RobotPlayer {
 	}
 
 	private static void runSupplyDepot() {
+		try {
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Supply Depot Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
 				// participate in census
 				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
 
 				// transfer supply
 				transferSupply();
@@ -1198,7 +1454,7 @@ public class RobotPlayer {
 						} else {
 							MapLocation invader = attackingEnemy();
 							if (invader != null) {
-								launcherTryMove(myLoc.directionTo(invader));
+								safeTryMove(myLoc.directionTo(invader));
 							} else {
 								harass();
 							}
@@ -1225,16 +1481,20 @@ public class RobotPlayer {
 	}
 
 	private static void runTankFactory() {
+		try {
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Tank Factory Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
 				// participate in census
 				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
 
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -1254,16 +1514,20 @@ public class RobotPlayer {
 	}
 
 	private static void runTechnologyInstitute() {
+		try {
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Technology Institute Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
 				// participate in census
 				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
 
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -1283,16 +1547,20 @@ public class RobotPlayer {
 	}
 
 	private static void runTrainingField() {
+		try {
+			// update locations
+			updateLocations();
+			
+			// look for map boundaries
+			lookForBounds();
+		} catch (Exception e) {
+			System.out.println("Training Field Exception");
+			e.printStackTrace();
+		}
 		while (true) {
 			try {
 				// participate in census
 				markCensus();
-
-				// update locations
-				updateLocations();
-
-				// look for map boundaries
-				lookForBounds();
 
 				// follow spawn orders
 				if (rc.isCoreReady()) {
@@ -1362,10 +1630,107 @@ public class RobotPlayer {
 		rc.broadcast(EAST_BOUND_CHAN, NO_BOUND);
 		rc.broadcast(SOUTH_BOUND_CHAN, NO_BOUND);
 		rc.broadcast(WEST_BOUND_CHAN, NO_BOUND);
-		rc.broadcast(NORTH_FARTHEST_CHAN, NO_BOUND);
-		rc.broadcast(EAST_FARTHEST_CHAN, NO_BOUND);
-		rc.broadcast(SOUTH_FARTHEST_CHAN, NO_BOUND);
-		rc.broadcast(WEST_FARTHEST_CHAN, NO_BOUND);
+		rc.broadcast(NORTH_FARTHEST_CHAN, myHQLoc.y);
+		rc.broadcast(EAST_FARTHEST_CHAN, myHQLoc.x);
+		rc.broadcast(SOUTH_FARTHEST_CHAN, myHQLoc.y);
+		rc.broadcast(WEST_FARTHEST_CHAN, myHQLoc.x);
+	}
+	
+	// combine both versions of lookForBounds to eliminate duplicated code
+	private static void lookForBounds(MapLocation myLoc, int rangeSq) throws GameActionException {
+		int range = (int)Math.sqrt(rangeSq);
+		Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
+		int[] knownBounds = {
+				rc.readBroadcast(NORTH_BOUND_CHAN),
+				rc.readBroadcast(EAST_BOUND_CHAN),
+				rc.readBroadcast(SOUTH_BOUND_CHAN),
+				rc.readBroadcast(WEST_BOUND_CHAN)
+		};
+		for (int dirNum = 0; dirNum < 4; dirNum++) {
+			Direction dir = myDirections[dirNum];
+			int bound = knownBounds[dirNum];
+			if (bound == NO_BOUND) {
+				MapLocation testLoc = myLoc.add(dir, range);
+				if (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP) {
+					do {
+						testLoc = testLoc.add(dir.opposite());
+					} while (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP && !testLoc.equals(myLoc));
+					if (dirNum == 0) {
+						// y direction
+						rc.broadcast(NORTH_BOUND_CHAN, testLoc.y);
+					} else if (dirNum == 1) {
+						// x direction
+						rc.broadcast(EAST_BOUND_CHAN, testLoc.x);
+					} else if (dirNum == 2) {
+						// y direction
+						rc.broadcast(SOUTH_BOUND_CHAN, testLoc.y);
+					} else if (dirNum == 3) {
+						// x direction
+						rc.broadcast(WEST_BOUND_CHAN, testLoc.x);
+					}
+				}
+			}
+		}
+		if (myLoc.y - range < rc.readBroadcast(NORTH_FARTHEST_CHAN)) {
+			rc.broadcast(NORTH_FARTHEST_CHAN, myLoc.y - range);
+		}
+		if (myLoc.y + range > rc.readBroadcast(SOUTH_FARTHEST_CHAN)) {
+			rc.broadcast(SOUTH_FARTHEST_CHAN, myLoc.y + range);
+		}
+		if (myLoc.x - range < rc.readBroadcast(WEST_FARTHEST_CHAN)) {
+			rc.broadcast(WEST_FARTHEST_CHAN, myLoc.x - range);
+		}
+		if (myLoc.x + range > rc.readBroadcast(EAST_FARTHEST_CHAN)) {
+			rc.broadcast(EAST_FARTHEST_CHAN, myLoc.x + range);
+		}
+	}
+
+	private static void lookForBounds() throws GameActionException {
+		int range = (int)Math.sqrt(myType.sensorRadiusSquared);
+		Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
+		int[] knownBounds = {
+				rc.readBroadcast(NORTH_BOUND_CHAN),
+				rc.readBroadcast(EAST_BOUND_CHAN),
+				rc.readBroadcast(SOUTH_BOUND_CHAN),
+				rc.readBroadcast(WEST_BOUND_CHAN)
+		};
+		for (int dirNum = 0; dirNum < 4; dirNum++) {
+			Direction dir = myDirections[dirNum];
+			int bound = knownBounds[dirNum];
+			if (bound == NO_BOUND) {
+				MapLocation testLoc = myLoc.add(dir, range);
+				if (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP) {
+					do {
+						testLoc = testLoc.add(dir.opposite());
+					} while (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP && !testLoc.equals(myLoc));
+					if (dirNum == 0) {
+						// y direction
+						rc.broadcast(NORTH_BOUND_CHAN, testLoc.y);
+					} else if (dirNum == 1) {
+						// x direction
+						rc.broadcast(EAST_BOUND_CHAN, testLoc.x);
+					} else if (dirNum == 2) {
+						// y direction
+						rc.broadcast(SOUTH_BOUND_CHAN, testLoc.y);
+					} else if (dirNum == 3) {
+						// x direction
+						rc.broadcast(WEST_BOUND_CHAN, testLoc.x);
+					}
+				}
+			}
+		}
+		if (myLoc.y - range < rc.readBroadcast(NORTH_FARTHEST_CHAN)) {
+			rc.broadcast(NORTH_FARTHEST_CHAN, myLoc.y - range);
+		}
+		if (myLoc.y + range > rc.readBroadcast(SOUTH_FARTHEST_CHAN)) {
+			rc.broadcast(SOUTH_FARTHEST_CHAN, myLoc.y + range);
+		}
+		if (myLoc.x - range < rc.readBroadcast(WEST_FARTHEST_CHAN)) {
+			rc.broadcast(WEST_FARTHEST_CHAN, myLoc.x - range);
+		}
+		if (myLoc.x + range > rc.readBroadcast(EAST_FARTHEST_CHAN)) {
+			rc.broadcast(EAST_FARTHEST_CHAN, myLoc.x + range);
+		}
 	}
 
 	private static int northBound() throws GameActionException {
@@ -1588,9 +1953,13 @@ public class RobotPlayer {
 	}
 
 	private static RobotType beaverFollowOrders() throws GameActionException {
+		return beaverFollowOrders(directions[rand.nextInt(8)]);
+	}
+	
+	private static RobotType beaverFollowOrders(Direction dir) throws GameActionException {
 		RobotType buildOrder = getMyBuildOrder();
 		if (buildOrder != null) {
-			boolean success = tryBuild(directions[rand.nextInt(8)],buildOrder);
+			boolean success = tryBuild(dir,buildOrder);
 			if (success) {
 				markProgressTable(buildOrder);
 			} else {
@@ -1979,7 +2348,7 @@ public class RobotPlayer {
 			// break ties by closeness to top of the table
 
 			// TODO: make this take less time
-			MapLocation targetLoc = getClosestMiningTargetBetterThan(myLoc, myOre);
+			MapLocation targetLoc = getClosestMiningTargetBetterThan(myLoc, 0);
 
 			bytecodes[3] = Clock.getBytecodeNum();
 
@@ -1997,20 +2366,23 @@ public class RobotPlayer {
 				markBadMiningTable(targetLoc);
 				rc.mine();
 			} else {
-
-
+				double bestEverOre = getBestOre();
+				
+				boolean noTarget = false;
 				if (targetLoc == null) {
+					noTarget = true;
 					targetLoc = myHQLoc;
 				} else {
 					if (myLoc.distanceSquaredTo(targetLoc) <= mySensorRangeSq) {
 						// TODO: make this take less time
-						if (rc.senseOre(targetLoc) < getBestOre()) {
+						if (rc.senseOre(targetLoc) < bestEverOre || !rc.isPathable(MINER, targetLoc)) {
 							markBadMiningTable(targetLoc);
 						}
 					}
 				}
-
-				if (getBestOre() <= myOre) {
+				rc.setIndicatorString(2,"bestore:" + bestEverOre);
+				if (bestEverOre <= myOre) {
+					noTarget = true;
 					targetLoc = myHQLoc;
 				}
 
@@ -2058,18 +2430,30 @@ public class RobotPlayer {
 				bytecodes[7] = Clock.getBytecodeNum();
 
 				if (bestLoc == null) {
-					rc.setIndicatorString(1,"branch4");
-					mineCounter = Simulator.minerOptimalNumMines(myOre);
-					double oreMined = Math.min(Math.max(Math.min(myOre/GameConstants.MINER_MINE_RATE,GameConstants.MINER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre);
-					markMinerOreCounter(oreMined);
-					mining = true;
-					markBadMiningTable(myLoc); // hack
-					rc.mine();
+					if (myOre > bestEverOre / 2) {
+						rc.setIndicatorString(1,"branch4");
+						mineCounter = Simulator.minerOptimalNumMines(myOre);
+						double oreMined = Math.min(Math.max(Math.min(myOre/GameConstants.MINER_MINE_RATE,GameConstants.MINER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre);
+						markMinerOreCounter(oreMined);
+						mining = true;
+						markBadMiningTable(myLoc); // hack
+						rc.mine();
+					} else if (noTarget) {
+						rc.setIndicatorString(1,"branch8");
+						safeTryMove(directions[rand.nextInt(8)]);
+					} else {
+						rc.setIndicatorString(1,"branch7 " + targetLoc.x + " " + targetLoc.y);
+						moveToSafely(targetLoc);
+					}
 				} else {
-					rc.setIndicatorString(1,"branch5");
-					rc.setIndicatorDot(bestLoc, 0, 255, 0);
-					//rc.setIndicatorDot(targetLoc, 0, 0, 255);
-					launcherTryMove(myLoc.directionTo(bestLoc));
+					if (bestOre > bestEverOre / 2) {
+						rc.setIndicatorString(1,"branch5");
+						moveToSafely(bestLoc);
+					} else {
+						rc.setIndicatorString(1,"branch9");
+						moveToSafely(targetLoc);
+					}
+
 				}
 
 				bytecodes[8] = Clock.getBytecodeNum();
@@ -2078,7 +2462,7 @@ public class RobotPlayer {
 		}
 
 		if (Clock.getRoundNum() > round) {
-			System.out.println("miners exceed bytecodes!!");
+			//System.out.println("miners exceed bytecodes!!");
 		}
 
 	}
@@ -2140,7 +2524,6 @@ public class RobotPlayer {
 	}
 
 	private static void rally() throws GameActionException {
-		MapLocation myLoc = rc.getLocation();
 		MapLocation invaderLoc = attackingEnemy();
 		MapLocation enemy = nearestAttackableEnemyAll();
 		if (enemy != null) {
@@ -2149,7 +2532,7 @@ public class RobotPlayer {
 			if (invaderLoc != null) {
 				tryMove(myLoc.directionTo(invaderLoc));
 			} else {
-				launcherTryMove(myLoc.directionTo(mapCenter));
+				launcherTryMoveTo(mapCenter);
 			}
 		}
 	}
@@ -2176,9 +2559,6 @@ public class RobotPlayer {
 			enemyHQDamage = enemyHQDamage * 10;
 		}
 		int enemyTowerDamage = 8;
-		//		if (brandNew) {
-		//			leftHanded = rand.nextBoolean();
-		//		}
 		int distX;
 		int distY;
 		int distSq;
@@ -2233,10 +2613,7 @@ public class RobotPlayer {
 							distX = targetX - sourceX;
 							distY = targetY - sourceY;
 							distSq = (distX*distX) + (distY*distY);
-							if (distSq <= rangeSq) {
-								damageGrid[sourceX+1][sourceY+1] += damage;
-							}
-							if (distSq <= 10) { // myRange
+							if (distSq <= myAttackRangeSq) { // myRange
 								canAttackGrid[sourceX+1][sourceY+1] = true;
 							}
 						}
@@ -2254,20 +2631,17 @@ public class RobotPlayer {
 							distX = targetX - sourceX;
 							distY = targetY - sourceY;
 							distSq = (distX*distX) + (distY*distY);
-							if (distSq <= rangeSq) {
-								damageGrid[sourceX+1][sourceY+1] += damage;
-							}
 						}
 					}
 				}
-				if (type != COMMANDER && type != TANK && type != LAUNCHER) {
+				if (type != COMMANDER && type != TANK) {
 					// can attack safely
 					for (int sourceX = -1; sourceX <= 1; sourceX++) {
 						for (int sourceY = -1; sourceY <= 1; sourceY++) {
 							distX = targetX - sourceX;
 							distY = targetY - sourceY;
 							distSq = (distX*distX) + (distY*distY);
-							if (distSq <= 10) { // myRange
+							if (distSq <= myAttackRangeSq) { // myRange
 								canAttackGrid[sourceX+1][sourceY+1] = true;
 							}
 						}
@@ -2501,6 +2875,70 @@ public class RobotPlayer {
 		//System.out.println("move and cleanup: " + (newBytecodes - bytecodes));
 		bytecodes = newBytecodes;
 	}
+	
+	private static boolean fitsCheckerboard (MapLocation loc) {
+		return ((((loc.x + loc.y) % 2) + 2) % 2 == buildingParity);
+	}
+	
+	private static boolean goodBuildLoc (MapLocation loc) {
+		return fitsCheckerboard(loc) && rc.isPathable(BEAVER, loc);
+	}
+	
+	private static boolean goodPlaceForBeaver (MapLocation loc) {
+		if (loc.equals(myLoc) || rc.isPathable(BEAVER, loc)) {
+			if (fitsCheckerboard(loc)) {
+				if (goodBuildLoc(loc.add(Direction.NORTH_EAST))
+						|| goodBuildLoc(loc.add(Direction.SOUTH_EAST))
+						|| goodBuildLoc(loc.add(Direction.SOUTH_WEST))
+						|| goodBuildLoc(loc.add(Direction.NORTH_WEST))) {
+					return true;
+				}
+			} else {
+				if (goodBuildLoc(loc.add(Direction.NORTH))
+						|| goodBuildLoc(loc.add(Direction.EAST))
+						|| goodBuildLoc(loc.add(Direction.SOUTH))
+						|| goodBuildLoc(loc.add(Direction.WEST))) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+	
+	private static Direction bestBuildDir() {
+		Direction dir = myLoc.directionTo(myHQLoc);
+		if (!fitsCheckerboard(myLoc.add(dir))) {
+			dir = dir.rotateLeft();
+		}
+		int i = 0;
+		while (i < 4 && !rc.canMove(dir)) {
+			dir = dir.rotateLeft().rotateLeft();
+			i++;
+		}
+		if (i < 4) {
+			return dir;
+		}
+		return null;
+	}
+	
+	private static boolean beaverMove() throws GameActionException {
+		if (goodPlaceForBeaver(myLoc)) {
+			return false;
+		}
+		Direction dir = myLoc.directionTo(myHQLoc);
+		int offsetIndex = 0;
+		int[] offsets = {0,1,-1,2,-2,3,-3};
+		int dirint = directionToInt(dir);
+		while (offsetIndex < 7 && !(rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8]) && goodPlaceForBeaver(myLoc.add(directions[(dirint+offsets[offsetIndex]+8)%8])))) {
+			offsetIndex++;
+		}
+		if (offsetIndex < 7) {
+			dir = directions[(dirint+offsets[offsetIndex]+8)%8];
+			rc.move(dir);
+			return true;
+		}
+		return tryMove(myHQLoc.directionTo(myLoc));
+	}
 
 	// TODO: generalize inMyHQRange, inEnemyHQRange, and inEnemyBuildingRange to reduce duplicate code
 	private static boolean inMyHQRange(MapLocation loc) {
@@ -2622,6 +3060,14 @@ public class RobotPlayer {
 		RobotInfo[] enemies = rc.senseNearbyRobots(mySensorRangeSq, enemyTeam);
 		int closestDist = 9999;
 		RobotInfo closestRobot = null;
+		int centroidX = 0;
+		int centroidY = 0;
+		int soldiers = 0;
+		int bashers = 0;
+		int tanks = 0;
+		int drones = 0;
+		int launchers = 0;
+		int commander = 0;	
 		for (RobotInfo r : enemies) {
 			if (r.type != MISSILE) {
 				MapLocation enemyLoc = r.location;
@@ -2630,6 +3076,133 @@ public class RobotPlayer {
 					closestDist = dist;
 					closestRobot = r;
 				}
+				centroidX += r.location.x;
+				centroidY += r.location.y;
+				if(r.type == SOLDIER){
+					soldiers++;
+				}
+				if(r.type == BASHER){
+					bashers++;
+				}
+				if(r.type == TANK){
+					tanks++;
+				}
+				if(r.type == DRONE){
+					drones++;
+				}
+				if(r.type == LAUNCHER){
+					launchers++;
+				}
+				if(r.type == COMMANDER){
+					commander = 1;
+				}
+			}
+		}
+		centroidX /= enemies.length;
+		centroidY /= enemies.length;
+		MapLocation swarmLocation = new MapLocation(centroidX,centroidY);
+		MapLocation swarm1 = unpackLocation(rc.readBroadcast(SWARM_ONE_LOCATION));
+		MapLocation swarm2 = unpackLocation(rc.readBroadcast(SWARM_TWO_LOCATION));
+		MapLocation swarm3 = unpackLocation(rc.readBroadcast(SWARM_THREE_LOCATION));
+		//initialize a swarm
+		if(swarm1.x == NO_BOUND){
+			rc.broadcast(SWARM_ONE_LOCATION, packLocation(swarmLocation));
+			rc.broadcast(SWARM_ONE_SOLDIERS, soldiers);
+			rc.broadcast(SWARM_ONE_BASHERS, bashers);
+			rc.broadcast(SWARM_ONE_TANKS, tanks);
+			rc.broadcast(SWARM_ONE_DRONES, drones);
+			rc.broadcast(SWARM_ONE_LAUNCHERS, launchers);
+			rc.broadcast(SWARM_ONE_COMMANDER, commander);
+		}
+		else{
+			//if its the same swarm as swarm 1
+			if(distance(swarmLocation, swarm1) < 100){
+				MapLocation meanCenter = new MapLocation((swarmLocation.x + swarm1.x)/2, (swarmLocation.y + swarm1.y)/2);
+				rc.broadcast(SWARM_ONE_LOCATION, packLocation(meanCenter));
+				if(soldiers > rc.readBroadcast(SWARM_ONE_SOLDIERS)){
+					rc.broadcast(SWARM_ONE_SOLDIERS, soldiers);
+				}
+				if(bashers > rc.readBroadcast(SWARM_ONE_BASHERS)){
+					rc.broadcast(SWARM_ONE_BASHERS, bashers);
+				}
+				if(tanks > rc.readBroadcast(SWARM_ONE_TANKS)){
+					rc.broadcast(SWARM_ONE_TANKS, tanks);
+				}
+				if(drones > rc.readBroadcast(SWARM_ONE_DRONES)){
+					rc.broadcast(SWARM_ONE_DRONES, drones);
+				}
+				if(soldiers > rc.readBroadcast(SWARM_ONE_LAUNCHERS)){
+					rc.broadcast(SWARM_ONE_LAUNCHERS, launchers);
+				}
+				if(commander == 1){ 
+					rc.broadcast(SWARM_ONE_COMMANDER, 1);
+				}
+			}
+			else if(swarm2.x == NO_BOUND){
+				rc.broadcast(SWARM_TWO_LOCATION, packLocation(swarmLocation));
+				rc.broadcast(SWARM_TWO_SOLDIERS, soldiers);
+				rc.broadcast(SWARM_TWO_BASHERS, bashers);
+				rc.broadcast(SWARM_TWO_TANKS, tanks);
+				rc.broadcast(SWARM_TWO_DRONES, drones);
+				rc.broadcast(SWARM_TWO_LAUNCHERS, launchers);
+				rc.broadcast(SWARM_TWO_COMMANDER, commander);
+			}
+			else if(distance(swarmLocation, swarm2) < 100){
+				MapLocation meanCenter = new MapLocation((swarmLocation.x + swarm1.x)/2, (swarmLocation.y + swarm1.y)/2);
+				rc.broadcast(SWARM_TWO_LOCATION, packLocation(meanCenter));
+				if(soldiers > rc.readBroadcast(SWARM_TWO_SOLDIERS)){
+					rc.broadcast(SWARM_TWO_SOLDIERS, soldiers);
+				}
+				if(bashers > rc.readBroadcast(SWARM_TWO_BASHERS)){
+					rc.broadcast(SWARM_TWO_BASHERS, bashers);
+				}
+				if(tanks > rc.readBroadcast(SWARM_TWO_TANKS)){
+					rc.broadcast(SWARM_TWO_TANKS, tanks);
+				}
+				if(drones > rc.readBroadcast(SWARM_TWO_DRONES)){
+					rc.broadcast(SWARM_TWO_DRONES, drones);
+				}
+				if(soldiers > rc.readBroadcast(SWARM_TWO_LAUNCHERS)){
+					rc.broadcast(SWARM_TWO_LAUNCHERS, launchers);
+				}
+				if((commander == 1 )){ 
+					rc.broadcast(SWARM_TWO_COMMANDER, 1);
+				}
+			}
+			else if(swarm3.x == NO_BOUND){
+				rc.broadcast(SWARM_THREE_LOCATION, packLocation(swarmLocation));
+				rc.broadcast(SWARM_THREE_SOLDIERS, soldiers);
+				rc.broadcast(SWARM_THREE_BASHERS, bashers);
+				rc.broadcast(SWARM_THREE_TANKS, tanks);
+				rc.broadcast(SWARM_THREE_DRONES, drones);
+				rc.broadcast(SWARM_THREE_LAUNCHERS, launchers);
+				rc.broadcast(SWARM_THREE_COMMANDER, commander);
+			}
+			else if(distance(swarmLocation, swarm3) < 100){
+				MapLocation meanCenter = new MapLocation((swarmLocation.x + swarm1.x)/2, (swarmLocation.y + swarm1.y)/2);
+				rc.broadcast(SWARM_THREE_LOCATION, packLocation(meanCenter));
+				if(soldiers > rc.readBroadcast(SWARM_THREE_SOLDIERS)){
+					rc.broadcast(SWARM_THREE_SOLDIERS, soldiers);
+				}
+				if(bashers > rc.readBroadcast(SWARM_THREE_BASHERS)){
+					rc.broadcast(SWARM_THREE_BASHERS, bashers);
+				}
+				if(tanks > rc.readBroadcast(SWARM_THREE_TANKS)){
+					rc.broadcast(SWARM_THREE_TANKS, tanks);
+				}
+				if(drones > rc.readBroadcast(SWARM_THREE_DRONES)){
+					rc.broadcast(SWARM_THREE_DRONES, drones);
+				}
+				if(soldiers > rc.readBroadcast(SWARM_THREE_LAUNCHERS)){
+					rc.broadcast(SWARM_THREE_LAUNCHERS, launchers);
+				}
+				if(commander == 1){ 
+					rc.broadcast(SWARM_THREE_COMMANDER, 1);
+				}
+				
+			}
+			else{
+				System.out.print("WTF! more than 3 swarms!?");
 			}
 		}
 		if (closestRobot != null) {
@@ -2657,13 +3230,12 @@ public class RobotPlayer {
 	}
 
 	private static MapLocation fastNearestEnemy() throws GameActionException {
-		MapLocation myLoc = rc.getLocation();
 		RobotInfo[] enemies = rc.senseNearbyRobots(24, enemyTeam);
 		int closestDist = 9999;
 		RobotInfo closestRobot = null;
 		int i = 0;
 		for (RobotInfo r : enemies) {
-			if (r.type != MISSILE) {
+			if (r.type != RobotType.MISSILE) {
 				MapLocation enemyLoc = r.location;
 				int dist = myLoc.distanceSquaredTo(enemyLoc);
 				if (dist < closestDist) {
@@ -2672,7 +3244,7 @@ public class RobotPlayer {
 				}
 			}
 			i++;
-			if (i >= 1) {
+			if (i >= 3) {
 				break;
 			}
 		}
@@ -2701,103 +3273,6 @@ public class RobotPlayer {
 			return closestRobot.location;
 		}
 		return null;
-	}
-
-	// combine both versions of lookForBounds to eliminate duplicated code
-	private static void lookForBounds(MapLocation myLoc, int rangeSq) throws GameActionException {
-		int range = (int)Math.sqrt(rangeSq);
-		Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
-		int[] knownBounds = {
-				rc.readBroadcast(NORTH_BOUND_CHAN),
-				rc.readBroadcast(EAST_BOUND_CHAN),
-				rc.readBroadcast(SOUTH_BOUND_CHAN),
-				rc.readBroadcast(WEST_BOUND_CHAN)
-		};
-		for (int dirNum = 0; dirNum < 4; dirNum++) {
-			Direction dir = myDirections[dirNum];
-			int bound = knownBounds[dirNum];
-			if (bound == NO_BOUND) {
-				MapLocation testLoc = myLoc.add(dir, range);
-				if (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP) {
-					do {
-						testLoc = testLoc.add(dir.opposite());
-					} while (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP && !testLoc.equals(myLoc));
-					if (dirNum == 0) {
-						// y direction
-						rc.broadcast(NORTH_BOUND_CHAN, testLoc.y);
-					} else if (dirNum == 1) {
-						// x direction
-						rc.broadcast(EAST_BOUND_CHAN, testLoc.x);
-					} else if (dirNum == 2) {
-						// y direction
-						rc.broadcast(SOUTH_BOUND_CHAN, testLoc.y);
-					} else if (dirNum == 3) {
-						// x direction
-						rc.broadcast(WEST_BOUND_CHAN, testLoc.x);
-					}
-				}
-			}
-		}
-		if (Math.max(myLoc.y - range, knownBounds[0]) < rc.readBroadcast(NORTH_FARTHEST_CHAN)) {
-			rc.broadcast(NORTH_FARTHEST_CHAN, myLoc.y - range);
-		}
-		if (Math.min(myLoc.y + range, knownBounds[2]) > rc.readBroadcast(SOUTH_FARTHEST_CHAN)) {
-			rc.broadcast(SOUTH_FARTHEST_CHAN, myLoc.y + range);
-		}
-		if (Math.max(myLoc.x - range, knownBounds[3]) < rc.readBroadcast(WEST_FARTHEST_CHAN)) {
-			rc.broadcast(WEST_FARTHEST_CHAN, myLoc.y - range);
-		}
-		if (Math.min(myLoc.x + range, knownBounds[1]) > rc.readBroadcast(EAST_FARTHEST_CHAN)) {
-			rc.broadcast(EAST_FARTHEST_CHAN, myLoc.y + range);
-		}
-	}
-
-	private static void lookForBounds() throws GameActionException {
-		int range = (int)Math.sqrt(myType.sensorRadiusSquared);
-		Direction[] myDirections = {Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST};
-		int[] knownBounds = {
-				rc.readBroadcast(NORTH_BOUND_CHAN),
-				rc.readBroadcast(EAST_BOUND_CHAN),
-				rc.readBroadcast(SOUTH_BOUND_CHAN),
-				rc.readBroadcast(WEST_BOUND_CHAN)
-		};
-		for (int dirNum = 0; dirNum < 4; dirNum++) {
-			Direction dir = myDirections[dirNum];
-			int bound = knownBounds[dirNum];
-			if (bound == NO_BOUND) {
-				MapLocation testLoc = myLoc.add(dir, range);
-				if (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP) {
-					do {
-						testLoc = testLoc.add(dir.opposite());
-					} while (rc.senseTerrainTile(testLoc) == TerrainTile.OFF_MAP && !testLoc.equals(myLoc));
-					if (dirNum == 0) {
-						// y direction
-						rc.broadcast(NORTH_BOUND_CHAN, testLoc.y);
-					} else if (dirNum == 1) {
-						// x direction
-						rc.broadcast(EAST_BOUND_CHAN, testLoc.x);
-					} else if (dirNum == 2) {
-						// y direction
-						rc.broadcast(SOUTH_BOUND_CHAN, testLoc.y);
-					} else if (dirNum == 3) {
-						// x direction
-						rc.broadcast(WEST_BOUND_CHAN, testLoc.x);
-					}
-				}
-			}
-		}
-		if (Math.max(myLoc.y - range, knownBounds[0]) < rc.readBroadcast(NORTH_FARTHEST_CHAN)) {
-			rc.broadcast(NORTH_FARTHEST_CHAN, myLoc.y - range);
-		}
-		if (Math.min(myLoc.y + range, knownBounds[2]) > rc.readBroadcast(SOUTH_FARTHEST_CHAN)) {
-			rc.broadcast(SOUTH_FARTHEST_CHAN, myLoc.y + range);
-		}
-		if (Math.max(myLoc.x - range, knownBounds[3]) < rc.readBroadcast(WEST_FARTHEST_CHAN)) {
-			rc.broadcast(WEST_FARTHEST_CHAN, myLoc.x - range);
-		}
-		if (Math.min(myLoc.x + range, knownBounds[1]) > rc.readBroadcast(EAST_FARTHEST_CHAN)) {
-			rc.broadcast(EAST_FARTHEST_CHAN, myLoc.x + range);
-		}
 	}
 
 	// TODO: replace with josh's drone micro
@@ -2914,14 +3389,14 @@ public class RobotPlayer {
 	}
 
 	// TODO: rewrite tryMove, quickTryMove and LauncherTryMove to be faster, better names
+	// this method is optimized to take about 53 bytecodes. rotateLeft and rotateRight appear to be free.
 	private static void quickTryMove(Direction d) throws GameActionException {
-		int offsetIndex = 0;
-		int dirint = directionToInt(d);
-		while (offsetIndex < 3 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
-			offsetIndex++;
-		}
-		if (offsetIndex < 3) {
-			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+		if (rc.canMove(d)) {
+			rc.move(d);
+		} else if (rc.canMove(d.rotateLeft())) {
+			rc.move(d.rotateLeft());
+		} else if (rc.canMove(d.rotateRight())) {
+			rc.move(d.rotateRight());
 		}
 	}
 
@@ -2941,7 +3416,7 @@ public class RobotPlayer {
 
 	//TODO: rename launcherTryMove
 	//TODO: make more efficient
-	private static boolean launcherTryMove(Direction d) throws GameActionException {
+	private static boolean safeTryMove(Direction d) throws GameActionException {
 		int offsetIndex = 0;
 		int[] offsets = {0,1,-1,2,-2};
 		int dirint = directionToInt(d);
@@ -2949,51 +3424,35 @@ public class RobotPlayer {
 			offsetIndex++;
 		}
 		if (offsetIndex < 5) {
+			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
+			return true;
+		}
+		return false;
+	}
+	
+	private static boolean launcherTryMoveTo(MapLocation targetLoc) throws GameActionException {
+		MapLocation myLoc = rc.getLocation();
+		MapLocation enemy = nearestSensedEnemy();
+		Direction d = myLoc.directionTo(targetLoc);
+		if (enemy != null) {
+			if (myLoc.distanceSquaredTo(enemy) <= 15) { // if i am too close
+				d = d.opposite(); // move away
+			} else if (myLoc.add(d).distanceSquaredTo(enemy) <= 15) { // if i would move too close
+				return false; // don't move
+			}
+		}
+		int offsetIndex = 0;
+		int[] offsets = {0,1,-1,2,-2};
+		int dirint = directionToInt(d);
+		while (offsetIndex < 5 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
+			offsetIndex++;
+		}
+		if (offsetIndex < 5) {
 			Direction dir = directions[(dirint+offsets[offsetIndex]+8)%8];
-			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
-			return true;
-		}
-		return false;
-	}
-
-	private static boolean limitedTryMove(Direction d) throws GameActionException {
-		int offsetIndex = 0;
-		int[] offsets = {0,1,-1};
-		int dirint = directionToInt(d);
-		while (offsetIndex < 3 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
-			offsetIndex++;
-		}
-		if (offsetIndex < 3) {
-			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
-			return true;
-		}
-		return false;
-	}
-
-	private static boolean tryMoveLeft(Direction d) throws GameActionException {
-		int offsetIndex = 0;
-		int[] offsets = {0,-1,-2,-3};
-		int dirint = directionToInt(d);
-		while (offsetIndex < 4 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
-			offsetIndex++;
-		}
-		if (offsetIndex < 4) {
-			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
-			return true;
-		}
-		return false;
-	}
-
-	private static boolean tryMoveRight(Direction d) throws GameActionException {
-		int offsetIndex = 0;
-		int[] offsets = {0,1,2,3};
-		int dirint = directionToInt(d);
-		while (offsetIndex < 4 && !rc.canMove(directions[(dirint+offsets[offsetIndex]+8)%8])) {
-			offsetIndex++;
-		}
-		if (offsetIndex < 4) {
-			rc.move(directions[(dirint+offsets[offsetIndex]+8)%8]);
-			return true;
+			if (!inEnemyBuildingRange(myLoc.add(dir))) {
+				rc.move(dir);
+				return true;
+			}
 		}
 		return false;
 	}
@@ -3161,4 +3620,855 @@ public class RobotPlayer {
 			return Direction.NONE;
 		}
 	}
+	
+	private static boolean moveTo(MapLocation targetLoc) throws GameActionException {
+		Direction dir = null;
+		if (targetLoc.equals(navTargetLoc)) {
+			if (navType == NAVTYPE_BUG && !pathExists(myLoc, targetLoc)) {
+				dir = bugNavDirection(targetLoc);
+			} else {
+				dir = pathFindingDirection(targetLoc);
+				if (dir == null) {
+					navType = 0;
+					dir = bugNavDirection(targetLoc);
+				}
+			}
+		} else {
+			navType = 0;
+			dir = pathFindingDirection(targetLoc);
+			if (dir == null) {
+				dir = bugNavDirection(targetLoc);
+			}
+		}
+		if (dir == null)
+			return false;
+		rc.move(dir);
+		return true;
+	}
+	
+	private static boolean moveToSafely(MapLocation targetLoc) throws GameActionException {
+		Direction dir = null;
+		if (targetLoc.equals(navTargetLoc)) {
+			if (navType == NAVTYPE_BUG && !pathExists(myLoc, targetLoc)) {
+				rc.setIndicatorString(0, "trying to bug again");
+				dir = safeBugNavDirection(targetLoc);
+			} else {
+				rc.setIndicatorString(1, "trying to path again");
+				dir = safePathFindingDirection(targetLoc);
+				if (dir == null) {
+					rc.setIndicatorString(2, "failed, trying to bug again");
+					navType = 0;
+					dir = safeBugNavDirection(targetLoc);
+				}
+			}
+		} else {
+			navType = 0;
+			rc.setIndicatorString(0, "trying to path first");
+			dir = safePathFindingDirection(targetLoc);
+			if (dir == null) {
+				rc.setIndicatorString(1, "failed, trying to bug first");
+				dir = safeBugNavDirection(targetLoc);
+			}
+		}
+		if (dir == null) {
+			rc.setIndicatorString(2, "epic fail");
+			return false;
+		}
+		rc.move(dir);
+		return true;
+	}
+	
+	private static boolean canMoveSafely(Direction dir) {
+		return !inEnemyBuildingRange(myLoc.add(dir));
+	}
+	
+	private static boolean canMove(Direction dir, boolean safety) {
+		return (safety ? (rc.canMove(dir) && canMoveSafely(dir)) : rc.canMove(dir));
+	}
+	
+	private static Direction bugNavDirection(MapLocation targetLoc) throws GameActionException {
+		return bugNavDirection(targetLoc, false);
+	}
+	
+	private static Direction safeBugNavDirection(MapLocation targetLoc) throws GameActionException {
+		return bugNavDirection(targetLoc, true);
+	}
+
+	private static Direction bugNavDirection(MapLocation targetLoc, boolean safety) throws GameActionException {
+		if (!targetLoc.equals(navTargetLoc) || navType != NAVTYPE_BUG) {
+			// new bugnav session
+			navTargetLoc = targetLoc;
+			navType = NAVTYPE_BUG;
+			bugNavWinding = 0;
+			navClosestDistSq = myLoc.distanceSquaredTo(targetLoc);
+		}
+		Direction targetDir = myLoc.directionTo(targetLoc);
+		int targetDirNum = targetDir.ordinal();
+		int currentDirNum = (((targetDirNum + bugNavWinding) % 8) + 8) % 8;
+		Direction currentDir = directions[currentDirNum];
+		int countWinds = 0;
+		// invariant: currentDir = directions[currentDirNum]
+		// invariant: currentDirNum - targetDirNum = bugNavWinding in mod 8
+		if (leftHanded) {
+			// move condition for left handed: (bugNavWinding == 0 && rc.canMove(currentDir)) || (!rc.canMove(currentDir.rotateRight()) && rc.canMove(currentDir))
+			while (!((bugNavWinding == 0 && canMove(currentDir, safety)) || (!canMove(currentDir.rotateRight(), safety) && canMove(currentDir, safety)))) { // loop if the move condition is false
+				// known: bugNavWinding != 0 || !rc.canMove(currentDir)
+				// known: rc.canMove(currentDir.rotateRight()) || !rc.canMove(currentDir)
+				if (canMove(currentDir.rotateRight(), safety) && bugNavWinding != 0) {
+					bugNavWinding++;
+				} else {
+					// known: !rc.canMove(currentDir)
+					bugNavWinding--;
+					countWinds++;
+				}
+				// update invariants
+				currentDirNum = (((targetDirNum + bugNavWinding) % 8) + 8) % 8;
+				currentDir = directions[currentDirNum];
+				// watchdog for totally blocked
+				if (countWinds >= 8) {
+					bugNavWinding += 8;
+					return null;
+				}
+			}
+		} else {
+			// move condition for right handed: (bugNavWinding == 0 && rc.canMove(currentDir)) || (!rc.canMove(currentDir.rotateLeft()) && rc.canMove(currentDir))
+			while (!((bugNavWinding == 0 && canMove(currentDir, safety)) || (!canMove(currentDir.rotateLeft(), safety) && canMove(currentDir, safety)))) { // loop if the move condition is false
+				// known: bugNavWinding != 0 || !rc.canMove(currentDir)
+				// known: rc.canMove(currentDir.rotateLeft()) || !rc.canMove(currentDir)
+				if (canMove(currentDir.rotateLeft(), safety) && bugNavWinding != 0) {
+					bugNavWinding--;
+				} else {
+					// known: !rc.canMove(currentDir)
+					bugNavWinding++;
+					countWinds++;
+				}
+				// update invariants
+				currentDirNum = (((targetDirNum + bugNavWinding) % 8) + 8) % 8;
+				currentDir = directions[currentDirNum];
+				// watchdog for totally blocked
+				if (countWinds >= 8) {
+					bugNavWinding -= 8;
+					return null;
+				}
+			}
+		}
+		int currentDistSq = myLoc.distanceSquaredTo(targetLoc);
+		if (currentDistSq < navClosestDistSq) {
+			navClosestDistSq = currentDistSq;
+		} else if (Math.sqrt(currentDistSq) > Math.sqrt(navClosestDistSq)*(Math.pow(2, bugNavFallTimes+1)) + 10) {
+			leftHanded = !leftHanded;
+			bugNavWinding = 0;
+			navClosestDistSq = currentDistSq;
+			bugNavFallTimes++;
+		}
+		return currentDir;
+	}
+	
+	private static Direction pathFindingDirection(MapLocation targetLoc) throws GameActionException {
+		return pathFindingDirection(targetLoc, false);
+	}
+	
+	private static Direction safePathFindingDirection(MapLocation targetLoc) throws GameActionException {
+		return pathFindingDirection(targetLoc, true);
+	}
+	
+	private static Direction pathFindingDirection(MapLocation targetLoc, boolean safety) throws GameActionException {
+		if (!targetLoc.equals(navTargetLoc) || navType != NAVTYPE_PRECOMP || navSourceLoc.distanceSquaredTo(myLoc) > 2) {
+			navTargetLoc = targetLoc;
+			navSourceLoc = myLoc;
+			navType = NAVTYPE_PRECOMP;
+			foundPath = pathFind(myLoc, navTargetLoc);
+			foundPathIndex = 0;
+		}
+		if (foundPath == null || foundPath[0] == null) {
+			return null;
+		}
+
+		MapLocation currentLoc = foundPath[foundPathIndex];
+		while (currentLoc != null && currentLoc.distanceSquaredTo(myLoc) <= 8) {
+			foundPathIndex++;
+			currentLoc = foundPath[foundPathIndex];
+		}
+		if (currentLoc == null) {
+			return null;
+		}
+		Direction d = myLoc.directionTo(currentLoc);
+		navSourceLoc = myLoc.add(d);
+		if (canMove(d, safety)) {
+			return d;
+		} else if (canMove(d.rotateLeft(), safety)) {
+			return d.rotateLeft();
+		} else if (canMove(d.rotateRight(), safety)) {
+			return d.rotateRight();
+		}else if (canMove(d.rotateLeft().rotateLeft(), safety)) {
+			return d.rotateLeft().rotateLeft();
+		} else if (canMove(d.rotateRight().rotateRight(), safety)) {
+			return d.rotateRight().rotateRight();
+		}
+		return null;
+	}
+	
+	private static boolean leftSideOfMap() {
+		int rushVecX = enemyHQLoc.x - myHQLoc.x;
+		int rushVecY = enemyHQLoc.y - myHQLoc.y;
+		int myVecX = myLoc.x - myHQLoc.x;
+		int myVecY = myLoc.y - myHQLoc.y;
+		int crossProduct = (rushVecX * myVecY) - (rushVecY * myVecX);
+		return crossProduct < 0;
+	}
+	
+	private static boolean isLocationBlocking(MapLocation loc) {
+		int risingEdges = 0;
+		int fallingEdges = 0;
+		boolean lastDirBlocked = !rc.isPathable(BEAVER, loc.add(directions[0]));
+		for (int i = 1; i < 8; i++) {
+			Direction dir = directions[i];
+			if (rc.isPathable(BEAVER, loc.add(directions[i]))) {
+				if (lastDirBlocked) {
+					fallingEdges++;
+				}
+			} else {
+				if (!lastDirBlocked) {
+					risingEdges++;
+				}
+			}
+		}
+		int connectivity = Math.max(risingEdges, fallingEdges);
+		return connectivity > 1;
+	}
+	
+	private static int getNavMapSquareChannel(MapLocation loc) {
+		int x = ((loc.x - myHQLoc.x) + NAVMAP_WIDTH) % NAVMAP_WIDTH;
+		int y = ((loc.y - myHQLoc.y) + NAVMAP_HEIGHT) % NAVMAP_HEIGHT;
+		return NAVMAP_CHAN + NAVMAP_SQUARE_SIZE * ((NAVMAP_WIDTH * y) + x);
+	}
+	
+	private static short readNavMapBits(MapLocation loc, int waypoint) throws GameActionException {
+		int channel = getNavMapSquareChannel(loc) + (waypoint / 2);
+		int dataInt = rc.readBroadcast(channel);
+		short dataShort = (waypoint % 2 == 0) ? (short)(dataInt >>> 16) : (short)(dataInt & 0xFFFF);
+		return dataShort;
+	}
+	
+	private static void writeNavMapBits(MapLocation loc, int waypoint, short bits) throws GameActionException {
+		int channel = getNavMapSquareChannel(loc) + (waypoint / 2);
+		int dataInt = rc.readBroadcast(channel);
+		dataInt = (waypoint % 2 == 0) ? ((bits << 16) | (dataInt & 0xFFFF)) : ((dataInt & 0xFFFF0000) | (bits & 0xFFFF));
+		rc.broadcast(channel, dataInt);
+	}
+	
+	private static boolean isLocationMarkedUnknown(MapLocation loc) throws GameActionException {
+		return readNavMapBits(loc, 7) == 1;
+	}
+	
+	private static void markLocationUnknown(MapLocation loc) throws GameActionException {
+		writeNavMapBits(loc, 7, (short)1);
+	}
+	
+	private static int packLocation(MapLocation loc) {
+		return (((short)loc.x) << 16) | (((short)loc.y) & 0xFFFF);
+	}
+	
+	private static MapLocation unpackLocation(int packedLoc) {
+		return new MapLocation((short)(packedLoc >>> 16), (short)(packedLoc & 0xFFFF));
+	}
+	
+	private static void addToNavQueue(int waypoint, MapLocation loc) throws GameActionException {
+		int startPtr = rc.readBroadcast(NAVQUEUE_STARTPTR_CHAN + waypoint);
+		int endPtr = rc.readBroadcast(NAVQUEUE_ENDPTR_CHAN + waypoint);
+		int size = ((endPtr - startPtr) + NAVQUEUE_QUEUE_SIZE) % NAVQUEUE_QUEUE_SIZE;
+		if (size >= NAVQUEUE_QUEUE_SIZE - 1) {
+			System.out.println("Nav queue full!");
+			return;
+		}
+		int packedLoc = packLocation(loc);
+		rc.broadcast(NAVQUEUE_CHAN + (waypoint * NAVQUEUE_QUEUE_SIZE) + endPtr, packedLoc);
+		endPtr = (endPtr + 1) % NAVQUEUE_QUEUE_SIZE;
+		rc.broadcast(NAVQUEUE_ENDPTR_CHAN + waypoint, endPtr);
+	}
+	
+	private static MapLocation popFromNavQueue(int waypoint) throws GameActionException {
+		int startPtr = rc.readBroadcast(NAVQUEUE_STARTPTR_CHAN + waypoint);
+		int endPtr = rc.readBroadcast(NAVQUEUE_ENDPTR_CHAN + waypoint);
+		int size = ((endPtr - startPtr) + NAVQUEUE_QUEUE_SIZE) % NAVQUEUE_QUEUE_SIZE;
+		if (size <= 0) { // queue empty
+			return null;
+		}
+		int packedLoc = rc.readBroadcast(NAVQUEUE_CHAN + (waypoint * NAVQUEUE_QUEUE_SIZE) + startPtr);
+		startPtr = (startPtr + 1) % NAVQUEUE_QUEUE_SIZE;
+		rc.broadcast(NAVQUEUE_STARTPTR_CHAN + waypoint, startPtr);
+		return unpackLocation(packedLoc);
+	}
+	
+	private static void addToUnknownQueue(MapLocation loc) throws GameActionException {
+		int startPtr = rc.readBroadcast(UNKNOWN_QUEUE_STARTPTR_CHAN);
+		int endPtr = rc.readBroadcast(UNKNOWN_QUEUE_ENDPTR_CHAN);
+		int size = ((endPtr - startPtr) + UNKNOWN_QUEUE_SIZE) % UNKNOWN_QUEUE_SIZE;
+		if (size >= UNKNOWN_QUEUE_SIZE - 1) {
+			System.out.println("Unknown queue full!");
+			return;
+		}
+		int packedLoc = packLocation(loc);
+		rc.broadcast(UNKNOWN_QUEUE_CHAN + endPtr, packedLoc);
+		endPtr = (endPtr + 1) % UNKNOWN_QUEUE_SIZE;
+		rc.broadcast(UNKNOWN_QUEUE_ENDPTR_CHAN, endPtr);
+	}
+	
+	private static MapLocation popFromUnknownQueue() throws GameActionException {
+		int startPtr = rc.readBroadcast(UNKNOWN_QUEUE_STARTPTR_CHAN);
+		int endPtr = rc.readBroadcast(UNKNOWN_QUEUE_ENDPTR_CHAN);
+		int size = ((endPtr - startPtr) + UNKNOWN_QUEUE_SIZE) % UNKNOWN_QUEUE_SIZE;
+		if (size <= 0) { // queue empty
+			return null;
+		}
+		int packedLoc = rc.readBroadcast(UNKNOWN_QUEUE_CHAN + startPtr);
+		startPtr = (startPtr + 1) % UNKNOWN_QUEUE_SIZE;
+		rc.broadcast(UNKNOWN_QUEUE_STARTPTR_CHAN, startPtr);
+		return unpackLocation(packedLoc);
+	}
+	
+	private static void initializePathfindingQueues() throws GameActionException {
+		MapLocation[] towerLocs = rc.senseTowerLocations();
+		int numTowers = towerLocs.length;
+		// broadcast waypoint info
+		rc.broadcast(NAVMAP_NUM_WAYPOINTS_CHAN, numTowers + 1);
+		short rootBits = -0x8000;
+		short adjBits = 0x4000;
+		
+		// for hq
+		rc.broadcast(NAVMAP_WAYPOINTS_CHAN, packLocation(myHQLoc));
+		writeNavMapBits(myHQLoc, 0, rootBits);
+		for (int dirNum = 0; dirNum < 8; dirNum++) {
+			Direction dir = directions[dirNum];
+			MapLocation adjLoc = myHQLoc.add(dir);
+			TerrainTile adjTile = rc.senseTerrainTile(adjLoc);
+			if (adjTile == TerrainTile.NORMAL || adjTile == TerrainTile.UNKNOWN) {
+				writeNavMapBits(adjLoc, 0, adjBits);
+				addToNavQueue(0, adjLoc);
+			}
+		}
+		rc.broadcast(NAVMAP_STILL_PATHFINDING_CHAN, 1);
+		
+		// for towers
+		for (int i = numTowers; --i >= 0;) {
+			MapLocation towerLoc = towerLocs[i];
+			rc.broadcast(NAVMAP_WAYPOINTS_CHAN + 1 + i, packLocation(towerLoc));
+			writeNavMapBits(towerLoc, i+1, rootBits);
+			for (int dirNum = 0; dirNum < 8; dirNum++) {
+				Direction dir = directions[dirNum];
+				MapLocation adjLoc = towerLoc.add(dir);
+				TerrainTile adjTile = rc.senseTerrainTile(adjLoc);
+				if (adjTile == TerrainTile.NORMAL || adjTile == TerrainTile.UNKNOWN) {
+					writeNavMapBits(adjLoc, i+1, adjBits);
+					addToNavQueue(i+1, adjLoc);
+				}
+			}
+			rc.broadcast(NAVMAP_STILL_PATHFINDING_CHAN + 1 + i, 1);
+		}
+		
+		// unknown queue is initialized by default
+	}
+	
+	// TODO: prioritize pathfinding
+	private static void precomputePathfindingAndYield() throws GameActionException {
+		precomputePathfindingAndYield(0);
+	}
+	
+	private static void precomputePathfindingAndYield(int waypoint) throws GameActionException {
+		if (rc.readBroadcast(NAVMAP_STILL_PATHFINDING_CHAN + waypoint) == 1) {
+			int roundNum = Clock.getRoundNum();
+			while (Clock.getRoundNum() == roundNum) {
+				MapLocation loc = popFromNavQueue(waypoint);
+				if (loc == null) {
+					// finished
+					traverseUnknownQueueAndYield();
+					return;
+				}
+				TerrainTile tile = rc.senseTerrainTile(loc);
+				MapLocation symmetricLoc = symmetricLocation(loc);
+				TerrainTile symmetricTile = (symmetricLoc != null) ? rc.senseTerrainTile(symmetricLoc) : null;
+				if (tile == TerrainTile.NORMAL || symmetricTile == TerrainTile.NORMAL) {
+					int bestCost = 99999999; // never negative
+					Direction bestDir = null;
+					for (int dirNum = 8; --dirNum >= 0;) {
+						Direction dir = directions[dirNum];
+						MapLocation adjLoc = loc.add(dir);
+						TerrainTile adjTile = rc.senseTerrainTile(adjLoc);
+						MapLocation symmetricAdjLoc = symmetricLocation(adjLoc);
+						TerrainTile symmetricAdjTile = (symmetricAdjLoc != null) ? rc.senseTerrainTile(symmetricAdjLoc) : null;
+						if (adjTile == TerrainTile.NORMAL || symmetricAdjTile == TerrainTile.NORMAL) {
+							short adjBits = readNavMapBits(adjLoc, waypoint);
+							if ((adjBits & -0x8000) == -0x8000) { // if done
+								int newCost = (adjBits & 0x07ff) + (dir.isDiagonal() ? 7 : 5); // move cost function
+								if (newCost < bestCost || (newCost <= bestCost && !dir.isDiagonal())) { // if lowest cost found yet
+									bestCost = newCost;
+									bestDir = dir;
+								}
+							} else if ((adjBits & 0x4000) == 0x0000) { // if not queued
+								writeNavMapBits(adjLoc, waypoint, (short)0x4000); // mark as queued
+								addToNavQueue(waypoint, adjLoc);
+							}
+						} else if (adjTile == TerrainTile.UNKNOWN && symmetricAdjTile == TerrainTile.UNKNOWN) {
+							short adjBits = readNavMapBits(adjLoc, waypoint);
+							if ((adjBits & 0x4000) == 0x0000) { // if not queued
+								writeNavMapBits(adjLoc, waypoint, (short)0x4000); // mark as queued
+								markLocationUnknown(adjLoc);
+								addToUnknownQueue(adjLoc);
+							} else {
+							}
+						}
+					}
+					if (bestDir == null) {
+						System.out.println("pathfinding error: bestDir = null");
+					} else {
+						short bits = (short)(-0x8000 | (bestDir.ordinal() << 11) | (bestCost & 0x07ff));
+						writeNavMapBits(loc, waypoint, bits);
+						if (isOnSymmetryBoundary(loc)) {
+							int bestSymmetryCost = rc.readBroadcast(NAVMAP_SYMMETRY_COSTS_CHAN + waypoint);
+							if (bestCost < bestSymmetryCost) {
+								rc.broadcast(NAVMAP_SYMMETRY_LOCS_CHAN + waypoint, packLocation(loc));
+								rc.broadcast(NAVMAP_SYMMETRY_COSTS_CHAN + waypoint, bestCost);
+							}
+						}
+					}
+				} else if (tile == TerrainTile.UNKNOWN && symmetricTile == TerrainTile.UNKNOWN) {
+					markLocationUnknown(loc);
+					addToUnknownQueue(loc);
+				}
+			}
+			
+		}
+	}
+	
+	private static void traverseUnknownQueueAndYield() throws GameActionException {
+		int roundNum = Clock.getRoundNum();
+		int numWaypoints = rc.readBroadcast(NAVMAP_NUM_WAYPOINTS_CHAN);
+		while (Clock.getRoundNum() == roundNum) {
+			MapLocation loc = popFromUnknownQueue();
+			if (loc == null) {
+				// finished
+				rc.yield();
+				return;
+			}
+			TerrainTile tile = rc.senseTerrainTile(loc);
+			MapLocation symmetricLoc = symmetricLocation(loc);
+			TerrainTile symmetricTile = (symmetricLoc != null) ? rc.senseTerrainTile(symmetricLoc) : null;
+			if (tile == TerrainTile.NORMAL || symmetricTile == TerrainTile.NORMAL) {
+				for (int waypoint = 0; waypoint < numWaypoints; waypoint++) {
+					short bits = readNavMapBits(loc, waypoint);
+					if ((bits & 0x4000) != 0) { // if queued by this waypoint
+						addToNavQueue(waypoint, loc);
+					}
+				}
+			} else if (tile == TerrainTile.UNKNOWN && symmetricTile == TerrainTile.UNKNOWN) {
+				addToUnknownQueue(loc);
+			}
+		}
+	}
+	
+	private static boolean pathExists(MapLocation startLoc, MapLocation endLoc) throws GameActionException {
+		MapLocation symmetricStartLoc = symmetricLocation(startLoc);
+		MapLocation symmetricEndLoc = symmetricLocation(endLoc);
+		final int waypoint = 0;
+		short startBits = readNavMapBits(startLoc, waypoint);
+		short endBits = readNavMapBits(endLoc, waypoint);
+		short symmetricStartBits = readNavMapBits(symmetricStartLoc, waypoint);
+		short symmetricEndBits = readNavMapBits(symmetricEndLoc, waypoint);
+		boolean startDone = ((startBits & -0x8000) != 0);
+		boolean endDone = ((endBits & -0x8000) != 0);
+		boolean symmetricStartDone = ((symmetricStartBits & -0x8000) != 0);
+		boolean symmetricEndDone = ((symmetricEndBits & -0x8000) != 0);
+		if (startDone && endDone) {
+			return true;
+		} else if (symmetricStartDone && symmetricEndDone) {
+			return true;
+		}
+		return false;
+	}
+	
+	//TODO: better drawstring on pathfinding
+	private static MapLocation[] pathFind(MapLocation startLoc, MapLocation endLoc) throws GameActionException {
+		int numWaypoints = rc.readBroadcast(NAVMAP_NUM_WAYPOINTS_CHAN);
+		MapLocation symmetricStartLoc = symmetricLocation(startLoc);
+		MapLocation symmetricEndLoc = symmetricLocation(endLoc);
+		int bestCost = 9999999;
+		int bestWaypoint = -1;
+		boolean bestSymmetric = false;
+		for (int waypoint = 0; waypoint < numWaypoints; waypoint++) {
+			short startBits = readNavMapBits(startLoc, waypoint);
+			short endBits = readNavMapBits(endLoc, waypoint);
+			short symmetricStartBits = readNavMapBits(symmetricStartLoc, waypoint);
+			short symmetricEndBits = readNavMapBits(symmetricEndLoc, waypoint);
+			boolean startDone = ((startBits & -0x8000) != 0);
+			boolean endDone = ((endBits & -0x8000) != 0);
+			boolean symmetricStartDone = ((symmetricStartBits & -0x8000) != 0);
+			boolean symmetricEndDone = ((symmetricEndBits & -0x8000) != 0);
+			if (startDone && endDone) {
+				int cost = (startBits & 0x07FF) + (endBits & 0x07FF);
+				if (cost < bestCost) {
+					bestCost = cost;
+					bestWaypoint = waypoint;
+					bestSymmetric = false;
+				}
+			} else if (symmetricStartDone && symmetricEndDone) {
+				int cost = (symmetricStartBits & 0x07FF) + (symmetricEndBits & 0x07FF);
+				if (cost < bestCost) {
+					bestCost = cost;
+					bestWaypoint = waypoint;
+					bestSymmetric = true;
+				}
+			}
+
+		}
+		if (bestWaypoint < 0) {
+			return null;
+		}
+		MapLocation[] startPath = new MapLocation[1000];
+		int startPathSize = 0;
+		MapLocation[] endPath = new MapLocation[1000];
+		int endPathSize = 0;
+		if (bestSymmetric) {
+			startLoc = symmetricLocation(startLoc);
+			endLoc = symmetricLocation(endLoc);
+		}
+		MapLocation waypointLoc = unpackLocation(rc.readBroadcast(NAVMAP_WAYPOINTS_CHAN + bestWaypoint));
+		MapLocation currentLoc = startLoc;
+		while (!currentLoc.equals(waypointLoc)) {
+			short bits = readNavMapBits(currentLoc, bestWaypoint);
+			int dirNum = (bits & 0x3800) >>> 11;
+			Direction dir = directions[dirNum];
+			currentLoc = currentLoc.add(dir);
+			if (bestSymmetric) {
+				startPath[startPathSize] = symmetricLocation(currentLoc);
+			} else {
+				startPath[startPathSize] = currentLoc;
+			}
+			startPathSize++;
+		}
+		currentLoc = endLoc;
+		while (!currentLoc.equals(waypointLoc)) {
+			short bits = readNavMapBits(currentLoc, bestWaypoint);
+			int dirNum = (bits & 0x3800) >>> 11;
+			Direction dir = directions[dirNum];
+			currentLoc = currentLoc.add(dir);
+			if (bestSymmetric) {
+				endPath[endPathSize] = symmetricLocation(currentLoc);
+			} else {
+				endPath[endPathSize] = currentLoc;
+			}
+			endPathSize++;
+		}
+		// drawstring
+		while (startPathSize > 2 && endPathSize > 2) {
+			MapLocation currentStartLoc = startPath[startPathSize - 1];
+			MapLocation prevStartLoc = startPath[startPathSize - 2];
+			MapLocation currentEndLoc = endPath[endPathSize - 1];
+			MapLocation prevEndLoc = endPath[endPathSize - 2];
+			if (isPathSimple(prevStartLoc, prevEndLoc)) {
+				int currentCost = straightPathCost(currentStartLoc, currentEndLoc);
+				int prevCost = straightPathCost(prevStartLoc, prevEndLoc);
+				currentCost += prevStartLoc.directionTo(currentStartLoc).isDiagonal() ? 7 : 5;
+				currentCost += prevEndLoc.directionTo(currentEndLoc).isDiagonal() ? 7 : 5;
+				if (prevCost <= currentCost) {
+					startPathSize--;
+					startPath[startPathSize] = null;
+					endPathSize--;
+				} else {
+					break;
+				}
+			} else {
+				break;
+			}
+		}
+		for (; --endPathSize >= 0; startPathSize++) {
+			startPath[startPathSize] = endPath[endPathSize];
+		}
+		return startPath;
+	}
+	
+	private static boolean isPathSimple(MapLocation startLoc, MapLocation endLoc) {
+		MapLocation currentLoc = startLoc;
+		while (currentLoc.distanceSquaredTo(endLoc) > 2) {
+			currentLoc = currentLoc.add(currentLoc.directionTo(endLoc));
+			if (rc.senseTerrainTile(currentLoc) != TerrainTile.NORMAL) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	private static int straightPathCost(MapLocation startLoc, MapLocation endLoc) {
+		int x = Math.abs(endLoc.x - startLoc.x);
+		int y = Math.abs(endLoc.y - startLoc.y);
+		int diagonals = Math.min(x, y);
+		int cardinals = Math.max(x, y) - diagonals;
+		return (cardinals * 5) + (diagonals * 7);
+	}
+	
+	private static boolean isOnSymmetryBoundary(MapLocation loc) throws GameActionException {
+		MapLocation symmetricLoc = symmetricLocation(loc);
+		if (loc.distanceSquaredTo(symmetricLoc) <= 2) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+	
+	private static MapLocation symmetricLocation(MapLocation loc) throws GameActionException {
+		int relX = loc.x - myHQLoc.x;
+		int relY = loc.y - myHQLoc.y;
+		MapLocation symmetricLoc = null;
+		int symmetryType = rc.readBroadcast(SYMMETRY_TYPE_CHAN);
+		switch (symmetryType) {
+		case (SYMMETRY_TYPE_HORIZONTAL):
+			symmetricLoc = new MapLocation(enemyHQLoc.x + relX, enemyHQLoc.y - relY);
+			break;
+		case (SYMMETRY_TYPE_VERTICAL):
+			symmetricLoc = new MapLocation(enemyHQLoc.x - relX, enemyHQLoc.y + relY);
+			break;
+		case (SYMMETRY_TYPE_DIAGONAL_POS):
+			symmetricLoc = new MapLocation(enemyHQLoc.x + relY, enemyHQLoc.y + relX);
+			break;
+		case (SYMMETRY_TYPE_DIAGONAL_NEG):
+			symmetricLoc = new MapLocation(enemyHQLoc.x - relY, enemyHQLoc.y - relX);
+			break;
+		case (SYMMETRY_TYPE_ROTATIONAL):
+			symmetricLoc = new MapLocation(enemyHQLoc.x - relX, enemyHQLoc.y - relY);
+			break;
+		}
+		return symmetricLoc;
+	}
+	
+	private static Direction symmetricDirection(Direction dir) throws GameActionException {
+		Direction symmetricDir = null;
+		int symmetryType = rc.readBroadcast(SYMMETRY_TYPE_CHAN);
+		switch (symmetryType) {
+		case (SYMMETRY_TYPE_HORIZONTAL):
+			symmetricDir = diffsToDir(dir.dx, -dir.dy);
+		break;
+		case (SYMMETRY_TYPE_VERTICAL):
+			symmetricDir = diffsToDir(-dir.dx, dir.dy);
+		break;
+		case (SYMMETRY_TYPE_DIAGONAL_POS):
+			symmetricDir = diffsToDir(dir.dy, dir.dx);
+		break;
+		case (SYMMETRY_TYPE_DIAGONAL_NEG):
+			symmetricDir = diffsToDir(-dir.dy, -dir.dx);
+		break;
+		case (SYMMETRY_TYPE_ROTATIONAL):
+			symmetricDir = diffsToDir(-dir.dx, -dir.dy);
+		break;
+		}
+		return symmetricDir;
+	}
+	
+	private static Direction diffsToDir(int dx, int dy) {
+		Direction dir = null;
+		switch (dx) {
+		case -1:
+			switch (dy) {
+			case -1: return Direction.NORTH_WEST;
+			case 0: return Direction.WEST;
+			case 1: return Direction.SOUTH_WEST;
+			}
+			break;
+		case 0:
+			switch (dy) {
+			case -1: return Direction.NORTH;
+			case 1: return Direction.SOUTH;
+			}
+			break;
+		case 1:
+			switch (dy) {
+			case -1: return Direction.NORTH_EAST;
+			case 0: return Direction.EAST;
+			case 1: return Direction.SOUTH_EAST;
+			}
+			break;
+		}
+		return null;
+	}
+	
+	private static void debug_showNavMap(int waypoint) throws GameActionException {
+		int xmin = westFarthest();
+		int xmax = eastFarthest();
+		int ymin = northFarthest();
+		int ymax = southFarthest();
+		if (xmin != NO_BOUND && xmax != NO_BOUND && ymin != NO_BOUND && ymax != NO_BOUND) {
+			for (int i = xmin; i <= xmax; i++) {
+				for (int j = ymin; j <= ymax; j++) {
+					MapLocation loc = new MapLocation(i, j);
+					short bits = readNavMapBits(loc, waypoint);
+					if ((bits & -0x8000) != 0) { // if done
+						int dirNum = (bits & 0x3800) >> 11;
+						Direction dir = directions[dirNum];
+						rc.setIndicatorLine(loc, loc.add(dir), 0, 255, 0);
+						
+					}
+				}
+			}
+		}
+	}
+	
+	private static boolean isEnemyTowerLoc(MapLocation loc) {
+		for (MapLocation towerLoc : enemyTowerLocs) {
+			if (towerLoc.equals(loc)) {
+				return true;
+			}
+		}
+		return false;
+	}
+	
+	//naive way
+		private static void estimateSwarm() throws GameActionException{
+			RobotInfo[] enemies = rc.senseNearbyRobots(mySensorRangeSq, enemyTeam);
+			int centroidX = 0;
+			int centroidY = 0;
+			int soldiers = 0;
+			int bashers = 0;
+			int tanks = 0;
+			int drones = 0;
+			int launchers = 0;
+			int commander = 0;
+			
+			for(RobotInfo r:enemies){
+				centroidX += r.location.x;
+				centroidY += r.location.y;
+				if(r.type == SOLDIER){
+					soldiers++;
+				}
+				if(r.type == BASHER){
+					bashers++;
+				}
+				if(r.type == TANK){
+					tanks++;
+				}
+				if(r.type == DRONE){
+					drones++;
+				}
+				if(r.type == LAUNCHER){
+					launchers++;
+				}
+				if(r.type == COMMANDER){
+					commander = 1;
+				}
+			}
+			centroidX /= enemies.length;
+			centroidY /= enemies.length;
+			MapLocation swarmLocation = new MapLocation(centroidX,centroidY);
+			//initialize a swarm
+			if(SWARM_ONE_LOCATION == 0){
+				rc.broadcast(SWARM_ONE_LOCATION, packLocation(swarmLocation));
+				rc.broadcast(SWARM_ONE_SOLDIERS, soldiers);
+				rc.broadcast(SWARM_ONE_BASHERS, bashers);
+				rc.broadcast(SWARM_ONE_TANKS, tanks);
+				rc.broadcast(SWARM_ONE_DRONES, drones);
+				rc.broadcast(SWARM_ONE_LAUNCHERS, launchers);
+				rc.broadcast(SWARM_ONE_COMMANDER, commander);
+			}
+			else{
+				MapLocation swarm1 = unpackLocation(SWARM_ONE_LOCATION);
+				MapLocation swarm2 = unpackLocation(SWARM_TWO_LOCATION);
+				MapLocation swarm3 = unpackLocation(SWARM_THREE_LOCATION);
+				//if its the same swarm as swarm 1
+				if(distance(swarmLocation, swarm1) < 100){
+					MapLocation meanCenter = new MapLocation((swarmLocation.x + swarm1.x)/2, (swarmLocation.y + swarm1.y)/2);
+					rc.broadcast(SWARM_ONE_LOCATION, packLocation(meanCenter));
+					if(soldiers > SWARM_ONE_SOLDIERS){
+						rc.broadcast(SWARM_ONE_SOLDIERS, soldiers);
+					}
+					if(bashers > SWARM_ONE_BASHERS){
+						rc.broadcast(SWARM_ONE_BASHERS, bashers);
+					}
+					if(tanks > SWARM_ONE_TANKS){
+						rc.broadcast(SWARM_ONE_TANKS, tanks);
+					}
+					if(drones > SWARM_ONE_DRONES){
+						rc.broadcast(SWARM_ONE_DRONES, drones);
+					}
+					if(soldiers > SWARM_ONE_LAUNCHERS){
+						rc.broadcast(SWARM_ONE_LAUNCHERS, launchers);
+					}
+					if((commander == 1 && SWARM_ONE_COMMANDER == 0) || SWARM_ONE_COMMANDER == 1){ 
+						rc.broadcast(SWARM_ONE_COMMANDER, 1);
+					}
+				}
+				else if(SWARM_TWO_LOCATION == 0){
+					rc.broadcast(SWARM_TWO_LOCATION, packLocation(swarmLocation));
+					rc.broadcast(SWARM_TWO_SOLDIERS, soldiers);
+					rc.broadcast(SWARM_TWO_BASHERS, bashers);
+					rc.broadcast(SWARM_TWO_TANKS, tanks);
+					rc.broadcast(SWARM_TWO_DRONES, drones);
+					rc.broadcast(SWARM_TWO_LAUNCHERS, launchers);
+					rc.broadcast(SWARM_TWO_COMMANDER, commander);
+				}
+				else if(distance(swarmLocation, swarm2) < 100){
+					MapLocation meanCenter = new MapLocation((swarmLocation.x + swarm1.x)/2, (swarmLocation.y + swarm1.y)/2);
+					rc.broadcast(SWARM_TWO_LOCATION, packLocation(meanCenter));
+					if(soldiers > SWARM_TWO_SOLDIERS){
+						rc.broadcast(SWARM_TWO_SOLDIERS, soldiers);
+					}
+					if(bashers > SWARM_TWO_BASHERS){
+						rc.broadcast(SWARM_TWO_BASHERS, bashers);
+					}
+					if(tanks > SWARM_TWO_TANKS){
+						rc.broadcast(SWARM_TWO_TANKS, tanks);
+					}
+					if(drones > SWARM_TWO_DRONES){
+						rc.broadcast(SWARM_TWO_DRONES, drones);
+					}
+					if(soldiers > SWARM_TWO_LAUNCHERS){
+						rc.broadcast(SWARM_TWO_LAUNCHERS, launchers);
+					}
+					if((commander == 1 && SWARM_TWO_COMMANDER == 0)){ 
+						rc.broadcast(SWARM_TWO_COMMANDER, 1);
+					}
+				}
+				else if(SWARM_THREE_LOCATION == 0){
+					rc.broadcast(SWARM_THREE_LOCATION, packLocation(swarmLocation));
+					rc.broadcast(SWARM_THREE_SOLDIERS, soldiers);
+					rc.broadcast(SWARM_THREE_BASHERS, bashers);
+					rc.broadcast(SWARM_THREE_TANKS, tanks);
+					rc.broadcast(SWARM_THREE_DRONES, drones);
+					rc.broadcast(SWARM_THREE_LAUNCHERS, launchers);
+					rc.broadcast(SWARM_THREE_COMMANDER, commander);
+				}
+				else if(distance(swarmLocation, swarm2) < 100){
+					MapLocation meanCenter = new MapLocation((swarmLocation.x + swarm1.x)/2, (swarmLocation.y + swarm1.y)/2);
+					rc.broadcast(SWARM_THREE_LOCATION, packLocation(meanCenter));
+					if(soldiers > SWARM_THREE_SOLDIERS){
+						rc.broadcast(SWARM_THREE_SOLDIERS, soldiers);
+					}
+					if(bashers > SWARM_THREE_BASHERS){
+						rc.broadcast(SWARM_THREE_BASHERS, bashers);
+					}
+					if(tanks > SWARM_THREE_TANKS){
+						rc.broadcast(SWARM_THREE_TANKS, tanks);
+					}
+					if(drones > SWARM_THREE_DRONES){
+						rc.broadcast(SWARM_THREE_DRONES, drones);
+					}
+					if(soldiers > SWARM_THREE_LAUNCHERS){
+						rc.broadcast(SWARM_THREE_LAUNCHERS, launchers);
+					}
+					if((commander == 1 && SWARM_THREE_COMMANDER == 0)){ 
+						rc.broadcast(SWARM_THREE_COMMANDER, 1);
+					}
+					
+				}
+				else{
+					System.out.print("WTF! more than 3 swarms!?");
+				}
+			}
+		}
+		
+		private static void createConcave(int swarm){
+			
+		}
+		
+		private static double distance(MapLocation l1, MapLocation l2){
+			return Math.sqrt((l1.x - l2.x)*(l1.x - l2.x)+(l1.y - l2.y)*(l1.y - l2.y));
+		}
+
 }
+
