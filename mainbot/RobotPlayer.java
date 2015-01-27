@@ -2378,7 +2378,7 @@ public class RobotPlayer {
 				bytecodes[7] = Clock.getBytecodeNum();
 
 				if (bestLoc == null) {
-					if (myOre > 0) {
+					if (myOre > bestEverOre / 2) {
 						rc.setIndicatorString(1,"branch4");
 						mineCounter = Simulator.minerOptimalNumMines(myOre);
 						double oreMined = Math.min(Math.max(Math.min(myOre/GameConstants.MINER_MINE_RATE,GameConstants.MINER_MINE_MAX),GameConstants.MINIMUM_MINE_AMOUNT),myOre);
@@ -2396,10 +2396,18 @@ public class RobotPlayer {
 						moveToSafely(targetLoc);
 					}
 				} else {
-					rc.setIndicatorString(1,"branch5");
-					rc.setIndicatorDot(bestLoc, 0, 255, 0);
-					//rc.setIndicatorDot(targetLoc, 0, 0, 255);
-					moveToSafely(bestLoc);
+					if (bestOre > bestEverOre / 2) {
+						rc.setIndicatorString(1,"branch5");
+						rc.setIndicatorDot(bestLoc, 0, 255, 0);
+						//rc.setIndicatorDot(targetLoc, 0, 0, 255);
+						moveToSafely(bestLoc);
+					} else {
+						rc.setIndicatorString(1,"branch9");
+						rc.setIndicatorDot(targetLoc, 0, 255, 0);
+						//rc.setIndicatorDot(targetLoc, 0, 0, 255);
+						moveToSafely(targetLoc);
+					}
+
 				}
 
 				bytecodes[8] = Clock.getBytecodeNum();
