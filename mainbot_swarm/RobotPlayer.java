@@ -689,6 +689,12 @@ public class RobotPlayer {
 				rc.setIndicatorString(0, sb.toString());
 				 */
 
+				rc.broadcast(SWARM_ONE_SOLDIERS, 0);
+				rc.broadcast(SWARM_ONE_BASHERS, 0);
+				rc.broadcast(SWARM_ONE_TANKS, 0);
+				rc.broadcast(SWARM_ONE_DRONES, 0);
+				rc.broadcast(SWARM_ONE_LAUNCHERS, 0);
+				rc.broadcast(SWARM_ONE_COMMANDER, 0);
 				// end round
 				precomputePathfindingAndYield(0);
 			} catch (Exception e) {
@@ -697,7 +703,7 @@ public class RobotPlayer {
 			}
 		}
 	}
-	
+
 	private static void addToBuildQueue(RobotType type) {
 		buildQueue[row][0] = type.ordinal();
 		buildQueue[row][1] = 1;
@@ -4219,38 +4225,20 @@ public class RobotPlayer {
 					if(soldiers > SWARM_ONE_SOLDIERS){
 						rc.broadcast(SWARM_ONE_SOLDIERS, soldiers);
 					}
-					else{
-						rc.broadcast(SWARM_ONE_SOLDIERS, (soldiers+SWARM_ONE_SOLDIERS)/2);
-					}
 					if(bashers > SWARM_ONE_BASHERS){
 						rc.broadcast(SWARM_ONE_BASHERS, bashers);
-					}
-					else{
-						rc.broadcast(SWARM_ONE_BASHERS, (bashers+SWARM_ONE_BASHERS)/2);
 					}
 					if(tanks > SWARM_ONE_TANKS){
 						rc.broadcast(SWARM_ONE_TANKS, tanks);
 					}
-					else{
-						rc.broadcast(SWARM_ONE_TANKS, (tanks+SWARM_ONE_TANKS)/2);
-					}
 					if(drones > SWARM_ONE_DRONES){
 						rc.broadcast(SWARM_ONE_DRONES, drones);
-					}
-					else{
-						rc.broadcast(SWARM_ONE_DRONES, drones+SWARM_ONE_DRONES/2);
 					}
 					if(soldiers > SWARM_ONE_LAUNCHERS){
 						rc.broadcast(SWARM_ONE_LAUNCHERS, launchers);
 					}
-					else{
-						rc.broadcast(SWARM_ONE_LAUNCHERS, launchers+SWARM_ONE_LAUNCHERS/2);
-					}
 					if((commander == 1 && SWARM_ONE_COMMANDER == 0) || SWARM_ONE_COMMANDER == 1){ 
 						rc.broadcast(SWARM_ONE_COMMANDER, 1);
-					}
-					else{
-						rc.broadcast(SWARM_ONE_COMMANDER, 0);
 					}
 				}
 				else if(SWARM_TWO_LOCATION == 0){
@@ -4268,38 +4256,20 @@ public class RobotPlayer {
 					if(soldiers > SWARM_TWO_SOLDIERS){
 						rc.broadcast(SWARM_TWO_SOLDIERS, soldiers);
 					}
-					else{
-						rc.broadcast(SWARM_TWO_SOLDIERS, (soldiers+SWARM_TWO_SOLDIERS)/2);
-					}
 					if(bashers > SWARM_TWO_BASHERS){
 						rc.broadcast(SWARM_TWO_BASHERS, bashers);
-					}
-					else{
-						rc.broadcast(SWARM_TWO_BASHERS, (bashers+SWARM_TWO_BASHERS)/2);
 					}
 					if(tanks > SWARM_TWO_TANKS){
 						rc.broadcast(SWARM_TWO_TANKS, tanks);
 					}
-					else{
-						rc.broadcast(SWARM_TWO_TANKS, (tanks+SWARM_TWO_TANKS)/2);
-					}
 					if(drones > SWARM_TWO_DRONES){
 						rc.broadcast(SWARM_TWO_DRONES, drones);
-					}
-					else{
-						rc.broadcast(SWARM_TWO_DRONES, drones+SWARM_TWO_DRONES/2);
 					}
 					if(soldiers > SWARM_TWO_LAUNCHERS){
 						rc.broadcast(SWARM_TWO_LAUNCHERS, launchers);
 					}
-					else{
-						rc.broadcast(SWARM_TWO_LAUNCHERS, launchers+SWARM_TWO_LAUNCHERS/2);
-					}
-					if((commander == 1 && SWARM_TWO_COMMANDER == 0) || SWARM_TWO_COMMANDER == 1){ 
+					if((commander == 1 && SWARM_TWO_COMMANDER == 0)){ 
 						rc.broadcast(SWARM_TWO_COMMANDER, 1);
-					}
-					else{
-						rc.broadcast(SWARM_TWO_COMMANDER, 0);
 					}
 				}
 				else if(SWARM_THREE_LOCATION == 0){
@@ -4317,39 +4287,22 @@ public class RobotPlayer {
 					if(soldiers > SWARM_THREE_SOLDIERS){
 						rc.broadcast(SWARM_THREE_SOLDIERS, soldiers);
 					}
-					else{
-						rc.broadcast(SWARM_THREE_SOLDIERS, (soldiers+SWARM_THREE_SOLDIERS)/2);
-					}
 					if(bashers > SWARM_THREE_BASHERS){
 						rc.broadcast(SWARM_THREE_BASHERS, bashers);
-					}
-					else{
-						rc.broadcast(SWARM_THREE_BASHERS, (bashers+SWARM_THREE_BASHERS)/2);
 					}
 					if(tanks > SWARM_THREE_TANKS){
 						rc.broadcast(SWARM_THREE_TANKS, tanks);
 					}
-					else{
-						rc.broadcast(SWARM_THREE_TANKS, (tanks+SWARM_THREE_TANKS)/2);
-					}
 					if(drones > SWARM_THREE_DRONES){
 						rc.broadcast(SWARM_THREE_DRONES, drones);
-					}
-					else{
-						rc.broadcast(SWARM_THREE_DRONES, drones+SWARM_THREE_DRONES/2);
 					}
 					if(soldiers > SWARM_THREE_LAUNCHERS){
 						rc.broadcast(SWARM_THREE_LAUNCHERS, launchers);
 					}
-					else{
-						rc.broadcast(SWARM_THREE_LAUNCHERS, launchers+SWARM_THREE_LAUNCHERS/2);
-					}
-					if((commander == 1 && SWARM_THREE_COMMANDER == 0) || SWARM_THREE_COMMANDER == 1){ 
+					if((commander == 1 && SWARM_THREE_COMMANDER == 0)){ 
 						rc.broadcast(SWARM_THREE_COMMANDER, 1);
 					}
-					else{
-						rc.broadcast(SWARM_THREE_COMMANDER, 0);
-					}
+					
 				}
 				else{
 					System.out.print("WTF! more than 3 swarms!?");
