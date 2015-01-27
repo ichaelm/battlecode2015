@@ -377,19 +377,6 @@ public class RobotPlayer {
 
 		while (true) {
 			try {
-				if (Clock.getRoundNum() > 1000) {
-					//MapLocation[] path = pathFind(new MapLocation((myHQLoc.x + enemyHQLoc.x)/2+12, (myHQLoc.y + enemyHQLoc.y)/2), new MapLocation((myHQLoc.x + enemyHQLoc.x)/2, (myHQLoc.y + enemyHQLoc.y)/2));
-					MapLocation[] path = pathFind(myHQLoc, enemyHQLoc);
-					if (path != null) {
-						int i = 1;
-						while (path[i] != null) {
-							rc.setIndicatorLine(path[i-1], path[i], 0, 0, 255);
-							i++;
-						}
-					}
-				}
-				
-				
 				int[] bytecodes = new int[50];
 				bytecodes[0] = Clock.getBytecodeNum();
 
@@ -674,10 +661,6 @@ public class RobotPlayer {
 				 */
 
 				// end round
-				if (Clock.getRoundNum() % 100 == 0) {
-					debug_showNavMap(0);
-				}
-				
 				precomputePathfindingAndYield(0);
 			} catch (Exception e) {
 				System.out.println("HQ Exception");
@@ -2331,6 +2314,7 @@ public class RobotPlayer {
 				markBadMiningTable(targetLoc);
 				rc.mine();
 			} else {
+				double bestEverOre = getBestOre();
 				
 				boolean noTarget = false;
 				if (targetLoc == null) {
@@ -2339,13 +2323,13 @@ public class RobotPlayer {
 				} else {
 					if (myLoc.distanceSquaredTo(targetLoc) <= mySensorRangeSq) {
 						// TODO: make this take less time
-						if (rc.senseOre(targetLoc) < getBestOre() || !rc.isPathable(MINER, targetLoc)) {
+						if (rc.senseOre(targetLoc) < bestEverOre || !rc.isPathable(MINER, targetLoc)) {
 							markBadMiningTable(targetLoc);
 						}
 					}
 				}
-				rc.setIndicatorString(2,"bestore:" + getBestOre());
-				if (getBestOre() <= myOre) {
+				rc.setIndicatorString(2,"bestore:" + bestEverOre);
+				if (bestEverOre <= myOre) {
 					noTarget = true;
 					targetLoc = myHQLoc;
 				}
