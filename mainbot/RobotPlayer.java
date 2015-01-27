@@ -45,7 +45,7 @@ public class RobotPlayer {
 	private static final int NAVMAP_HEIGHT = MAX_MAP_HEIGHT;
 	private static final int NAVMAP_SIZE = NAVMAP_SQUARE_SIZE * NAVMAP_WIDTH * NAVMAP_HEIGHT;
 	private static final int NAVQUEUE_CHAN = NAVMAP_CHAN + NAVMAP_SIZE;
-	private static final int NAVQUEUE_QUEUE_SIZE = 1000;
+	private static final int NAVQUEUE_QUEUE_SIZE = 500;
 	private static final int NAVQUEUE_NUM_QUEUES = 7;
 	private static final int NAVQUEUE_SIZE = NAVQUEUE_QUEUE_SIZE * NAVQUEUE_NUM_QUEUES;
 	private static final int NAVQUEUE_STARTPTR_CHAN = NAVQUEUE_CHAN + NAVQUEUE_SIZE;
@@ -79,6 +79,10 @@ public class RobotPlayer {
 	private static final int UNIT_NEEDS_SUPPLY_Y_CHAN = UNIT_NEEDS_SUPPLY_X_CHAN + 1;
 	private static final int TOWER_ASSIGN_NUM_CHAN = UNIT_NEEDS_SUPPLY_Y_CHAN + 1;
 	private static final int SYMMETRY_TYPE_CHAN = TOWER_ASSIGN_NUM_CHAN + 1;
+	private static final int UNKNOWN_QUEUE_CHAN = SYMMETRY_TYPE_CHAN + 1;
+	private static final int UNKNOWN_QUEUE_SIZE = 1000;
+	private static final int UNKNOWN_QUEUE_STARTPTR_CHAN = UNKNOWN_QUEUE_CHAN + UNKNOWN_QUEUE_SIZE;
+	private static final int UNKNOWN_QUEUE_ENDPTR_CHAN = UNKNOWN_QUEUE_STARTPTR_CHAN + 1;
 	
 	// Broadcast signaling constants
 	private static final int NO_BOUND = 32000;
@@ -292,41 +296,40 @@ public class RobotPlayer {
 			}
 			for (int i = 0; i < myTowerLocs.length; i++) {
 				MapLocation myTowerLoc = myTowerLocs[i];
-				MapLocation enemyTowerLoc = enemyTowerLocs[i];
 				int relX = myTowerLoc.x - myHQLoc.x;
 				int relY = myTowerLoc.y - myHQLoc.y;
 				MapLocation expectedLoc;
 				if (couldBeHorizontal) {
 					expectedLoc = new MapLocation(enemyHQLoc.x + relX, enemyHQLoc.y - relY);
-					if (!enemyTowerLoc.equals(expectedLoc)) {
+					if (!isEnemyTowerLoc(expectedLoc)) {
 						couldBeHorizontal = false;
 						numPossible--;
 					}
 				}
 				if (couldBeVertical) {
 					expectedLoc = new MapLocation(enemyHQLoc.x - relX, enemyHQLoc.y + relY);
-					if (!enemyTowerLoc.equals(expectedLoc)) {
+					if (!isEnemyTowerLoc(expectedLoc)) {
 						couldBeVertical = false;
 						numPossible--;
 					}
 				}
 				if (couldBeDiagonalPos) {
 					expectedLoc = new MapLocation(enemyHQLoc.x + relY, enemyHQLoc.y + relX);
-					if (!enemyTowerLoc.equals(expectedLoc)) {
+					if (!isEnemyTowerLoc(expectedLoc)) {
 						couldBeDiagonalPos = false;
 						numPossible--;
 					}
 				}
 				if (couldBeDiagonalNeg) {
 					expectedLoc = new MapLocation(enemyHQLoc.x - relY, enemyHQLoc.y - relX);
-					if (!enemyTowerLoc.equals(expectedLoc)) {
+					if (!isEnemyTowerLoc(expectedLoc)) {
 						couldBeDiagonalNeg = false;
 						numPossible--;
 					}
 				}
 				if (couldBeRotational) {
 					expectedLoc = new MapLocation(enemyHQLoc.x - relX, enemyHQLoc.y - relY);
-					if (!enemyTowerLoc.equals(expectedLoc)) {
+					if (!isEnemyTowerLoc(expectedLoc)) {
 						couldBeRotational = false;
 						numPossible--;
 					}
@@ -337,18 +340,23 @@ public class RobotPlayer {
 			}
 			Direction symmetryDirection;
 			if (couldBeRotational) {
+				System.out.println("rotational symmetry");
 				symmetryDirection = Direction.OMNI;
 				rc.broadcast(SYMMETRY_TYPE_CHAN, SYMMETRY_TYPE_ROTATIONAL);
 			} else if (couldBeHorizontal) {
+				System.out.println("horizontal symmetry");
 				symmetryDirection = Direction.EAST;
 				rc.broadcast(SYMMETRY_TYPE_CHAN, SYMMETRY_TYPE_HORIZONTAL);
 			} else if (couldBeVertical) {
+				System.out.println("vertical symmetry");
 				symmetryDirection = Direction.SOUTH;
 				rc.broadcast(SYMMETRY_TYPE_CHAN, SYMMETRY_TYPE_VERTICAL);
 			} else if (couldBeDiagonalPos) {
+				System.out.println("diagonal pos symmetry");
 				symmetryDirection = Direction.SOUTH_EAST;
 				rc.broadcast(SYMMETRY_TYPE_CHAN, SYMMETRY_TYPE_DIAGONAL_POS);
 			} else if (couldBeDiagonalNeg) {
+				System.out.println("diagonal neg symmetry");
 				symmetryDirection = Direction.NORTH_EAST;
 				rc.broadcast(SYMMETRY_TYPE_CHAN, SYMMETRY_TYPE_DIAGONAL_NEG);
 			} else {
@@ -378,7 +386,6 @@ public class RobotPlayer {
 							rc.setIndicatorLine(path[i-1], path[i], 0, 0, 255);
 							i++;
 						}
-						System.out.println("path length = " + i);
 					}
 				}
 				
@@ -667,6 +674,10 @@ public class RobotPlayer {
 				 */
 
 				// end round
+				if (Clock.getRoundNum() % 100 == 0) {
+					debug_showNavMap(0);
+				}
+				
 				precomputePathfindingAndYield(0);
 			} catch (Exception e) {
 				System.out.println("HQ Exception");
@@ -3587,12 +3598,20 @@ public class RobotPlayer {
 		rc.broadcast(channel, dataInt);
 	}
 	
+	private static boolean isLocationMarkedUnknown(MapLocation loc) throws GameActionException {
+		return readNavMapBits(loc, 7) == 1;
+	}
+	
+	private static void markLocationUnknown(MapLocation loc) throws GameActionException {
+		writeNavMapBits(loc, 7, (short)1);
+	}
+	
 	private static int packLocation(MapLocation loc) {
 		return (((short)loc.x) << 16) | (((short)loc.y) & 0xFFFF);
 	}
 	
 	private static MapLocation unpackLocation(int packedLoc) {
-		return new MapLocation((packedLoc >>> 16), (packedLoc & 0xFFFF));
+		return new MapLocation((short)(packedLoc >>> 16), (short)(packedLoc & 0xFFFF));
 	}
 	
 	private static void addToNavQueue(int waypoint, MapLocation loc) throws GameActionException {
@@ -3614,12 +3633,38 @@ public class RobotPlayer {
 		int endPtr = rc.readBroadcast(NAVQUEUE_ENDPTR_CHAN + waypoint);
 		int size = ((endPtr - startPtr) + NAVQUEUE_QUEUE_SIZE) % NAVQUEUE_QUEUE_SIZE;
 		if (size <= 0) { // queue empty
-			System.out.println("queue empty");
 			return null;
 		}
 		int packedLoc = rc.readBroadcast(NAVQUEUE_CHAN + (waypoint * NAVQUEUE_QUEUE_SIZE) + startPtr);
 		startPtr = (startPtr + 1) % NAVQUEUE_QUEUE_SIZE;
 		rc.broadcast(NAVQUEUE_STARTPTR_CHAN + waypoint, startPtr);
+		return unpackLocation(packedLoc);
+	}
+	
+	private static void addToUnknownQueue(MapLocation loc) throws GameActionException {
+		int startPtr = rc.readBroadcast(UNKNOWN_QUEUE_STARTPTR_CHAN);
+		int endPtr = rc.readBroadcast(UNKNOWN_QUEUE_ENDPTR_CHAN);
+		int size = ((endPtr - startPtr) + UNKNOWN_QUEUE_SIZE) % UNKNOWN_QUEUE_SIZE;
+		if (size >= UNKNOWN_QUEUE_SIZE - 1) {
+			System.out.println("Unknown queue full!");
+			return;
+		}
+		int packedLoc = packLocation(loc);
+		rc.broadcast(UNKNOWN_QUEUE_CHAN + endPtr, packedLoc);
+		endPtr = (endPtr + 1) % UNKNOWN_QUEUE_SIZE;
+		rc.broadcast(UNKNOWN_QUEUE_ENDPTR_CHAN, endPtr);
+	}
+	
+	private static MapLocation popFromUnknownQueue() throws GameActionException {
+		int startPtr = rc.readBroadcast(UNKNOWN_QUEUE_STARTPTR_CHAN);
+		int endPtr = rc.readBroadcast(UNKNOWN_QUEUE_ENDPTR_CHAN);
+		int size = ((endPtr - startPtr) + UNKNOWN_QUEUE_SIZE) % UNKNOWN_QUEUE_SIZE;
+		if (size <= 0) { // queue empty
+			return null;
+		}
+		int packedLoc = rc.readBroadcast(UNKNOWN_QUEUE_CHAN + startPtr);
+		startPtr = (startPtr + 1) % UNKNOWN_QUEUE_SIZE;
+		rc.broadcast(UNKNOWN_QUEUE_STARTPTR_CHAN, startPtr);
 		return unpackLocation(packedLoc);
 	}
 	
@@ -3661,6 +3706,8 @@ public class RobotPlayer {
 			}
 			rc.broadcast(NAVMAP_STILL_PATHFINDING_CHAN + 1 + i, 1);
 		}
+		
+		// unknown queue is initialized by default
 	}
 	
 	// TODO: prioritize pathfinding
@@ -3675,7 +3722,7 @@ public class RobotPlayer {
 				MapLocation loc = popFromNavQueue(waypoint);
 				if (loc == null) {
 					// finished
-					rc.yield();
+					traverseUnknownQueueAndYield();
 					return;
 				}
 				TerrainTile tile = rc.senseTerrainTile(loc);
@@ -3702,11 +3749,12 @@ public class RobotPlayer {
 								writeNavMapBits(adjLoc, waypoint, (short)0x4000); // mark as queued
 								addToNavQueue(waypoint, adjLoc);
 							}
-						} else if (adjTile == TerrainTile.UNKNOWN) {
+						} else if (adjTile == TerrainTile.UNKNOWN && symmetricAdjTile == TerrainTile.UNKNOWN) {
 							short adjBits = readNavMapBits(adjLoc, waypoint);
 							if ((adjBits & 0x4000) == 0x0000) { // if not queued
 								writeNavMapBits(adjLoc, waypoint, (short)0x4000); // mark as queued
-								addToNavQueue(waypoint, adjLoc);
+								markLocationUnknown(adjLoc);
+								addToUnknownQueue(adjLoc);
 							} else {
 							}
 						}
@@ -3724,11 +3772,38 @@ public class RobotPlayer {
 							}
 						}
 					}
-				} else if (tile == TerrainTile.UNKNOWN) {
-					addToNavQueue(waypoint, loc);
+				} else if (tile == TerrainTile.UNKNOWN && symmetricTile == TerrainTile.UNKNOWN) {
+					markLocationUnknown(loc);
+					addToUnknownQueue(loc);
 				}
 			}
 			
+		}
+	}
+	
+	private static void traverseUnknownQueueAndYield() throws GameActionException {
+		int roundNum = Clock.getRoundNum();
+		int numWaypoints = rc.readBroadcast(NAVMAP_NUM_WAYPOINTS_CHAN);
+		while (Clock.getRoundNum() == roundNum) {
+			MapLocation loc = popFromUnknownQueue();
+			if (loc == null) {
+				// finished
+				rc.yield();
+				return;
+			}
+			TerrainTile tile = rc.senseTerrainTile(loc);
+			MapLocation symmetricLoc = symmetricLocation(loc);
+			TerrainTile symmetricTile = (symmetricLoc != null) ? rc.senseTerrainTile(symmetricLoc) : null;
+			if (tile == TerrainTile.NORMAL || symmetricTile == TerrainTile.NORMAL) {
+				for (int waypoint = 0; waypoint < numWaypoints; waypoint++) {
+					short bits = readNavMapBits(loc, waypoint);
+					if ((bits & 0x4000) != 0) { // if queued by this waypoint
+						addToNavQueue(waypoint, loc);
+					}
+				}
+			} else if (tile == TerrainTile.UNKNOWN && symmetricTile == TerrainTile.UNKNOWN) {
+				addToUnknownQueue(loc);
+			}
 		}
 	}
 	
@@ -3935,7 +4010,7 @@ public class RobotPlayer {
 	
 	private static void debug_showNavMap(int waypoint) throws GameActionException {
 		int xmin = westFarthest();
-		int xmax = eastFarthest() + 20;
+		int xmax = eastFarthest();
 		int ymin = northFarthest();
 		int ymax = southFarthest();
 		if (xmin != NO_BOUND && xmax != NO_BOUND && ymin != NO_BOUND && ymax != NO_BOUND) {
@@ -3952,6 +4027,15 @@ public class RobotPlayer {
 				}
 			}
 		}
+	}
+	
+	private static boolean isEnemyTowerLoc(MapLocation loc) {
+		for (MapLocation towerLoc : enemyTowerLocs) {
+			if (towerLoc.equals(loc)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 }
