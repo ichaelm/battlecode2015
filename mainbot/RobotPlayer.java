@@ -114,6 +114,8 @@ public class RobotPlayer {
 	private static final int SWARM_THREE_LAUNCHERS = SWARM_THREE_DRONES + 1;
 	private static final int SWARM_THREE_COMMANDER = SWARM_THREE_LAUNCHERS + 1;
 	
+	private static final int ATTACK_LOCATION = SWARM_THREE_COMMANDER + 1;
+	
 	// Broadcast signaling constants
 	private static final int NO_BOUND = 32000;
 	private static final int UNIT_ORDER_ATTACK_TOWERS = 1;
@@ -126,7 +128,7 @@ public class RobotPlayer {
 	private static final int SYMMETRY_TYPE_VERTICAL = 3;
 	private static final int SYMMETRY_TYPE_DIAGONAL_POS = 4;
 	private static final int SYMMETRY_TYPE_DIAGONAL_NEG = 5;
-
+	
 	// cached enums for brevity
 	private static RobotType HQ;
 	private static RobotType TOWER;
@@ -729,7 +731,26 @@ public class RobotPlayer {
 				bytecodes[26] = Clock.getBytecodeNum();
 
 				//getAllMiningTargets();
+				int ourStrength = numRobotsByType[SOLDIER.ordinal()]*1 + numRobotsByType[BASHER.ordinal()]*1 + numRobotsByType[TANK.ordinal()]*3 + numRobotsByType[DRONE.ordinal()]*1 + numRobotsByType[LAUNCHER.ordinal()]*5 + numRobotsByType[COMMANDER.ordinal()]*20;
+				int swarmOneStrength = rc.readBroadcast(SWARM_ONE_SOLDIERS)*1 + rc.readBroadcast(SWARM_ONE_BASHERS)*1 + rc.readBroadcast(SWARM_ONE_DRONES)*1 + rc.readBroadcast(SWARM_ONE_TANKS)*3 + rc.readBroadcast(SWARM_ONE_LAUNCHERS)*5 + rc.readBroadcast(SWARM_ONE_COMMANDER);
+				int swarmTwoStrength = rc.readBroadcast(SWARM_TWO_SOLDIERS)*1 + rc.readBroadcast(SWARM_TWO_BASHERS)*1 + rc.readBroadcast(SWARM_TWO_DRONES)*1 + rc.readBroadcast(SWARM_TWO_TANKS)*3 + rc.readBroadcast(SWARM_TWO_LAUNCHERS)*5 + rc.readBroadcast(SWARM_TWO_COMMANDER);
+				int swarmThreeStrength = rc.readBroadcast(SWARM_THREE_SOLDIERS)*1 + rc.readBroadcast(SWARM_THREE_BASHERS)*1 + rc.readBroadcast(SWARM_THREE_DRONES)*1 + rc.readBroadcast(SWARM_THREE_TANKS)*3 + rc.readBroadcast(SWARM_THREE_LAUNCHERS)*5 + rc.readBroadcast(SWARM_THREE_COMMANDER);
 				
+				if(ourStrength-swarmOneStrength > 10 && swarmOneStrength > 10){
+					
+				}
+				
+				if(ourStrength-swarmTwoStrength > 10 && swarmTwoStrength > 10){
+					
+				}
+				
+				if(ourStrength-swarmThreeStrength > 10 && swarmThreeStrength > 10){
+					
+				}
+				
+				if(swarmOneStrength < 1){
+					rc.broadcast(SWARM_ONE_LOCATION, packLocation(new MapLocation(0,0)));
+				}
 				rc.broadcast(SWARM_ONE_SOLDIERS, 0);
 				rc.broadcast(SWARM_ONE_BASHERS, 0);
 				rc.broadcast(SWARM_ONE_TANKS, 0);
@@ -737,6 +758,9 @@ public class RobotPlayer {
 				rc.broadcast(SWARM_ONE_LAUNCHERS, 0);
 				rc.broadcast(SWARM_ONE_COMMANDER, 0);
 				
+				if(swarmTwoStrength < 1){
+					rc.broadcast(SWARM_TWO_LOCATION, packLocation(new MapLocation(0,0)));
+				}
 				rc.broadcast(SWARM_TWO_SOLDIERS, 0);
 				rc.broadcast(SWARM_TWO_BASHERS, 0);
 				rc.broadcast(SWARM_TWO_TANKS, 0);
@@ -744,6 +768,9 @@ public class RobotPlayer {
 				rc.broadcast(SWARM_TWO_LAUNCHERS, 0);
 				rc.broadcast(SWARM_TWO_COMMANDER, 0);
 				
+				if(swarmThreeStrength < 1){
+					rc.broadcast(SWARM_THREE_LOCATION, packLocation(new MapLocation(0,0)));
+				}
 				rc.broadcast(SWARM_THREE_SOLDIERS, 0);
 				rc.broadcast(SWARM_THREE_BASHERS, 0);
 				rc.broadcast(SWARM_THREE_TANKS, 0);
