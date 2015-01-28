@@ -1,4 +1,4 @@
-package mainbot;
+package mainbot_v1;
 
 import battlecode.common.*;
 
@@ -2150,13 +2150,8 @@ public class RobotPlayer {
 					loc = new MapLocation(x, y);
 					distSq = myLoc.distanceSquaredTo(loc);
 					if (distSq < bestDistSq) {
-						MapLocation badLoc1 = unpackLocation(rc.readBroadcast(SWARM_ONE_LOCATION));
-						MapLocation badLoc2 = unpackLocation(rc.readBroadcast(SWARM_TWO_LOCATION));
-						MapLocation badLoc3 = unpackLocation(rc.readBroadcast(SWARM_THREE_LOCATION));
-						if (loc.distanceSquaredTo(badLoc1) > 100 && loc.distanceSquaredTo(badLoc2) > 100 && loc.distanceSquaredTo(badLoc3) > 100) {
-							bestLoc = loc;
-							bestDistSq = distSq;
-						}
+						bestLoc = loc;
+						bestDistSq = distSq;
 					}
 				}
 			}
