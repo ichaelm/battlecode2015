@@ -6,7 +6,7 @@ import java.util.*;
 
 public class RobotPlayer {
 	
-	private static final int ROUND_TO_BUILD_LAUNCHERS = 100;
+	private static final int ROUND_TO_BUILD_LAUNCHERS = 50;
 
 	// AI parameters
 	private static final int RUSH_TURNS_LEFT = 500;
@@ -429,7 +429,8 @@ public class RobotPlayer {
 			System.out.println("HQ Exception");
 			e.printStackTrace();
 		}
-
+		
+		boolean neverAgain = false;
 		while (true) {
 			try {
 				int[] bytecodes = new int[50];
@@ -623,38 +624,61 @@ public class RobotPlayer {
 					//addToBuildQueue(SOLDIER);
 					//addToBuildQueue(BARRACKS);
 				} else {
-					if (numHelipad < 1) {
-						addToBuildQueue(HELIPAD);
-						//addToBuildQueue(SOLDIER);
-					} else if (numRobotsByType[HELIPAD.ordinal()] < 1) {
-						//addToBuildQueue(SOLDIER);
-					} else if (numAeroLab < 1) {
-						if (!builtADrone)
-							addToBuildQueue(DRONE);
-						addToBuildQueue(AEROSPACELAB);
-						//addToBuildQueue(SOLDIER);
-					} else if (numRobotsByType[AEROSPACELAB.ordinal()] < 1) {
-						if (!builtADrone)
-							addToBuildQueue(DRONE);
-						//addToBuildQueue(SOLDIER);
-					} else {
-						if (!builtADrone)
-							addToBuildQueue(DRONE);
-						if (true) {
-							addToBuildQueue(LAUNCHER);
-							addToBuildQueue(AEROSPACELAB);
-							addToBuildQueue(AEROSPACELAB);
-							addToBuildQueue(AEROSPACELAB);
-						} else {
-							addToBuildQueue(SOLDIER);
-							addToBuildQueue(BARRACKS);
-							addToBuildQueue(LAUNCHER);
-							addToBuildQueue(AEROSPACELAB);
-							addToBuildQueue(AEROSPACELAB);
-							addToBuildQueue(AEROSPACELAB);
+					if (!neverAgain && numRobotsByType[TECHNOLOGYINSTITUTE.ordinal()] + numInProgressByType[TECHNOLOGYINSTITUTE.ordinal()] < 1) {
+						addToBuildQueue(TECHNOLOGYINSTITUTE);
+						if (numHelipad < 1) {
+							addToBuildQueue(HELIPAD);
 						}
-						
-						
+					} else if (!neverAgain && numRobotsByType[TECHNOLOGYINSTITUTE.ordinal()] < 1) {
+						if (numHelipad < 1) {
+							addToBuildQueue(HELIPAD);
+						}
+					} else if (!neverAgain && numRobotsByType[TRAININGFIELD.ordinal()] + numInProgressByType[TRAININGFIELD.ordinal()] < 1) {
+						addToBuildQueue(TRAININGFIELD);
+						if (numHelipad < 1) {
+							addToBuildQueue(HELIPAD);
+						}
+					} else if (!neverAgain && numRobotsByType[TRAININGFIELD.ordinal()] < 1) {
+						if (numHelipad < 1) {
+							addToBuildQueue(HELIPAD);
+						}
+					} else if (!neverAgain && numRobotsByType[COMMANDER.ordinal()] < 1) {
+						addToBuildQueue(COMMANDER);
+					} else {
+						neverAgain = true;
+						if (numHelipad < 1) {
+							addToBuildQueue(HELIPAD);
+							//addToBuildQueue(SOLDIER);
+						} else if (numRobotsByType[HELIPAD.ordinal()] < 1) {
+							//addToBuildQueue(SOLDIER);
+						} else if (numAeroLab < 1) {
+							if (!builtADrone)
+								addToBuildQueue(DRONE);
+							addToBuildQueue(AEROSPACELAB);
+							//addToBuildQueue(SOLDIER);
+						} else if (numRobotsByType[AEROSPACELAB.ordinal()] < 1) {
+							if (!builtADrone)
+								addToBuildQueue(DRONE);
+							//addToBuildQueue(SOLDIER);
+						} else {
+							if (!builtADrone)
+								addToBuildQueue(DRONE);
+							if (true) {
+								addToBuildQueue(LAUNCHER);
+								addToBuildQueue(AEROSPACELAB);
+								addToBuildQueue(AEROSPACELAB);
+								addToBuildQueue(AEROSPACELAB);
+							} else {
+								addToBuildQueue(SOLDIER);
+								addToBuildQueue(BARRACKS);
+								addToBuildQueue(LAUNCHER);
+								addToBuildQueue(AEROSPACELAB);
+								addToBuildQueue(AEROSPACELAB);
+								addToBuildQueue(AEROSPACELAB);
+							}
+
+
+						}
 					}
 				}
 				
@@ -1081,13 +1105,35 @@ public class RobotPlayer {
 
 				// attack
 				if (rc.isWeaponReady()) {
-					attackSomething();
+					focusAttackEnemies();
 				}
 
-				// TODO: commander movement code
+				// move according to orders
+				if (rc.isCoreReady()) {
+					if (rc.getRoundLimit()-Clock.getRoundNum() > RUSH_TURNS_LEFT) {
+						MapLocation invader = attackingEnemy();
+						if (invader != null) {
+							safeTryMove(myLoc.directionTo(invader));
+						} else {
+							harass();
+						}
+					} else {
+						MapLocation invader = attackingEnemy();
+						if (invader != null) {
+							safeTryMove(myLoc.directionTo(invader));
+						} else {
+							if (enemyTowerLocs.length == 0) {
+								safeTryMove(myLoc.directionTo(enemyHQLoc));
+							} else {
+								safeTryMove(myLoc.directionTo(closestLocation(mapCenter, enemyTowerLocs)));
+							}
+						}
+					}
+				} else { // hack for bytecodes
+					// transfer supply
+					transferSupply();
+				}
 
-				// transfer supply
-				transferSupply();
 
 				// yield
 				rc.yield();
@@ -2741,6 +2787,21 @@ public class RobotPlayer {
 			int targetY = ri.location.y - myLoc.y;
 			RobotType type = ri.type;
 			if (type == MISSILE) {
+				for (int sourceX = -1; sourceX <= 1; sourceX++) {
+					for (int sourceY = -1; sourceY <= 1; sourceY++) {
+						distX = targetX - sourceX;
+						distY = targetY - sourceY;
+						distSq = (distX*distX) + (distY*distY);
+						if (distSq <= 2) {
+							damageGrid[sourceX+1][sourceY+1] += 20;
+						} else if (distSq <= 8) {
+							damageGrid[sourceX+1][sourceY+1] += 4; // approx
+						}
+						if (sourceX*sourceX+sourceY*sourceY > 1) { // if non-cardinal direction
+							damageGrid[sourceX+1][sourceY+1] += 4; // approx
+						}
+					}
+				}
 			} else if (type == LAUNCHER) { 
 				int rangeSq = 8;
 				int damage = 20;
