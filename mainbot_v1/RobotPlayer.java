@@ -1391,9 +1391,7 @@ public class RobotPlayer {
 					} else {
 						RobotInfo[] allies = rc.senseNearbyRobots(2, myTeam);
 						if (allies.length > 0) {
-							System.out.println("got here");
 							if (allies[0].type != RobotType.MISSILE) {
-								System.out.println("got here2");
 								rc.disintegrate();
 							}
 						}

@@ -1391,9 +1391,7 @@ public class RobotPlayer {
 					} else {
 						RobotInfo[] allies = rc.senseNearbyRobots(2, myTeam);
 						if (allies.length > 0) {
-							System.out.println("got here");
 							if (allies[0].type != RobotType.MISSILE) {
-								System.out.println("got here2");
 								rc.disintegrate();
 							}
 						}
@@ -3369,7 +3367,7 @@ public class RobotPlayer {
 				MapLocation enemyLoc = r.location;
 				int dist = myLoc.distanceSquaredTo(enemyLoc);
 				if (r.type == DRONE) {
-					if (dist < 15 && dist < closestDist) {
+					if (dist < closestDist && dist <= 15) {
 						closestDist = dist;
 						closestRobot = r;
 					}
@@ -3379,6 +3377,7 @@ public class RobotPlayer {
 						closestRobot = r;
 					}
 				}
+				
 				
 				centroidX += r.location.x;
 				centroidY += r.location.y;
@@ -3405,7 +3404,7 @@ public class RobotPlayer {
 			}
 		}
 		
-		
+		System.out.println("enemies sensed:" +  enemies.length);
 		if(enemies.length > 3){
 			centroidX /= enemies.length;
 			centroidY /= enemies.length;
@@ -3415,7 +3414,11 @@ public class RobotPlayer {
 			MapLocation swarm2 = unpackLocation(rc.readBroadcast(SWARM_TWO_LOCATION));
 			MapLocation swarm3 = unpackLocation(rc.readBroadcast(SWARM_THREE_LOCATION));
 			//initialize a swarm
-			if(swarm1.x == NO_BOUND){
+			System.out.println("Swarm 1 :" + swarm1.x + ", " + swarm1.y);
+			System.out.println("Swarm 2 :" + swarm2.x + ", " + swarm2.y);
+			System.out.println("Swarm 3 :" + swarm3.x + ", " + swarm3.y);
+			
+			if(swarm1.x == 0 && swarm1.y == 0){
 				rc.setIndicatorString(1, "broadcasting initial for swarm 1");
 				rc.broadcast(SWARM_ONE_LOCATION, packLocation(swarmLocation));
 				rc.broadcast(SWARM_ONE_SOLDIERS, soldiers);
@@ -3425,9 +3428,7 @@ public class RobotPlayer {
 				rc.broadcast(SWARM_ONE_LAUNCHERS, launchers);
 				rc.broadcast(SWARM_ONE_COMMANDER, commander);
 			}
-			else{
-				//if its the same swarm as swarm 1
-				if(distance(swarmLocation, swarm1) < 100){
+			else if(distance(swarmLocation, swarm1) < 200){
 					rc.setIndicatorString(1, "broadcasting updated for swarm 1");
 					MapLocation meanCenter = new MapLocation((swarmLocation.x + swarm1.x)/2, (swarmLocation.y + swarm1.y)/2);
 					rc.broadcast(SWARM_ONE_LOCATION, packLocation(meanCenter));
@@ -3449,8 +3450,8 @@ public class RobotPlayer {
 					if(commander == 1){ 
 						rc.broadcast(SWARM_ONE_COMMANDER, 1);
 					}
-				}
-				else if(swarm2.x == NO_BOUND){
+				}				
+				else if(swarm2.x == 0 && swarm2.y == 0){
 					rc.setIndicatorString(1, "broadcasting initial for swarm 2");
 					rc.broadcast(SWARM_TWO_LOCATION, packLocation(swarmLocation));
 					rc.broadcast(SWARM_TWO_SOLDIERS, soldiers);
@@ -3483,7 +3484,7 @@ public class RobotPlayer {
 						rc.broadcast(SWARM_TWO_COMMANDER, 1);
 					}
 				}
-				else if(swarm3.x == NO_BOUND){
+				else if(swarm3.x == 0 && swarm3.y == 0){
 					rc.setIndicatorString(1, "broadcasting initial for swarm 3");
 					rc.broadcast(SWARM_THREE_LOCATION, packLocation(swarmLocation));
 					rc.broadcast(SWARM_THREE_SOLDIERS, soldiers);
@@ -3521,7 +3522,6 @@ public class RobotPlayer {
 					System.out.print("WTF! more than 3 swarms!?");
 				}
 			}
-		}
 		
 		
 		if (closestRobot != null) {
