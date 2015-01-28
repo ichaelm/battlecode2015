@@ -737,15 +737,16 @@ public class RobotPlayer {
 				int swarmThreeStrength = rc.readBroadcast(SWARM_THREE_SOLDIERS)*1 + rc.readBroadcast(SWARM_THREE_BASHERS)*1 + rc.readBroadcast(SWARM_THREE_DRONES)*1 + rc.readBroadcast(SWARM_THREE_TANKS)*3 + rc.readBroadcast(SWARM_THREE_LAUNCHERS)*5 + rc.readBroadcast(SWARM_THREE_COMMANDER);
 				
 				if(ourStrength-swarmOneStrength > 10 && swarmOneStrength > 10){
-					
+					rc.broadcast(ATTACK_LOCATION, rc.readBroadcast(SWARM_ONE_LOCATION));
 				}
-				
-				if(ourStrength-swarmTwoStrength > 10 && swarmTwoStrength > 10){
-					
+				else if(ourStrength-swarmTwoStrength > 10 && swarmTwoStrength > 10){
+					rc.broadcast(ATTACK_LOCATION, rc.readBroadcast(SWARM_ONE_LOCATION));
 				}
-				
-				if(ourStrength-swarmThreeStrength > 10 && swarmThreeStrength > 10){
-					
+				else if(ourStrength-swarmThreeStrength > 10 && swarmThreeStrength > 10){
+					rc.broadcast(ATTACK_LOCATION, rc.readBroadcast(SWARM_ONE_LOCATION));
+				}
+				else{
+					//do nothing
 				}
 				
 				if(swarmOneStrength < 1){
@@ -3248,7 +3249,7 @@ public class RobotPlayer {
 		}
 		
 		System.out.println("enemies sensed:" +  enemies.length);
-		if(enemies.length > 3){
+		if(enemies.length > 3 || enemies[0].type == COMMANDER){
 			centroidX /= enemies.length;
 			centroidY /= enemies.length;
 			rc.setIndicatorString(0, "Centroid is:"+ centroidX +", "+ centroidY);
@@ -3363,10 +3364,8 @@ public class RobotPlayer {
 				}
 				else{
 					System.out.print("WTF! more than 3 swarms!?");
-				}
 			}
-		
-		
+		}
 		if (closestRobot != null) {
 			return closestRobot.location;
 		}
