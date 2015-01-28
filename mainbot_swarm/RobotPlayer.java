@@ -3218,7 +3218,7 @@ public class RobotPlayer {
 			return closestRobot.location;
 		}
 		return null;
-		}
+	}
 
 	private static MapLocation nearestAttackableEnemyAll() throws GameActionException {
 		RobotInfo[] enemies = rc.senseNearbyRobots(myAttackRangeSq, enemyTeam);
